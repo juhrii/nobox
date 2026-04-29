@@ -1,0 +1,501 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+
+import '../../../core/providers/chat_provider.dart';
+import '../../../core/providers/theme_provider.dart';
+import '../../../core/model/message.dart';
+import 'chat_detail_page.dart';
+
+class ArchiveListPage extends StatefulWidget {
+  const ArchiveListPage({super.key});
+
+  @override
+  State<ArchiveListPage> createState() => _ArchiveListPageState();
+}
+
+class _ArchiveListPageState extends State<ArchiveListPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  final Set<String> _selectedChats = {};
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  PreferredSizeWidget _buildSelectionAppBar(BuildContext context) {
+    final chatProvider = context.read<ChatProvider>();
+    return AppBar(
+      backgroundColor: Colors.blue.shade600,
+      elevation: 0,
+      toolbarHeight: 64,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => setState(() => _selectedChats.clear()),
+      ),
+      title: Text(
+        '${_selectedChats.length} selected',
+        style: const TextStyle(color: Colors.white, fontSize: 20),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.unarchive, color: Colors.white),
+          tooltip: 'Unarchive Selected',
+          onPressed: () {
+            final selectedCount = _selectedChats.length;
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Text(
+                  'Unarchive Conversation',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                content: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Are you sure you want to unarchive $selectedCount conversation(s)?',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                ),
+                actionsAlignment: MainAxisAlignment.center,
+                actions: [
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.grey.shade600,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel', style: TextStyle(fontSize: 15)),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      for (var id in _selectedChats) {
+                        await chatProvider.toggleArchive(id);
+                      }
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('$selectedCount chat(s) unarchived'),
+                            backgroundColor: Colors.blue.shade700,
+                          ),
+                        );
+                        setState(() => _selectedChats.clear());
+                      }
+                    },
+                    child: const Text('Confirm', style: TextStyle(fontSize: 15)),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  PreferredSizeWidget _buildNormalAppBar(BuildContext context) {
+    return AppBar(
+      backgroundColor: Colors.blue,
+      surfaceTintColor: Colors.blue,
+      iconTheme: const IconThemeData(color: Colors.white),
+      elevation: 0,
+      title: const Text(
+        'Archived Conversation',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
+
+    return PopScope(
+      canPop: _selectedChats.isEmpty,
+      onPopInvoked: (didPop) {
+        if (!didPop && _selectedChats.isNotEmpty) {
+          setState(() => _selectedChats.clear());
+        }
+      },
+      child: Scaffold(
+        backgroundColor: isDark ? const Color(0xFF121B22) : const Color(0xFFF0F2F5),
+        appBar: _selectedChats.isNotEmpty
+            ? _buildSelectionAppBar(context)
+            : _buildNormalAppBar(context),
+        body: Column(
+          children: [
+            // Search Bar
+            Container(
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1F2C34) : Colors.white,
+                border: Border(
+                  bottom: BorderSide(
+                    color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade300,
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _searchQuery = value),
+                style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                decoration: InputDecoration(
+                  hintText: 'Search conversation',
+                  hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[600]),
+                  prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[500] : Colors.grey[600]),
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF2C3940) : const Color(0xFFF1F5F9),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            
+            Expanded(
+              child: Consumer<ChatProvider>(
+                builder: (context, chatProvider, _) {
+                  var chats = chatProvider.archivedChats;
+                  
+                  if (_searchQuery.isNotEmpty) {
+                    chats = chats.where((chat) => 
+                      chat.sender.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                      chat.lastMessage.toLowerCase().contains(_searchQuery.toLowerCase())
+                    ).toList();
+                  }
+                  
+                  if (chats.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.inventory_2_outlined, size: 80, color: isDark ? Colors.grey.shade700 : Colors.grey.shade400),
+                          const SizedBox(height: 16),
+                          Text(
+                            _searchQuery.isEmpty ? 'Tidak ada chat yang diarsipkan' : 'Tidak ada hasil pencarian',
+                            style: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey.shade600, fontSize: 16),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    itemCount: chats.length,
+                    itemBuilder: (context, index) {
+                      final chat = chats[index];
+                      return _buildChatTile(context, chat, chatProvider, isDark);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper Widget Format waktu (Sama dengan chat_list_page)
+  String _formatTime(String rawTime) {
+    if (rawTime.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(rawTime);
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${dt.day} ${months[dt.month - 1]}, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return rawTime;
+    }
+  }
+
+  // Helper Widget Status Badge (Khusus Halaman Arsip)
+  Widget _buildStatusBadge(String status, bool isDark) {
+    // Untuk halaman arsip, kita paksa statusnya selalu "Archived"
+    // dengan tampilan abu-abu yang lebih pas sesuai gambar referensi.
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+        border: Border.all(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8), 
+      ),
+      child: Text(
+        'Archived',
+        style: TextStyle(
+          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+
+  // Builder pesan terakhir (Sama dengan chat_list_page)
+  Widget _buildLastMessageRow(ChatModel chat, bool isDark) {
+    final messageColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600; 
+    if (chat.lastMessageType != null && chat.lastMessageType!.isNotEmpty) {
+      final isUnsupported = chat.lastMessageType!.toLowerCase().contains('unsupported');
+      if (isUnsupported) {
+        return Row(
+          children: [
+            Icon(Icons.block, size: 14, color: Colors.red.shade400),
+            const SizedBox(width: 4),
+            Text(
+              chat.lastMessageType!,
+              style: TextStyle(fontSize: 13, color: Colors.red.shade400, fontStyle: FontStyle.italic),
+            ),
+          ],
+        );
+      }
+      return Row(
+        children: [
+          const Text('🌟 ', style: TextStyle(fontSize: 14)),
+          Text(chat.lastMessageType!, style: TextStyle(fontSize: 13, color: messageColor, fontStyle: FontStyle.italic)),
+        ],
+      );
+    }
+    return Text(
+      chat.lastMessage,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 13, color: messageColor),
+    );
+  }
+
+  // Rendering Chat Tile utuh dengan Selectable Mode
+  Widget _buildChatTile(BuildContext context, ChatModel chat, ChatProvider chatProvider, bool isDark) {
+    final isSelected = _selectedChats.contains(chat.id);
+    
+    return Container(
+      color: isSelected ? (isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50) : (isDark ? const Color(0xFF111B21) : Colors.white),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              // Jika dalam mode pilih, ketuk chat menambah pilihan
+              if (_selectedChats.isNotEmpty) {
+                setState(() {
+                  if (isSelected) _selectedChats.remove(chat.id);
+                  else _selectedChats.add(chat.id);
+                });
+                return;
+              }
+              // Jika normal, pergi ke ruangan chat
+              chatProvider.markAsRead(chat.id);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatDetailPage(chat: chat),
+                ),
+              );
+            },
+            onLongPress: () {
+              // Masuk ke Selectable Mode untuk Unarchive massal
+              if (_selectedChats.isEmpty) {
+                setState(() => _selectedChats.add(chat.id));
+              } else {
+                setState(() {
+                  if (isSelected) _selectedChats.remove(chat.id);
+                  else _selectedChats.add(chat.id);
+                });
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Avatar ──
+                  if (_selectedChats.isNotEmpty)
+                    Container(
+                      width: 48,
+                      height: 48,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                        color: isSelected ? Colors.blue.shade600 : Colors.grey.shade400,
+                        size: 28,
+                      ),
+                    )
+                  else
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+                      backgroundImage: chat.avatarUrl != null && chat.avatarUrl!.isNotEmpty
+                          ? NetworkImage(chat.avatarUrl!)
+                          : null,
+                      child: chat.avatarUrl == null || chat.avatarUrl!.isEmpty
+                          ? Icon(
+                              chat.isGroup ? Icons.group : Icons.person,
+                              color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+                              size: 28,
+                            )
+                          : null,
+                    ),
+                  const SizedBox(width: 12),
+
+                  // ── Content ──
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Nama Pengirim
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                chat.sender,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: isDark ? Colors.white : Colors.black,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+
+                        // Last message
+                        _buildLastMessageRow(chat, isDark),
+
+                        // Tags & Funnel
+                        if (chat.tags.isNotEmpty || chat.funnel.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              if (chat.tags.isNotEmpty) ...[
+                                Icon(Icons.local_offer, size: 13, color: Colors.grey.shade500),
+                                const SizedBox(width: 3),
+                                Flexible(
+                                  child: Text(
+                                    chat.tags.join(', '),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                  ),
+                                ),
+                              ],
+                              if (chat.tags.isNotEmpty && chat.funnel.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Text('|', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+                                const SizedBox(width: 6),
+                              ],
+                              if (chat.funnel.isNotEmpty) ...[
+                                Icon(Icons.filter_alt, size: 13, color: Colors.grey.shade500),
+                                const SizedBox(width: 3),
+                                Text(
+                                  chat.funnel,
+                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+
+                        // WhatsApp channel
+                        if (chat.channelName.isNotEmpty && chat.channelName != 'Not Found') ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              FaIcon(FontAwesomeIcons.whatsapp, size: 14, color: Colors.green.shade600),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  chat.channelName,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  
+                  // ── Trailing Content (Sisi Kanan) ──
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // Jam & Pin (Opsional untuk archived)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _formatTime(chat.time),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
+                            ),
+                          ),
+                          if (chat.isPinned) ...[
+                            const SizedBox(width: 4),
+                            Icon(Icons.push_pin, size: 14, color: Colors.blue.shade400),
+                          ],
+                        ],
+                      ),
+                      
+                      // Badge Unread (Daftar Arsip juga menampilkan unread jika ada pesan baru)
+                      if (chat.unreadCount > 0) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: const BoxDecoration(
+                            color: Colors.blue,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            chat.unreadCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                      
+                      // Status badge
+                      const SizedBox(height: 6),
+                      _buildStatusBadge(chat.status, isDark),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            height: 0.5,
+            color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade300,
+          ),
+        ],
+      ),
+    );
+  }
+}

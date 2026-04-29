@@ -1,0 +1,64 @@
+name: nobox_chat_basic
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  provider: ^6.0.5
+  shared_preferences: ^2.5.2
+  dio: ^5.8.0+1
+  signalr_netcore: ^1.4.4
+
+  cupertino_icons: ^1.0.8
+  intl: ^0.20.2
+  emoji_picker_flutter: ^4.4.0
+  record: ^5.0.5
+  audioplayers: ^6.1.0
+  path_provider: ^2.1.5
+  image_picker: ^1.0.7
+  flutter_secure_storage: ^10.0.0
+  file_picker: ^10.3.10
+  geolocator: ^14.0.2
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  font_awesome_flutter: ^11.0.0
+  country_state_city: ^0.1.6
+  url_launcher: ^6.3.2
+  flutter_local_notifications: ^19.0.0
+  firebase_core: ^4.6.0
+  firebase_messaging: ^16.1.3
+  dropdown_button2: ^3.0.0
+  cached_network_image: ^3.4.1
+  video_thumbnail: ^0.5.3
+  video_player: 2.8.3
+  chewie: ^1.7.5  # (Ini package tambahan biar UI tombol play, pause, dan slider-nya otomatis bagus sekelas Netflix wkwk)
+  flutter_cache_manager: ^3.4.1
+
+dependency_overrides:
+  record_platform_interface: 1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/app_icon.png"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/

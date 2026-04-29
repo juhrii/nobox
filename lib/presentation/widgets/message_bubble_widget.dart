@@ -1,0 +1,1120 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+
+import '../../../core/model/message.dart';
+import '../../../core/providers/theme_provider.dart';
+import '../screens/media/image_viewer_screen.dart';
+import '../screens/media/image_gallery_viewer_screen.dart';
+import '../screens/media/video_player_screen.dart';
+import 'forward_dialog.dart';
+import 'audio_player_widget.dart';
+
+import '../../../core/theme/app_theme.dart';
+
+class MessageBubbleWidget extends StatefulWidget {
+  final Message message;
+  final List<Message>? allMessages;
+  final bool showSenderInfo;
+  final bool isSelected;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onTap;
+  final VoidCallback? onReply;
+  final VoidCallback? onForward;
+  final VoidCallback? onCopy;
+  final VoidCallback? onDelete;
+
+  const MessageBubbleWidget({
+    super.key,
+    required this.message,
+    this.allMessages,
+    this.showSenderInfo = true,
+    this.isSelected = false,
+    this.onLongPress,
+    this.onTap,
+    this.onReply,
+    this.onForward,
+    this.onCopy,
+    this.onDelete,
+  });
+
+  @override
+  State<MessageBubbleWidget> createState() => _MessageBubbleWidgetState();
+}
+
+class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
+    with SingleTickerProviderStateMixin {
+  double _dragPosition = 0;
+  static const double _maxDragDistance = 80.0;
+  static const double _replyThreshold = 60.0;
+  late AnimationController _resetAnimationController;
+  late Animation<double> _resetAnimation;
+  bool _hasTriggeredHaptic = false;
+  bool _isDragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resetAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+
+    _resetAnimation = Tween<double>(
+      begin: 0,
+      end: 0,
+    ).animate(
+      CurvedAnimation(
+        parent: _resetAnimationController,
+        curve: Curves.easeOutCubic,
+      ),
+    )..addListener(() {
+        setState(() {
+          _dragPosition = _resetAnimation.value;
+        });
+      });
+  }
+
+  @override
+  void dispose() {
+    _resetAnimationController.dispose();
+    super.dispose();
+  }
+
+  void _onHorizontalDragStart(DragStartDetails details) {
+    _resetAnimationController.stop();
+    setState(() {
+      _isDragging = true;
+      _hasTriggeredHaptic = false;
+    });
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    if (!_isDragging) return;
+
+    setState(() {
+      double newPosition = _dragPosition + details.delta.dx;
+      if (newPosition < 0) newPosition = 0;
+
+      if (newPosition > _replyThreshold) {
+        final excess = newPosition - _replyThreshold;
+        final resistance =
+            1 - (excess / (_maxDragDistance - _replyThreshold)) * 0.5;
+        newPosition = _replyThreshold + (excess * resistance);
+      }
+
+      if (newPosition > _maxDragDistance) newPosition = _maxDragDistance;
+
+      _dragPosition = newPosition;
+
+      if (_dragPosition >= _replyThreshold && !_hasTriggeredHaptic) {
+        HapticFeedback.lightImpact();
+        _hasTriggeredHaptic = true;
+      } else if (_dragPosition < _replyThreshold && _hasTriggeredHaptic) {
+        _hasTriggeredHaptic = false;
+      }
+    });
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    _isDragging = false;
+
+    if (_dragPosition >= _replyThreshold && widget.onReply != null) {
+      HapticFeedback.mediumImpact();
+      widget.onReply!();
+    }
+
+    _resetAnimation = Tween<double>(
+      begin: _dragPosition,
+      end: 0,
+    ).animate(
+      CurvedAnimation(
+        parent: _resetAnimationController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    _resetAnimationController.forward(from: 0);
+    _hasTriggeredHaptic = false;
+  }
+
+  void _onHorizontalDragCancel() {
+    _isDragging = false;
+    _resetAnimation = Tween<double>(
+      begin: _dragPosition,
+      end: 0,
+    ).animate(
+      CurvedAnimation(
+        parent: _resetAnimationController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    _resetAnimationController.forward(from: 0);
+    _hasTriggeredHaptic = false;
+  }
+
+  String _cleanContent(String content) {
+    return content.trim();
+  }
+
+  bool _isLocationMessage(String content) {
+    return content.contains('Location:') ||
+        content.contains('maps.google.com/maps?q=');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = themeProvider.isDarkMode;
+
+    if (widget.message.isSystemMessage) {
+      return _buildSystemMessage(context, isDarkMode);
+    }
+
+    final isMe = widget.message.isMe;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      onHorizontalDragStart:
+          widget.onReply != null ? _onHorizontalDragStart : null,
+      onHorizontalDragUpdate:
+          widget.onReply != null ? _onHorizontalDragUpdate : null,
+      onHorizontalDragEnd: widget.onReply != null ? _onHorizontalDragEnd : null,
+      onHorizontalDragCancel:
+          widget.onReply != null ? _onHorizontalDragCancel : null,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+        child: Stack(
+          children: [
+            if (_dragPosition > 5)
+              Positioned(
+                right: isMe ? null : 16,
+                left: isMe ? 16 : null,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: AnimatedScale(
+                    scale: (_dragPosition / _maxDragDistance).clamp(0.5, 1.0),
+                    duration: const Duration(milliseconds: 100),
+                    curve: Curves.easeOut,
+                    child: AnimatedOpacity(
+                      opacity:
+                          (_dragPosition / _replyThreshold).clamp(0.3, 1.0),
+                      duration: const Duration(milliseconds: 100),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: (_dragPosition >= _replyThreshold
+                                  ? AppTheme.primaryColor
+                                  : Colors.grey.shade500)
+                              .withOpacity(
+                                  _dragPosition >= _replyThreshold ? 0.25 : 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.reply_rounded,
+                          color: _dragPosition >= _replyThreshold
+                              ? AppTheme.primaryColor
+                              : Colors.grey.shade600,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            AnimatedContainer(
+              duration: _isDragging
+                  ? Duration.zero
+                  : const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              transform: Matrix4.translationValues(_dragPosition, 0, 0),
+              child: Column(
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment:
+                        isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Flexible(
+                        child: Container(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.85,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: isMe
+                                ? CrossAxisAlignment.end
+                                : CrossAxisAlignment.start,
+                            children: [
+                              if (widget.message.repliedMessage != null)
+                                _buildReplyPreview(context, isMe, isDarkMode),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: widget.isSelected
+                                      ? (isMe
+                                          ? AppTheme.primaryColor
+                                              .withOpacity(0.8)
+                                          : (isDarkMode
+                                              ? AppTheme.darkSurface
+                                                  .withOpacity(0.8)
+                                              : AppTheme.otherMessageColor
+                                                  .withOpacity(0.8)))
+                                      : (isMe
+                                          ? AppTheme.primaryColor
+                                          : (isDarkMode
+                                              ? AppTheme.darkSurface
+                                              : Colors.white)),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(12),
+                                    topRight: const Radius.circular(12),
+                                    bottomLeft: Radius.circular(isMe ? 12 : 2),
+                                    bottomRight: Radius.circular(isMe ? 2 : 12),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(
+                                          isDarkMode ? 0.3 : 0.08),
+                                      blurRadius: 1,
+                                      offset: const Offset(0, 0.5),
+                                    ),
+                                  ],
+                                ),
+                                child: _buildMessageContent(
+                                    context, isMe, isDarkMode),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSystemMessage(BuildContext context, bool isDarkMode) {
+    final cleanMessage = _cleanContent(widget.message.content);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 1,
+            child: Container(
+              height: 1,
+              color: isDarkMode
+                  ? Colors.white.withOpacity(0.2)
+                  : Colors.grey.shade300,
+            ),
+          ),
+          Flexible(
+            flex: 3,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    cleanMessage,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDarkMode
+                          ? AppTheme.darkTextSecondary
+                          : Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.message.time, // Using the formatted time directly
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isDarkMode
+                          ? AppTheme.darkTextSecondary.withOpacity(0.7)
+                          : Colors.grey.shade400,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Container(
+              height: 1,
+              color: isDarkMode
+                  ? Colors.white.withOpacity(0.2)
+                  : Colors.grey.shade300,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimestampRow(bool isMe) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text(
+          widget.message.time,
+          style: TextStyle(
+            fontSize: 11,
+            color: isMe ? Colors.white70 : AppTheme.textSecondary,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        if (isMe) ...[
+          const SizedBox(width: 4),
+          _buildAckIcon(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildReplyPreview(BuildContext context, bool isMe, bool isDarkMode) {
+    final repliedMsg = widget.message.repliedMessage;
+    if (repliedMsg == null) return const SizedBox.shrink();
+
+    final replyContent = _cleanContent(repliedMsg.content);
+    final replySender = repliedMsg.isMe ? 'You' : 'Customer'; // Simplification
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: isMe
+            ? Colors.blue.withOpacity(0.1)
+            : (isDarkMode
+                ? Colors.green[900]!.withOpacity(0.3)
+                : const Color(0xFFE8F5E8)),
+        borderRadius: BorderRadius.circular(6),
+        border: Border(
+          left: BorderSide(
+              color: isMe
+                  ? Colors.blue.withOpacity(0.8)
+                  : const Color(0xFF25D366),
+              width: 3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.reply,
+                size: 12,
+                color: isMe
+                    ? Colors.blue.withOpacity(0.9)
+                    : const Color(0xFF25D366),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Reply to:',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isMe
+                      ? Colors.blue.withOpacity(0.7)
+                      : const Color(0xFF25D366).withOpacity(0.7),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            replySender,
+            style: TextStyle(
+              fontSize: 12,
+              color: isMe
+                  ? Colors.blue.withOpacity(0.9)
+                  : const Color(0xFF25D366),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            replyContent,
+            style: TextStyle(
+              fontSize: 13,
+              color: isMe
+                  ? Colors.white.withOpacity(0.85)
+                  : (isDarkMode
+                      ? AppTheme.darkTextPrimary
+                      : const Color(0xFF4A4A4A)),
+              height: 1.2,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageContent(BuildContext context, bool isMe, bool isDarkMode) {
+    if (widget.message.messageType == MessageType.text &&
+        _isLocationMessage(widget.message.content)) {
+      return _buildLocationMessage(isMe, isDarkMode);
+    }
+    if (widget.message.content.contains('🎥 Video') || widget.message.content.contains('📹 Video')) {
+       return _buildVideoMessage(context, isMe, isDarkMode);
+    }
+
+    switch (widget.message.messageType) {
+      case MessageType.text:
+        return _buildTextMessage(isMe, isDarkMode);
+      case MessageType.voice:
+        return _buildAudioMessage(isMe, isDarkMode);
+      case MessageType.image:
+        return _buildImageMessage(context, isMe, isDarkMode);
+      default:
+        return _buildTextMessage(isMe, isDarkMode);
+    }
+  }
+
+  Widget _buildTextMessage(bool isMe, bool isDarkMode) {
+    final cleanMessage = _cleanContent(widget.message.content);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Flexible(
+          child: _buildTextWithLinks(cleanMessage, isMe, isDarkMode),
+        ),
+        const SizedBox(width: 8),
+        _buildTimestampRow(isMe),
+      ],
+    );
+  }
+
+  Widget _buildTextWithLinks(String text, bool isMe, bool isDarkMode) {
+    final urlRegex =
+        RegExp(r'https?://[^\s]+|www\.[^\s]+', caseSensitive: false);
+    final matches = urlRegex.allMatches(text);
+
+    if (matches.isEmpty) {
+      return Text(
+        text,
+        style: TextStyle(
+          color: isMe
+              ? Colors.white
+              : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+          fontSize: 16,
+          height: 1.3,
+        ),
+      );
+    }
+
+    final List<TextSpan> spans = [];
+    int currentIndex = 0;
+
+    for (final match in matches) {
+      if (match.start > currentIndex) {
+        spans.add(TextSpan(
+          text: text.substring(currentIndex, match.start),
+          style: TextStyle(
+            color: isMe
+                ? Colors.white
+                : (isDarkMode
+                    ? AppTheme.darkTextPrimary
+                    : AppTheme.textPrimary),
+            fontSize: 16,
+            height: 1.3,
+          ),
+        ));
+      }
+
+      final url = match.group(0)!;
+      spans.add(TextSpan(
+        text: url,
+        style: TextStyle(
+          color: isMe ? Colors.white : Colors.blue,
+          fontSize: 16,
+          height: 1.3,
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: TapGestureRecognizer()..onTap = () => _launchURL(url),
+      ));
+
+      currentIndex = match.end;
+    }
+
+    if (currentIndex < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(currentIndex),
+        style: TextStyle(
+          color: isMe
+              ? Colors.white
+              : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+          fontSize: 16,
+          height: 1.3,
+        ),
+      ));
+    }
+
+    return RichText(text: TextSpan(children: spans));
+  }
+
+  Future<void> _launchURL(String url) async {
+    String finalUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      finalUrl = 'https://$url';
+    }
+
+    final uri = Uri.parse(finalUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      print('Could not launch $finalUrl');
+    }
+  }
+
+  Widget _buildImageMessage(BuildContext context, bool isMe, bool isDarkMode) {
+    final imageUrl = widget.message.imageUrl;
+    String caption = widget.message.content;
+    if (caption == '📷 Photo') caption = '';
+    
+    final hasCaption = caption.isNotEmpty;
+    final maxWidth = MediaQuery.of(context).size.width * 0.7;
+
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return Column(
+        crossAxisAlignment:
+            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 200,
+            height: 150,
+            decoration: BoxDecoration(
+              color: isMe
+                  ? Colors.white.withOpacity(0.2)
+                  : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.broken_image,
+                    size: 48, color: isMe ? Colors.white70 : Colors.grey),
+                const SizedBox(height: 8),
+                Text(
+                  'Image not available',
+                  style: TextStyle(
+                      color: isMe ? Colors.white70 : Colors.grey, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          _buildTimestampRow(isMe),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment:
+          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ImageViewerScreen(
+                    imageUrl: imageUrl,
+                    caption: hasCaption ? caption : null,
+                  ),
+                ),
+              );
+            },
+            child: Hero(
+              tag: imageUrl,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: maxWidth,
+                  maxHeight: 400,
+                ),
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => Container(
+                    width: maxWidth,
+                    height: 200,
+                    color: isMe
+                        ? Colors.white.withOpacity(0.2)
+                        : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: 200,
+                    height: 200,
+                    color: isMe
+                        ? Colors.white.withOpacity(0.2)
+                        : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.broken_image,
+                            size: 48,
+                            color: isMe ? Colors.white70 : Colors.grey),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Failed to load image',
+                          style: TextStyle(
+                              color: isMe ? Colors.white70 : Colors.grey,
+                              fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (hasCaption) ...[
+          const SizedBox(height: 8),
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: maxWidth,
+            ),
+            child: Text(
+              _cleanContent(caption),
+              style: TextStyle(
+                color: isMe
+                    ? Colors.white
+                    : (isDarkMode
+                        ? AppTheme.darkTextPrimary
+                        : AppTheme.textPrimary),
+                fontSize: 14,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 4),
+        _buildTimestampRow(isMe),
+      ],
+    );
+  }
+
+  Widget _buildVideoMessage(BuildContext context, bool isMe, bool isDarkMode) {
+    final videoUrl = widget.message.imageUrl ?? '';
+    final caption = widget.message.content.replaceAll('📹 Video', '').trim();
+    final hasCaption = caption.isNotEmpty;
+    final maxWidth = MediaQuery.of(context).size.width * 0.7;
+
+    return Column(
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () {
+            if (videoUrl.isNotEmpty) {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => VideoPlayerScreen(
+                    videoUrl: videoUrl,
+                    caption: hasCaption ? caption : null,
+                  ),
+                ),
+              );
+            }
+          },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: maxWidth,
+                maxHeight: 200,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                     Container(
+                        color: Colors.grey.shade800,
+                        child: const Icon(
+                                Icons.videocam,
+                                size: 48,
+                                color: Colors.white54,
+                              ),
+                      ),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.3),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow,
+                          size: 36,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        if (hasCaption) ...[
+          const SizedBox(height: 8),
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: maxWidth,
+            ),
+            child: Text(
+              _cleanContent(caption),
+              style: TextStyle(
+                color: isMe ? Colors.white : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+                fontSize: 14,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 4),
+        _buildTimestampRow(isMe),
+      ],
+    );
+  }
+
+  Widget _buildAudioMessage(bool isMe, bool isDarkMode) {
+    final audioUrl = widget.message.audioPath;
+
+    if (audioUrl == null || audioUrl.isEmpty) {
+      return Column(
+        crossAxisAlignment:
+            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 280,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isMe
+                  ? Colors.white.withOpacity(0.2)
+                  : (isDarkMode ? Colors.grey[800] : Colors.grey.shade100),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 24,
+                  color: isMe ? Colors.white70 : Colors.red,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Voice note not available',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isMe ? Colors.white70 : Colors.red,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          _buildTimestampRow(isMe),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment:
+          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        AudioPlayerWidget(
+          audioUrl: audioUrl,
+          isMe: isMe,
+          caption: widget.message.content.trim().isNotEmpty == true
+              ? widget.message.content
+              : null,
+        ),
+        const SizedBox(height: 4),
+        _buildTimestampRow(isMe),
+      ],
+    );
+  }
+
+  Widget _buildLocationMessage(bool isMe, bool isDarkMode) {
+    final messageText = widget.message.content;
+
+    double? latitude;
+    double? longitude;
+    String? mapsUrl;
+
+    final locationRegex = RegExp(r'Location: (-?\d+\.\d+), (-?\d+\.\d+)');
+    final match = locationRegex.firstMatch(messageText);
+
+    if (match != null) {
+      latitude = double.tryParse(match.group(1)!);
+      longitude = double.tryParse(match.group(2)!);
+    }
+
+    final urlRegex = RegExp(r'https://maps\.google\.com/maps\?q=(-?\d+\.\d+),(-?\d+\.\d+)');
+    final urlMatch = urlRegex.firstMatch(messageText);
+    if (urlMatch != null) {
+      mapsUrl = urlMatch.group(0);
+    }
+
+    return Column(
+      crossAxisAlignment:
+          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () {
+            if (mapsUrl != null) {
+              _openInMaps(mapsUrl);
+            } else if (latitude != null && longitude != null) {
+              final url = 'https://maps.google.com/maps?q=$latitude,$longitude';
+              _openInMaps(url);
+            }
+          },
+          child: Container(
+            width: 280,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isMe
+                  ? Colors.white.withOpacity(0.2)
+                  : (isDarkMode ? Colors.grey[800] : Colors.grey.shade100),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isMe
+                    ? Colors.white.withOpacity(0.3)
+                    : Colors.grey.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      size: 20,
+                      color: isMe ? Colors.white : AppTheme.primaryColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Location',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isMe
+                            ? Colors.white
+                            : (isDarkMode
+                                ? AppTheme.darkTextPrimary
+                                : AppTheme.textPrimary),
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: isMe
+                        ? Colors.white.withOpacity(0.1)
+                        : (isDarkMode
+                            ? Colors.grey[800]
+                            : Colors.grey.shade200),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isMe
+                          ? Colors.white.withOpacity(0.2)
+                          : Colors.grey.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        Icons.map,
+                        size: 48,
+                        color: isMe ? Colors.white70 : AppTheme.textSecondary,
+                      ),
+                      Positioned(
+                        bottom: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text(
+                            'Tap to open in Maps',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (latitude != null && longitude != null)
+                  Text(
+                    'Lat: ${latitude!.toStringAsFixed(6)}, Lng: ${longitude!.toStringAsFixed(6)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isMe ? Colors.white70 : AppTheme.textSecondary,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isMe
+                        ? Colors.white.withOpacity(0.2)
+                        : AppTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isMe
+                          ? Colors.white.withOpacity(0.3)
+                          : AppTheme.primaryColor.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.open_in_new,
+                        size: 16,
+                        color: isMe ? Colors.white : AppTheme.primaryColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Open in Maps',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isMe ? Colors.white : AppTheme.primaryColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        _buildTimestampRow(isMe),
+      ],
+    );
+  }
+
+  void _openInMaps(String url) {
+    try {
+      launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (e) {
+      debugPrint('Failed to open maps: $e');
+    }
+  }
+
+  Widget _buildAckIcon() {
+    IconData icon;
+    Color color;
+
+    switch (widget.message.status) {
+      case MessageStatus.sent:
+        icon = Icons.check;
+        color = AppTheme.textSecondary;
+        break;
+      case MessageStatus.delivered:
+        icon = Icons.done_all;
+        color = AppTheme.textSecondary;
+        break;
+      case MessageStatus.read:
+        icon = Icons.done_all;
+        color = AppTheme.primaryColor;
+        break;
+      default:
+        icon = Icons.access_time;
+        color = AppTheme.textSecondary;
+        break;
+    }
+
+    return Icon(
+      icon,
+      size: 14,
+      color: color,
+    );
+  }
+}

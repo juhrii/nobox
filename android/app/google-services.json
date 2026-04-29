@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "865864145623",
+    "project_id": "nobox-chat-akbar",
+    "storage_bucket": "nobox-chat-akbar.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:865864145623:android:b9013fe9de650b66d52e92",
+        "android_client_info": {
+          "package_name": "ai.nobox.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCW5Pe6vhQcAyYOy3eifwYA_GfBFdMFG-k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
