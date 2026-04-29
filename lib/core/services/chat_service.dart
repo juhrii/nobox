@@ -1049,6 +1049,7 @@ class ChatService {
     }
   }
 
+
   /// Get active campaigns list
   Future<ApiResponse<List<Map<String, dynamic>>>> getCampaignsListActive() async {
     try {
