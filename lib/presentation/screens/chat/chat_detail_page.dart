@@ -35,6 +35,7 @@ import '../../../core/services/notification_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../widgets/message_bubble_widget.dart';
 import '../../widgets/voice_recording_bottom_sheet.dart';
+import '../../widgets/message_shimmer_widget.dart';
 
 class ChatDetailPage extends StatefulWidget {
   final ChatModel? chat;
@@ -2135,7 +2136,7 @@ if (!response.isError) {
 
   Widget _buildMessageList(bool isDark) {
     if (_isLoadingMessages) {
-      return const Center(child: CircularProgressIndicator());
+      return const MessageShimmerWidget();
     }
 
     if (_messages.isEmpty) {

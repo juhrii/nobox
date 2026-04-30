@@ -859,9 +859,18 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                   // Refresh chat list and navigate
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Pesan terkirim, obrolan sedang disiapkan...')),
+                                      const SnackBar(content: Text('Pesan terkirim, memuat ruangan obrolan...')),
                                     );
                                     
+                                    // Sesuai kode mentor: Jeda statis lalu fetch ulang paksa
+                                    final isManual = manualInput.isNotEmpty;
+                                    final delayDuration = isManual 
+                                      ? const Duration(seconds: 2)
+                                      : const Duration(milliseconds: 1500);
+                                    
+                                    await Future.delayed(delayDuration);
+                                    await context.read<ChatProvider>().fetchChats();
+
                                     if (mounted && _scrollController.hasClients) {
                                       _scrollController.animateTo(
                                         0,
@@ -873,11 +882,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                     final chats = context.read<ChatProvider>().chats;
                                     if (chats.isNotEmpty) {
                                       // Cari chat yang sesuai dengan tujuan yang dipilih pengguna.
-                                      // Jangan asal `chats.first` karena berpotensi race-condition jika server delay.
+                                      // Mencari berdasarkan target tujuan seperti kode mentor
                                       final newChat = chats.firstWhere(
                                         (c) {
                                           if (receiver != null && c.contactId == receiver) return true;
-                                          // sender is the contact name or phone number
                                           if (selectedContact != null && selectedContact!.isNotEmpty && c.sender.toLowerCase().contains(selectedContact!.toLowerCase())) return true;
                                           if (manualInput.isNotEmpty && c.sender.contains(manualInput)) return true;
                                           return false;
