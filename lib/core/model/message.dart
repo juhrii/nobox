@@ -248,6 +248,12 @@ class Message {
     // Helper to extract file path from Files array or File field
     String extractFilePath(dynamic fileData) {
       String filePath = fileData.toString();
+      
+      // Fix for backend serialization bug where it sends the class name instead of a file
+      if (filePath.contains('NoboxWhatsapp') || filePath.contains('MessageResponse')) {
+        return '';
+      }
+
       if (fileData is Map) {
         if (fileData['Filename'] != null) filePath = fileData['Filename'].toString();
         else if (fileData['url'] != null) filePath = fileData['url'].toString();

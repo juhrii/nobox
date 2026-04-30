@@ -9,6 +9,8 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
+import '../../../core/services/api_client.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:latlong2/latlong.dart';
@@ -478,36 +480,51 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   /// Subscribe to SignalR for real-time incoming messages
   void _subscribeToSignalR() {
     final signalR = SignalRService();
-    _signalRSubscription = signalR.onMessageReceived.listen((data) {
-      debugPrint('ChatDetailPage: Received SignalR message: $data');
-      
-      final args = data['arguments'] as List?;
-      
-      if (args != null && args.isNotEmpty) {
-        final msgData = args[0];
-        String content = '';
-        String time = '';
-        
-        if (msgData is Map) {
-          content = msgData['Body'] ?? msgData['Message'] ?? msgData['Content'] ?? msgData.toString();
-          time = msgData['In'] ?? msgData['Time'] ?? DateTime.now().toString();
-        } else {
-          content = msgData.toString();
-          time = DateTime.now().toString();
-        }
-        
-        if (mounted && content.isNotEmpty) {
-          final now = DateTime.now();
-          setState(() {
-            _messages.add(Message(
-              content: content,
-              isMe: false,
-              time: _formatFullTime(now),
-              status: MessageStatus.read,
-            ));
-          });
-          _scrollToBottom();
-        }
+
+    // Listen to TerimaPesan (pre-parsed by SignalRService)
+    _signalRSubscription = signalR.onTerimaPesan.listen((data) {
+      final incomingRoomId = data['roomId']?.toString() ?? '';
+      final messageData = data['message'] as Map<String, dynamic>? ?? {};
+      final senderData = data['sender'] as Map<String, dynamic>?;
+
+      debugPrint('ChatDetailPage: TerimaPesan | room=$incomingRoomId | current=${chat.id}');
+
+      // ❗ FILTER: Only process messages for THIS room
+      if (incomingRoomId.isEmpty || incomingRoomId != chat.id) {
+        debugPrint('SignalR: 🛑 Pesan DIABAIKAN. (Beda Room). Incoming: $incomingRoomId | Current: ${chat.id}');
+        return;
+      }
+
+      // Skip our own outgoing messages (AgentId present = sent by agent/us)
+      final agentId = messageData['AgentId'];
+      if (agentId != null && agentId != 0 && agentId.toString() != '0') {
+        debugPrint('SignalR: Skipping own outgoing message in room $incomingRoomId');
+        return;
+      }
+
+      // Extract content from NoBox payload
+      final content = messageData['Msg']?.toString() ?? '';
+      final timeStr = messageData['In']?.toString() ?? DateTime.now().toIso8601String();
+
+      if (mounted && content.isNotEmpty) {
+        final msgTime = DateTime.tryParse(timeStr) ?? DateTime.now();
+        setState(() {
+          _messages.add(Message(
+            content: content,
+            isMe: false,
+            time: _formatFullTime(msgTime),
+            status: MessageStatus.read,
+          ));
+        });
+        _scrollToBottom();
+
+        // Tell server we've read this message
+        try {
+          final roomIdInt = int.tryParse(chat.id);
+          if (roomIdInt != null) {
+            signalR.sendReadCount(roomIdInt);
+          }
+        } catch (_) {}
       }
     });
   }
@@ -1252,13 +1269,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       );
 
       if (mounted && messageIndex < _messages.length) {
-        if (!response.isError) {
-          setState(() {
-            _messages[messageIndex] = _messages[messageIndex].copyWith(
-              status: MessageStatus.delivered,
-            );
-          });
-
+       // ✅ FIX
+if (!response.isError) {
+  setState(() {
+    _messages[messageIndex] = _messages[messageIndex].copyWith(
+      status: MessageStatus.delivered,
+      audioPath: response.data, // URL dari server
+    );
+  });
           Timer(const Duration(seconds: 2), () {
             if (mounted && messageIndex < _messages.length) {
               setState(() {
@@ -1338,33 +1356,32 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   Future<void> _togglePlayback(String path) async {
     try {
-      debugPrint('Playback: path = $path');
-      final file = File(path);
-      final exists = await file.exists();
-      debugPrint('Playback: file exists = $exists');
-      if (!exists) {
-        debugPrint('Playback: FILE NOT FOUND');
-        return;
+      final isUrl = path.startsWith('http');
+
+      if (!isUrl) {
+        final file = File(path);
+        if (!await file.exists()) {
+          debugPrint('Playback: FILE NOT FOUND: $path');
+          return;
+        }
       }
-      final size = await file.length();
-      debugPrint('Playback: file size = $size bytes');
 
       if (_isPlaying && _currentlyPlayingPath == path) {
         await _audioPlayer.pause();
         setState(() => _isPlaying = false);
       } else {
-        // Stop any current playback first
         await _audioPlayer.stop();
         setState(() {
           _playbackPosition = Duration.zero;
           _playbackDuration = Duration.zero;
         });
 
-        // Use setSourceDeviceFile + resume for more reliable playback
-        await _audioPlayer.setSourceDeviceFile(path);
-        await _audioPlayer.setVolume(1.0);
-        await _audioPlayer.resume();
-        debugPrint('Playback: resume() called successfully');
+        if (isUrl) {
+          await _audioPlayer.play(UrlSource(path));
+        } else {
+          await _audioPlayer.play(DeviceFileSource(path));
+        }
+
         setState(() {
           _isPlaying = true;
           _currentlyPlayingPath = path;
@@ -1372,19 +1389,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       }
     } catch (e) {
       debugPrint('Error toggling playback: $e');
-      if (mounted) {
-        final msg = e.toString();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Gagal memutar: ${msg.length > 80 ? '${msg.substring(0, 80)}...' : msg}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
     }
   }
 

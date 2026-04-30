@@ -1,9 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
-import '../../core/services/api_client.dart';
 import '../../core/theme/app_theme.dart';
 
 class AudioPlayerWidget extends StatefulWidget {
@@ -29,7 +26,6 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
   bool _hasError = false;
-  String? _cachedFilePath;
 
   @override
   void initState() {
@@ -45,22 +41,6 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   }
 
   void _setupAudioPlayer() {
-    // Ensure audio plays through the speaker
-    final audioContext = AudioContext(
-      android: const AudioContextAndroid(
-        isSpeakerphoneOn: true,
-        stayAwake: true,
-        contentType: AndroidContentType.music,
-        usageType: AndroidUsageType.media,
-        audioFocus: AndroidAudioFocus.gain,
-      ),
-      iOS: AudioContextIOS(
-        category: AVAudioSessionCategory.playback,
-      ),
-    );
-    _audioPlayer.setAudioContext(audioContext);
-    _audioPlayer.setVolume(1.0);
-
     // Listen to player state changes
     _audioPlayer.onPlayerStateChanged.listen((PlayerState state) {
       if (mounted) {
@@ -111,30 +91,18 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
           _hasError = false;
         });
         
-        // Use cached file if already downloaded
-        if (_cachedFilePath != null && await File(_cachedFilePath!).exists()) {
-          await _audioPlayer.play(DeviceFileSource(_cachedFilePath!));
+        final audioUrl = widget.audioUrl;
+        debugPrint('AudioPlayer: Playing: $audioUrl');
+        
+        // Local file → DeviceFileSource, Remote URL → UrlSource
+        if (audioUrl.startsWith('http')) {
+          await _audioPlayer.play(UrlSource(audioUrl));
         } else {
-          // Download audio using ApiClient's Dio (has built-in auth interceptor)
-          final tempDir = await getTemporaryDirectory();
-          final urlHash = widget.audioUrl.hashCode.toRadixString(16);
-          final ext = widget.audioUrl.contains('.') 
-              ? '.${widget.audioUrl.split('.').last.split('?').first}'
-              : '.m4a';
-          final filePath = '${tempDir.path}/audio_$urlHash$ext';
-          
-          await ApiClient().dio.download(
-            widget.audioUrl,
-            filePath,
-            options: Options(responseType: ResponseType.bytes),
-          );
-          
-          _cachedFilePath = filePath;
-          await _audioPlayer.play(DeviceFileSource(filePath));
+          await _audioPlayer.play(DeviceFileSource(audioUrl));
         }
       }
     } catch (e) {
-      print('Error playing audio: $e');
+      debugPrint('AudioPlayer ERROR: $e');
       setState(() {
         _hasError = true;
         _isLoading = false;

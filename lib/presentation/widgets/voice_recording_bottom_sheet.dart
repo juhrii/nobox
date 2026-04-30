@@ -80,20 +80,6 @@ class _VoiceRecordingBottomSheetState extends State<VoiceRecordingBottomSheet>
   }
 
   void _setupAudioListeners() {
-    // Ensure audio plays through the speaker
-    final audioContext = AudioContext(
-      android: const AudioContextAndroid(
-        isSpeakerphoneOn: true,
-        stayAwake: true,
-        contentType: AndroidContentType.music,
-        usageType: AndroidUsageType.media,
-        audioFocus: AndroidAudioFocus.gain,
-      ),
-      iOS: AudioContextIOS(
-        category: AVAudioSessionCategory.playback,
-      ),
-    );
-    widget.audioPlayer.setAudioContext(audioContext);
     widget.audioPlayer.setVolume(1.0);
 
     _posSub = widget.audioPlayer.onPositionChanged.listen((p) {

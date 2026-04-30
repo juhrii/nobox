@@ -859,13 +859,9 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                   // Refresh chat list and navigate
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Memuat ruangan obrolan...')),
+                                      const SnackBar(content: Text('Pesan terkirim, obrolan sedang disiapkan...')),
                                     );
                                     
-                                    // Beri jeda 1.5 detik agar server database selesai memproses pesan baru 
-                                    // sebelum kita menarik ulang daftar obrolan.
-                                    await Future.delayed(const Duration(milliseconds: 1500));
-                                    await context.read<ChatProvider>().fetchChats();
                                     if (mounted && _scrollController.hasClients) {
                                       _scrollController.animateTo(
                                         0,

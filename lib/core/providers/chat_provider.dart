@@ -272,6 +272,43 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
+  /// Update a single room's data directly from a SignalR TerimaSubSpv event.
+  /// This avoids an API call and provides instant UI updates.
+  ///
+  /// [roomData] is the parsed JSON from TerimaSubSpv with keys like:
+  /// Id, Ct, LastMsg, Uc, TimeMsg, IsPin, St, IsNeedReply, SdrMsg, etc.
+  void updateRoomFromSignalR(Map<String, dynamic> roomData) {
+    final roomId = roomData['Id']?.toString() ?? '';
+    if (roomId.isEmpty) return;
+
+    final index = _chats.indexWhere((c) => c.id == roomId);
+
+    if (index >= 0) {
+      // Update existing chat
+      final existing = _chats[index];
+      final lastMsg = roomData['LastMsg']?.toString() ?? existing.lastMessage;
+      final uc = roomData['Uc'] is int ? roomData['Uc'] as int : existing.unreadCount;
+      final timeMsg = roomData['TimeMsg']?.toString() ?? existing.time;
+      final isNeedReply = roomData['IsNeedReply'] == 1 || roomData['IsNeedReply'] == true;
+      final sdrMsg = roomData['SdrMsg']?.toString() ?? '';
+
+      _chats[index] = existing.copyWith(
+        lastMessage: lastMsg,
+        unreadCount: uc,
+        time: timeMsg,
+        needReply: isNeedReply,
+        isLastMessageFromMe: sdrMsg.toLowerCase() == 'you',
+      );
+
+      debugPrint('ChatProvider: 🏠 Updated room $roomId from SignalR | lastMsg=$lastMsg | uc=$uc');
+      notifyListeners();
+    } else {
+      // Room not in current list — trigger a full refresh to pick it up
+      debugPrint('ChatProvider: Room $roomId not in list, triggering refreshFirstPage');
+      refreshFirstPage();
+    }
+  }
+
   /// Refresh only the first page of conversations without resetting pagination.
   /// Used by SignalR and polling to update data without breaking infinite scroll.
   Future<void> refreshFirstPage() async {
