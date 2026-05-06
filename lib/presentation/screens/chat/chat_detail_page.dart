@@ -1157,7 +1157,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     try {
       if (await _audioRecorder.hasPermission()) {
         final dir = await getTemporaryDirectory();
-        final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.aac';
 
         debugPrint('Recording: Starting recording to $path');
 

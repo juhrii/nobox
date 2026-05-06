@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
 import '../../core/theme/app_theme.dart';
 
 class AudioPlayerWidget extends StatefulWidget {
@@ -26,6 +28,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
   bool _hasError = false;
+  String? _localFilePath; // Cache downloaded file path
 
   @override
   void initState() {
@@ -81,6 +84,36 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     });
   }
 
+  /// Downloads audio from URL to local temp file (cached for replay)
+  Future<String> _ensureDownloaded(String url) async {
+    // Return cached path if already downloaded
+    if (_localFilePath != null && File(_localFilePath!).existsSync()) {
+      return _localFilePath!;
+    }
+
+    final dir = await getTemporaryDirectory();
+    final fileName = url.split('/').last;
+    final filePath = '${dir.path}/audio_cache_$fileName';
+
+    // Check if already cached on disk
+    if (File(filePath).existsSync()) {
+      _localFilePath = filePath;
+      return filePath;
+    }
+
+    debugPrint('🔊 AudioPlayerWidget: Downloading $url ...');
+    final dio = Dio();
+    final response = await dio.download(url, filePath);
+    if (response.statusCode == 200) {
+      _localFilePath = filePath;
+      final fileSize = File(filePath).lengthSync();
+      debugPrint('🔊 AudioPlayerWidget: Downloaded $fileSize bytes → $filePath');
+      return filePath;
+    } else {
+      throw Exception('Download failed: HTTP ${response.statusCode}');
+    }
+  }
+
   Future<void> _togglePlayPause() async {
     try {
       if (_isPlaying) {
@@ -92,17 +125,20 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         });
         
         final audioUrl = widget.audioUrl;
-        debugPrint('AudioPlayer: Playing: $audioUrl');
         
-        // Local file → DeviceFileSource, Remote URL → UrlSource
+        // Ensure volume is at max
+        await _audioPlayer.setVolume(1.0);
+        
         if (audioUrl.startsWith('http')) {
-          await _audioPlayer.play(UrlSource(audioUrl));
+          // Download file first to avoid MPEG4 streaming issues (MOOV atom at end)
+          final localPath = await _ensureDownloaded(audioUrl);
+          await _audioPlayer.play(DeviceFileSource(localPath));
         } else {
           await _audioPlayer.play(DeviceFileSource(audioUrl));
         }
       }
     } catch (e) {
-      debugPrint('AudioPlayer ERROR: $e');
+      debugPrint('Error playing audio: $e');
       setState(() {
         _hasError = true;
         _isLoading = false;

@@ -275,19 +275,34 @@ class Message {
       return filePath.trim();
     }
 
+    // Helper to extract OriginalName from file data (for type detection fallback)
+    String extractOriginalName(dynamic fileData) {
+      if (fileData is Map) {
+        return fileData['OriginalName']?.toString() ?? '';
+      } else if (fileData is String && fileData.startsWith('{')) {
+        try {
+          final fileMap = jsonDecode(fileData);
+          return fileMap['OriginalName']?.toString() ?? '';
+        } catch (_) {}
+      }
+      return '';
+    }
+
     if (json['Files'] != null && json['Files'] is List && (json['Files'] as List).isNotEmpty) {
-      final filePath = extractFilePath((json['Files'] as List).first);
-      // Priority: extension first, then API Type fallback
-      if (isAudioFile(filePath)) {
+      final firstFile = (json['Files'] as List).first;
+      final filePath = extractFilePath(firstFile);
+      final originalName = extractOriginalName(firstFile);
+      // Priority: check filePath extension first, then originalName, then API Type fallback
+      if (isAudioFile(filePath) || isAudioFile(originalName)) {
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-      } else if (isVideoFile(filePath)) {
+      } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
         msgType = MessageType.video;
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
         content = '📹 Video';
-      } else if (_isImageFile(filePath)) {
+      } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '2') {
@@ -306,17 +321,18 @@ class Message {
       }
     } else if (json['File'] != null && json['File'].toString().isNotEmpty) {
       final filePath = extractFilePath(json['File']);
-      // Priority: extension first, then API Type fallback
-      if (isAudioFile(filePath)) {
+      final originalName = extractOriginalName(json['File']);
+      // Priority: check filePath extension first, then originalName, then API Type fallback
+      if (isAudioFile(filePath) || isAudioFile(originalName)) {
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-      } else if (isVideoFile(filePath)) {
+      } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
         msgType = MessageType.video;
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
         content = '📹 Video';
-      } else if (_isImageFile(filePath)) {
+      } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '2') {
@@ -347,6 +363,11 @@ class Message {
     // Format time — parse ISO timestamp to readable format
     final rawTime = json['In']?.toString() ?? json['timestamp']?.toString() ?? json['CreatedAt']?.toString() ?? '';
     final formattedTime = rawTime.contains('T') ? _formatIsoTime(rawTime) : rawTime;
+
+    // Debug: log audio path for voice messages
+    if (msgType == MessageType.voice) {
+      debugPrint('🔊 Message.fromJson VOICE: id=$id, audioPath=$audioPath, Files=${json['Files']}, File=${json['File']}, Type=$typeVal');
+    }
 
     return Message(
       id: id,
