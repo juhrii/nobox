@@ -986,6 +986,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         isMe: true,
         time: timeString,
         status: MessageStatus.sent,
+        messageType: MessageType.document,
+        documentName: file.name,
       );
 
       setState(() {
@@ -1810,7 +1812,7 @@ if (!response.isError) {
                 ? NetworkImage(chat.avatarUrl!)
                 : null,
             child: chat.avatarUrl == null || chat.avatarUrl!.isEmpty
-                ? const Icon(Icons.person, color: Colors.white, size: 22)
+                ? Icon(chat.isGroup ? Icons.groups : Icons.person, color: Colors.white, size: 22)
                 : null,
           ),
           ),

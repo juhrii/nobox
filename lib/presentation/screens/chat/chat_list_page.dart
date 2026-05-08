@@ -1095,7 +1095,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                       // Logika pengecekan: Jika chat adalah Group, gunakan ikon grup berombongan (Icons.group)
                       // Jika personal, gunakan ikon orang tunggal (Icons.person)
                       ? Icon(
-                          chat.isGroup ? Icons.group : Icons.person,
+                          chat.isGroup ? Icons.groups : Icons.person,
                           color: Colors.grey.shade600,
                           size: 28,
                         )

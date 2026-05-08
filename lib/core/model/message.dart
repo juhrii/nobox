@@ -106,7 +106,7 @@ class ChatModel {
 }
 
 enum MessageStatus { sent, delivered, read }
-enum MessageType { text, voice, image, video }
+enum MessageType { text, voice, image, video, document, sticker }
 
 class Message {
   final String id;
@@ -122,6 +122,8 @@ class Message {
   final String? imagePath;  // local file path
   final String? imageUrl;   // remote URL from server
   final String? videoUrl;   // remote video URL from server
+  final String? documentName; // original filename for document messages
+  final String? documentUrl;  // remote URL for document download
 
   Message({
     this.id = '',
@@ -137,6 +139,8 @@ class Message {
     this.imagePath,
     this.imageUrl,
     this.videoUrl,
+    this.documentName,
+    this.documentUrl,
   });
 
   /// Format ISO timestamp "2026-03-25T05:42:28.107" → "25 Mar, 05:42"
@@ -288,12 +292,19 @@ class Message {
       return '';
     }
 
+    String? docName;
+    String? docUrl;
+
     if (json['Files'] != null && json['Files'] is List && (json['Files'] as List).isNotEmpty) {
       final firstFile = (json['Files'] as List).first;
       final filePath = extractFilePath(firstFile);
       final originalName = extractOriginalName(firstFile);
-      // Priority: check filePath extension first, then originalName, then API Type fallback
-      if (isAudioFile(filePath) || isAudioFile(originalName)) {
+      // Sticker detection FIRST (typeVal == '16') — before extension checks
+      if (typeVal == '16' && filePath.isNotEmpty) {
+        msgType = MessageType.sticker;
+        imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        content = '🌟 Sticker';
+      } else if (isAudioFile(filePath) || isAudioFile(originalName)) {
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
@@ -318,12 +329,22 @@ class Message {
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+      } else if (filePath.isNotEmpty) {
+        // Unrecognized file type → treat as document
+        msgType = MessageType.document;
+        docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
+        docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        content = '📄 $docName';
       }
     } else if (json['File'] != null && json['File'].toString().isNotEmpty) {
       final filePath = extractFilePath(json['File']);
       final originalName = extractOriginalName(json['File']);
-      // Priority: check filePath extension first, then originalName, then API Type fallback
-      if (isAudioFile(filePath) || isAudioFile(originalName)) {
+      // Sticker detection FIRST (typeVal == '16') — before extension checks
+      if (typeVal == '16' && filePath.isNotEmpty) {
+        msgType = MessageType.sticker;
+        imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        content = '🌟 Sticker';
+      } else if (isAudioFile(filePath) || isAudioFile(originalName)) {
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
@@ -348,6 +369,12 @@ class Message {
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+      } else if (filePath.isNotEmpty) {
+        // Unrecognized file type → treat as document
+        msgType = MessageType.document;
+        docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
+        docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        content = '📄 $docName';
       }
     } else if (typeVal == '16' || typeVal == '2' || typeVal == '3') {
       // No Files/File data available
@@ -380,6 +407,8 @@ class Message {
       imageUrl: imgUrl,
       audioPath: audioPath,
       videoUrl: videoUrl,
+      documentName: docName,
+      documentUrl: docUrl,
     );
   }
 
@@ -397,6 +426,8 @@ class Message {
     String? imagePath,
     String? imageUrl,
     String? videoUrl,
+    String? documentName,
+    String? documentUrl,
   }) {
     return Message(
       id: id ?? this.id,
@@ -412,6 +443,8 @@ class Message {
       imagePath: imagePath ?? this.imagePath,
       imageUrl: imageUrl ?? this.imageUrl,
       videoUrl: videoUrl ?? this.videoUrl,
+      documentName: documentName ?? this.documentName,
+      documentUrl: documentUrl ?? this.documentUrl,
     );
   }
 }

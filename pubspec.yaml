@@ -38,7 +38,6 @@ dependencies:
   cached_network_image: ^3.4.1
   video_thumbnail: ^0.5.3
   video_player: 2.8.3
-  chewie: ^1.7.5  # (Ini package tambahan biar UI tombol play, pause, dan slider-nya otomatis bagus sekelas Netflix wkwk)
   flutter_cache_manager: ^3.4.1
 
 dependency_overrides:

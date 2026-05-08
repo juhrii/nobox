@@ -253,50 +253,60 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.85,
                           ),
-                          child: Column(
-                            crossAxisAlignment: isMe
-                                ? CrossAxisAlignment.end
-                                : CrossAxisAlignment.start,
-                            children: [
-                              if (widget.message.repliedMessage != null)
-                                _buildReplyPreview(context, isMe, isDarkMode),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: widget.isSelected
-                                      ? (isMe
-                                          ? AppTheme.primaryColor
-                                              .withOpacity(0.8)
-                                          : (isDarkMode
-                                              ? AppTheme.darkSurface
-                                                  .withOpacity(0.8)
-                                              : AppTheme.otherMessageColor
-                                                  .withOpacity(0.8)))
-                                      : (isMe
-                                          ? AppTheme.primaryColor
-                                          : (isDarkMode
-                                              ? AppTheme.darkSurface
-                                              : Colors.white)),
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(12),
-                                    topRight: const Radius.circular(12),
-                                    bottomLeft: Radius.circular(isMe ? 12 : 2),
-                                    bottomRight: Radius.circular(isMe ? 2 : 12),
+                          child: Builder(
+                            builder: (context) {
+                              final isNoBubble = widget.message.messageType == MessageType.sticker ||
+                                  widget.message.messageType == MessageType.image;
+                              return Column(
+                                crossAxisAlignment: isMe
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  if (widget.message.repliedMessage != null)
+                                    _buildReplyPreview(context, isMe, isDarkMode),
+                                  Container(
+                                    padding: isNoBubble
+                                        ? EdgeInsets.zero
+                                        : const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                    decoration: isNoBubble
+                                        ? null
+                                        : BoxDecoration(
+                                            color: widget.isSelected
+                                                ? (isMe
+                                                    ? AppTheme.primaryColor
+                                                        .withOpacity(0.8)
+                                                    : (isDarkMode
+                                                        ? AppTheme.darkSurface
+                                                            .withOpacity(0.8)
+                                                        : AppTheme.otherMessageColor
+                                                            .withOpacity(0.8)))
+                                                : (isMe
+                                                    ? AppTheme.primaryColor
+                                                    : (isDarkMode
+                                                        ? AppTheme.darkSurface
+                                                        : Colors.white)),
+                                            borderRadius: BorderRadius.only(
+                                              topLeft: const Radius.circular(12),
+                                              topRight: const Radius.circular(12),
+                                              bottomLeft: Radius.circular(isMe ? 12 : 2),
+                                              bottomRight: Radius.circular(isMe ? 2 : 12),
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(
+                                                    isDarkMode ? 0.3 : 0.08),
+                                                blurRadius: 1,
+                                                offset: const Offset(0, 0.5),
+                                              ),
+                                            ],
+                                          ),
+                                    child: _buildMessageContent(
+                                        context, isMe, isDarkMode),
                                   ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(
-                                          isDarkMode ? 0.3 : 0.08),
-                                      blurRadius: 1,
-                                      offset: const Offset(0, 0.5),
-                                    ),
-                                  ],
-                                ),
-                                child: _buildMessageContent(
-                                    context, isMe, isDarkMode),
-                              ),
-                            ],
+                                ],
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -502,6 +512,10 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
         return _buildAudioMessage(isMe, isDarkMode);
       case MessageType.image:
         return _buildImageMessage(context, isMe, isDarkMode);
+      case MessageType.document:
+        return _buildDocumentMessage(isMe, isDarkMode);
+      case MessageType.sticker:
+        return _buildStickerMessage(isMe, isDarkMode);
       default:
         return _buildTextMessage(isMe, isDarkMode);
     }
@@ -526,6 +540,151 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
           child: _buildTextWithLinks(cleanMessage, isMe, isDarkMode),
         ),
         const SizedBox(width: 8),
+        _buildTimestampRow(isMe),
+      ],
+    );
+  }
+
+  Widget _buildStickerMessage(bool isMe, bool isDarkMode) {
+    final imageUrl = widget.message.imageUrl;
+
+    return Column(
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 180,
+            maxHeight: 180,
+          ),
+          child: imageUrl != null && imageUrl.isNotEmpty
+              ? CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const SizedBox(
+                    width: 100,
+                    height: 100,
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                  errorWidget: (_, __, ___) => Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.emoji_emotions_outlined, size: 48, color: Colors.grey),
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.emoji_emotions_outlined, size: 48, color: Colors.grey),
+                  ),
+                ),
+        ),
+        const SizedBox(height: 2),
+        _buildTimestampRow(isMe),
+      ],
+    );
+  }
+
+  Widget _buildDocumentMessage(bool isMe, bool isDarkMode) {
+    // Extract file name and extension from documentName or content
+    final fileName = widget.message.documentName ??
+        widget.message.content.replaceAll('📄 ', '').trim();
+    final ext = fileName.contains('.')
+        ? '.${fileName.split('.').last.toLowerCase()}'
+        : '';
+
+    return Column(
+      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Container(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.65,
+          ),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: isMe
+                ? Colors.white.withOpacity(0.15)
+                : (isDarkMode
+                    ? Colors.white.withOpacity(0.08)
+                    : Colors.black.withOpacity(0.05)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // File icon container
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isMe
+                      ? Colors.white.withOpacity(0.2)
+                      : (isDarkMode
+                          ? AppTheme.primaryColor.withOpacity(0.2)
+                          : AppTheme.primaryColor.withOpacity(0.12)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.insert_drive_file,
+                  color: isMe
+                      ? Colors.white
+                      : AppTheme.primaryColor,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              // File name + extension
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      fileName,
+                      style: TextStyle(
+                        color: isMe
+                            ? Colors.white
+                            : (isDarkMode
+                                ? AppTheme.darkTextPrimary
+                                : AppTheme.textPrimary),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Document${ext.isNotEmpty ? ' • ${ext.toUpperCase().replaceAll('.', '')}' : ''}',
+                      style: TextStyle(
+                        color: isMe
+                            ? Colors.white70
+                            : (isDarkMode
+                                ? AppTheme.darkTextSecondary
+                                : AppTheme.textSecondary),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
         _buildTimestampRow(isMe),
       ],
     );
@@ -619,7 +778,8 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     if (caption == '📷 Photo') caption = '';
     
     final hasCaption = caption.isNotEmpty;
-    final maxWidth = MediaQuery.of(context).size.width * 0.7;
+    final maxW = 180.0;
+    final maxH = 180.0;
 
     if (imageUrl == null || imageUrl.isEmpty) {
       return Column(
@@ -677,18 +837,15 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
               tag: imageUrl,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxWidth: maxWidth,
-                  maxHeight: 400,
+                  maxWidth: maxW,
+                  maxHeight: maxH,
                 ),
                 child: CachedNetworkImage(
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
-                  placeholder: (context, url) => Container(
-                    width: maxWidth,
-                    height: 200,
-                    color: isMe
-                        ? Colors.white.withOpacity(0.2)
-                        : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
+                  placeholder: (context, url) => SizedBox(
+                    width: maxW * 0.6,
+                    height: maxH * 0.6,
                     child: const Center(
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
@@ -725,7 +882,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
           const SizedBox(height: 8),
           Container(
             constraints: BoxConstraints(
-              maxWidth: maxWidth,
+              maxWidth: maxW,
             ),
             child: Text(
               _cleanContent(caption),
