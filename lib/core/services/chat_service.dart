@@ -569,7 +569,7 @@ class ChatService {
 
   /// Fetch message history for a chatroom.
   /// [roomId] must be the RoomId (Id from Chatrooms/List), NOT the ContactId (CtId).
-  Future<ApiResponse<List<Message>>> getMessageHistory(String roomId, String currentUserEmail) async {
+  Future<ApiResponse<List<Message>>> getMessageHistory(String roomId, String currentUserEmail, {int skip = 0, int take = 50}) async {
     if (currentTenantId == null) {
       // Ensure we have TenantId before fetching messages to construct WhatsApp image URLs
       await getAccounts();
@@ -577,8 +577,8 @@ class ChatService {
     
     try {
       final payload = {
-        'Take': 50,
-        'Skip': 0,
+        'Take': take,
+        'Skip': skip,
         'Sort': ['In DESC'],
         'IncludeColumns': [
           "Id", "IdAlias", "GrpMember", "RoomId", "Ack", "From", "ReplyFrom", "To", "AgentId", "IsNobox",

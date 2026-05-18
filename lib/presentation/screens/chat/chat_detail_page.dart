@@ -75,6 +75,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   Timer? _quickReplyDebounce;
   bool _isSettingQuickReply = false;
 
+  // ── Message Pagination State ──
+  static const int _messagePageSize = 50;
+  int _messageSkip = 0;
+  bool _isLoadingOlderMessages = false;
+  bool _hasMoreMessages = true;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -149,6 +155,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void initState() {
     super.initState();
     _initializeChat();
+
+    // Scroll listener for loading older messages
+    _scrollController.addListener(() {
+      // In reverse mode, maxScrollExtent = oldest messages (top of screen)
+      if (_scrollController.hasClients &&
+          _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+          !_isLoadingOlderMessages &&
+          _hasMoreMessages &&
+          !chat.isArchived) {
+        _loadOlderMessages();
+      }
+    });
     _messageController.addListener(() {
       if (_isSettingQuickReply) return; // Skip if we are injecting a template
       
@@ -546,6 +564,48 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
+      });
+    }
+  }
+
+  /// Load older messages when user scrolls to top of chat
+  Future<void> _loadOlderMessages() async {
+    if (_isLoadingOlderMessages || !_hasMoreMessages || chat.isArchived) return;
+
+    setState(() => _isLoadingOlderMessages = true);
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final currentUserEmail = authProvider.currentUser ?? '';
+
+    final response = await _chatService.getMessageHistory(
+      chat.id,
+      currentUserEmail,
+      skip: _messageSkip + _messagePageSize,
+      take: _messagePageSize,
+    );
+
+    if (mounted) {
+      setState(() {
+        _isLoadingOlderMessages = false;
+        if (response.isError || response.data == null || response.data!.isEmpty) {
+          _hasMoreMessages = false;
+          debugPrint('ChatDetail: No more older messages');
+        } else {
+          final olderMessages = response.data!;
+          debugPrint('ChatDetail: Loaded ${olderMessages.length} older messages');
+
+          // Deduplicate by message ID
+          final existingIds = _messages.map((m) => m.id).where((id) => id.isNotEmpty).toSet();
+          final uniqueOlder = olderMessages.where((m) => m.id.isEmpty || !existingIds.contains(m.id)).toList();
+
+          // Prepend older messages (they come in ASC order from service)
+          _messages.insertAll(0, uniqueOlder);
+          _messageSkip += _messagePageSize;
+
+          if (olderMessages.length < _messagePageSize) {
+            _hasMoreMessages = false;
+          }
+        }
       });
     }
   }
@@ -2255,9 +2315,9 @@ if (!response.isError) {
         // Adjust index for archived footer offset
         final adjustedIndex = hasArchivedFooter ? index - 1 : index;
 
-        // Last index (top of screen): "No more messages" header
+        // Last index (top of screen): loading indicator or "No more messages"
         if (adjustedIndex == _messages.length) {
-          return _buildNoMoreMessages();
+          return _buildMessageListHeader();
         }
 
         // Map reversed index to message index (newest = index 0, oldest = last)
@@ -2735,18 +2795,51 @@ if (!response.isError) {
   //  "No more messages" header
   // ─────────────────────────────────────────────
 
-  Widget _buildNoMoreMessages() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      alignment: Alignment.center,
-      child: Text(
-        'No more messages',
-        style: TextStyle(
-          color: Colors.grey[500],
-          fontSize: 13,
+  Widget _buildMessageListHeader() {
+    if (_isLoadingOlderMessages) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.grey[400],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Memuat pesan lama...',
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
-      ),
-    );
+      );
+    }
+
+    if (!_hasMoreMessages) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        alignment: Alignment.center,
+        child: Text(
+          'Tidak ada pesan lagi',
+          style: TextStyle(
+            color: Colors.grey[500],
+            fontSize: 13,
+          ),
+        ),
+      );
+    }
+
+    // Has more but not loading yet — will auto-trigger via scroll listener
+    return const SizedBox(height: 20);
   }
 
   // ─────────────────────────────────────────────

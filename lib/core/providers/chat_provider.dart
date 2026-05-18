@@ -150,6 +150,40 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
+  /// Maps raw funnel IDs and tag IDs on a [ChatModel] to human-readable names
+  /// using the cached funnels/tags lists. Returns a new ChatModel with names applied.
+  ChatModel _applyTagAndFunnelMapping(ChatModel chat, Conversation conv) {
+    // Funnel: resolve ID → name
+    if ((chat.funnel.isEmpty || int.tryParse(chat.funnel) != null) && conv.funnelId.isNotEmpty) {
+      if (_cachedFunnels != null) {
+        final matched = _cachedFunnels!.firstWhere(
+          (f) => f['Id']?.toString() == conv.funnelId,
+          orElse: () => <String, dynamic>{},
+        );
+        final name = matched['Name']?.toString() ?? matched['Nm']?.toString() ?? '';
+        if (name.isNotEmpty) chat = chat.copyWith(funnel: name);
+      }
+    }
+    // Tags: resolve IDs → names
+    if (chat.tags.isEmpty && conv.tagsIds.isNotEmpty && conv.tagsIds != "null") {
+      if (_cachedTags != null) {
+        final tagIdList = conv.tagsIds.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty && e != "null").toList();
+        final matchedNames = _cachedTags!
+            .where((t) => tagIdList.contains(t['Id']?.toString()))
+            .map((t) => t['Name']?.toString() ?? t['Nm']?.toString() ?? '')
+            .where((n) => n.isNotEmpty)
+            .toList();
+        if (matchedNames.isNotEmpty) {
+          chat = chat.copyWith(tags: matchedNames);
+        } else if (tagIdList.any((id) => int.tryParse(id) == null)) {
+          // Fallback: values are already names, not numeric IDs
+          chat = chat.copyWith(tags: tagIdList);
+        }
+      }
+    }
+    return chat;
+  }
+
   Future<void> fetchChats() async {
     _isLoading = true;
     _error = null;
@@ -188,39 +222,8 @@ class ChatProvider with ChangeNotifier {
         _chats = freshData.map((c) {
           var chat = c.toChatModel();
 
-          // Apply locally cached mapping for tags and funnel if API omits them
-          if ((chat.funnel.isEmpty || int.tryParse(chat.funnel) != null) && c.funnelId.isNotEmpty) {
-            if (_cachedFunnels != null) {
-               final matched = _cachedFunnels!.firstWhere(
-                 (f) => f['Id']?.toString() == c.funnelId,
-                 orElse: () => <String, dynamic>{},
-               );
-               final name = matched['Name']?.toString() ?? matched['Nm']?.toString() ?? '';
-               if (name.isNotEmpty) chat = chat.copyWith(funnel: name);
-            }
-          }
-          if (chat.tags.isEmpty && c.tagsIds.isNotEmpty && c.tagsIds != "null") {
-            if (_cachedTags != null) {
-              final tagIdList = c.tagsIds.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty && e != "null").toList();
-              // First attempt ID mapping
-              final matchedNames = _cachedTags!
-                  .where((t) => tagIdList.contains(t['Id']?.toString()))
-                  .map((t) => t['Name']?.toString() ?? t['Nm']?.toString() ?? '')
-                  .where((n) => n.isNotEmpty)
-                  .toList();
-              
-              if (matchedNames.isNotEmpty) {
-                 chat = chat.copyWith(tags: matchedNames);
-              } else if (tagIdList.any((id) => int.tryParse(id) == null)) {
-                 // Fallback: If it's not numbers, it means we probably saved names previously
-                 chat = chat.copyWith(tags: tagIdList);
-              }
-            }
-          }
-          
-          if (c.participantEmail.contains('NICHOL') || c.participantEmail.contains('sultan')) {
-             debugPrint('ChatProvider: After mapped - Funnel: ${chat.funnel}, Tags: ${chat.tags}');
-          }
+          // Apply locally cached mapping for tags and funnel
+          chat = _applyTagAndFunnelMapping(chat, c);
 
           // Check if unread count increased compared to previous state
           final oldChat = oldChatsMap[chat.id];
@@ -332,32 +335,8 @@ class ChatProvider with ChangeNotifier {
         for (final conv in freshData) {
           var chat = conv.toChatModel();
 
-          // Apply locally cached mapping for tags and funnel if API omits them
-          if ((chat.funnel.isEmpty || int.tryParse(chat.funnel) != null) && conv.funnelId.isNotEmpty) {
-            if (_cachedFunnels != null) {
-              final matched = _cachedFunnels!.firstWhere(
-                (f) => f['Id']?.toString() == conv.funnelId,
-                orElse: () => <String, dynamic>{},
-              );
-              final name = matched['Name']?.toString() ?? matched['Nm']?.toString() ?? '';
-              if (name.isNotEmpty) chat = chat.copyWith(funnel: name);
-            }
-          }
-          if (chat.tags.isEmpty && conv.tagsIds.isNotEmpty && conv.tagsIds != "null") {
-            if (_cachedTags != null) {
-              final tagIdList = conv.tagsIds.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty && e != "null").toList();
-              final matchedNames = _cachedTags!
-                  .where((t) => tagIdList.contains(t['Id']?.toString()))
-                  .map((t) => t['Name']?.toString() ?? t['Nm']?.toString() ?? '')
-                  .where((n) => n.isNotEmpty)
-                  .toList();
-              if (matchedNames.isNotEmpty) {
-                chat = chat.copyWith(tags: matchedNames);
-              } else if (tagIdList.any((id) => int.tryParse(id) == null)) {
-                chat = chat.copyWith(tags: tagIdList);
-              }
-            }
-          }
+          // Apply locally cached mapping for tags and funnel
+          chat = _applyTagAndFunnelMapping(chat, conv);
 
           // Apply persisted local state
           chat = chat.copyWith(
@@ -378,32 +357,8 @@ class ChatProvider with ChangeNotifier {
             .map((c) {
               var chat = c.toChatModel();
 
-              // Apply mapping
-              if ((chat.funnel.isEmpty || int.tryParse(chat.funnel) != null) && c.funnelId.isNotEmpty) {
-                if (_cachedFunnels != null) {
-                  final matched = _cachedFunnels!.firstWhere(
-                    (f) => f['Id']?.toString() == c.funnelId,
-                    orElse: () => <String, dynamic>{},
-                  );
-                  final name = matched['Name']?.toString() ?? matched['Nm']?.toString() ?? '';
-                  if (name.isNotEmpty) chat = chat.copyWith(funnel: name);
-                }
-              }
-              if (chat.tags.isEmpty && c.tagsIds.isNotEmpty && c.tagsIds != "null") {
-                if (_cachedTags != null) {
-                  final tagIdList = c.tagsIds.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty && e != "null").toList();
-                  final matchedNames = _cachedTags!
-                      .where((t) => tagIdList.contains(t['Id']?.toString()))
-                      .map((t) => t['Name']?.toString() ?? t['Nm']?.toString() ?? '')
-                      .where((n) => n.isNotEmpty)
-                      .toList();
-                  if (matchedNames.isNotEmpty) {
-                    chat = chat.copyWith(tags: matchedNames);
-                  } else if (tagIdList.any((id) => int.tryParse(id) == null)) {
-                    chat = chat.copyWith(tags: tagIdList);
-                  }
-                }
-              }
+              // Apply locally cached mapping for tags and funnel
+              chat = _applyTagAndFunnelMapping(chat, c);
 
               return chat.copyWith(
                 isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
@@ -453,32 +408,8 @@ class ChatProvider with ChangeNotifier {
           final newChats = newConversations.map((c) {
             var chat = c.toChatModel();
 
-            // Apply locally cached mapping for tags and funnel if API omits them
-            if ((chat.funnel.isEmpty || int.tryParse(chat.funnel) != null) && c.funnelId.isNotEmpty) {
-              if (_cachedFunnels != null) {
-                final matched = _cachedFunnels!.firstWhere(
-                  (f) => f['Id']?.toString() == c.funnelId,
-                  orElse: () => <String, dynamic>{},
-                );
-                final name = matched['Name']?.toString() ?? matched['Nm']?.toString() ?? '';
-                if (name.isNotEmpty) chat = chat.copyWith(funnel: name);
-              }
-            }
-            if (chat.tags.isEmpty && c.tagsIds.isNotEmpty && c.tagsIds != "null") {
-              if (_cachedTags != null) {
-                final tagIdList = c.tagsIds.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty && e != "null").toList();
-                final matchedNames = _cachedTags!
-                    .where((t) => tagIdList.contains(t['Id']?.toString()))
-                    .map((t) => t['Name']?.toString() ?? t['Nm']?.toString() ?? '')
-                    .where((n) => n.isNotEmpty)
-                    .toList();
-                if (matchedNames.isNotEmpty) {
-                  chat = chat.copyWith(tags: matchedNames);
-                } else if (tagIdList.any((id) => int.tryParse(id) == null)) {
-                  chat = chat.copyWith(tags: tagIdList);
-                }
-              }
-            }
+            // Apply locally cached mapping for tags and funnel
+            chat = _applyTagAndFunnelMapping(chat, c);
 
             // Apply persisted local state
             return chat.copyWith(

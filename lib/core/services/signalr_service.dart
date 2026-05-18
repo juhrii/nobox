@@ -23,6 +23,10 @@ class SignalRService {
   bool _isSubscribed = false;
   bool get isConnected => _isConnected;
 
+  /// Callback when server signals session/room expired (TerimaExpired).
+  /// Set this from the app layer to show a dialog or force logout.
+  Function? onSessionExpired;
+
   // ── NoBox Server Event Names ──
   static const String eventTerimaPesan = 'TerimaPesan';
   static const String eventTerimaSubSpv = 'TerimaSubSpv';
@@ -505,6 +509,9 @@ class SignalRService {
         'arguments': arguments,
         'timestamp': DateTime.now().toIso8601String(),
       });
+
+      // Notify the app layer so it can show a dialog / force logout
+      onSessionExpired?.call();
     } catch (e) {
       debugPrint('SignalR: ❌ Error parsing TerimaExpired: $e');
     }

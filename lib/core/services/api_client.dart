@@ -98,10 +98,14 @@ class ApiClient {
       },
     ));
 
-    _dio.interceptors.add(LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-    ));
+    // Only log request/response bodies in debug mode to avoid
+    // memory waste on large payloads (e.g. base64 images) in production.
+    if (!kReleaseMode) {
+      _dio.interceptors.add(LogInterceptor(
+        requestBody: true,
+        responseBody: true,
+      ));
+    }
   }
 
   /// Silent re-login: ambil saved credentials → login ulang → simpan token baru

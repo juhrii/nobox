@@ -20,6 +20,7 @@ import 'presentation/screens/chat/chat_list_page.dart';
 import 'presentation/screens/chat/chat_detail_page.dart';
 import 'presentation/screens/chat/archive_list_page.dart';
 import 'core/utils/globals.dart';
+import 'core/model/message.dart';
 
 void main() {
   debugPrint('App: main started');
@@ -73,7 +74,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         );
-        await PushNotificationService.initialize();
+        await PushNotificationService.initialize(
+          onNotificationTap: (roomId, roomName) {
+            debugPrint('Main: Notification tapped | room=$roomId | name=$roomName');
+            // Navigate to ChatDetailPage using the global navigator key
+            navigatorKey.currentState?.pushNamed(
+              AppRoutes.chatDetail,
+              arguments: ChatModel(
+                id: roomId,
+                sender: roomName,
+                lastMessage: '',
+                time: '',
+              ),
+            );
+          },
+        );
       } catch (e) {
         debugPrint('Firebase init failed (maybe google-services.json is missing): $e');
       }
@@ -163,6 +178,71 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         } catch (_) {}
       }
     });
+
+    // ── TerimaExpired: session expired → show dialog and logout ──
+    signalR.onSessionExpired = () {
+      debugPrint('Main: Session expired event received');
+      _handleSessionExpired();
+    };
+  }
+
+  // ── Session Expired Handler ──
+  static bool _isShowingExpiredDialog = false;
+
+  void _handleSessionExpired() {
+    // Guard: prevent stacking multiple dialogs
+    if (_isShowingExpiredDialog) return;
+    _isShowingExpiredDialog = true;
+
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) {
+      // No navigator context — force logout silently
+      _forceLogout();
+      _isShowingExpiredDialog = false;
+      return;
+    }
+
+    showDialog(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.timer_off_rounded, color: Colors.redAccent),
+            SizedBox(width: 10),
+            Text('Sesi Berakhir'),
+          ],
+        ),
+        content: const Text(
+          'Sesi Anda telah kedaluwarsa. Silakan login kembali untuk melanjutkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop(); // close dialog
+              _forceLogout();
+            },
+            child: const Text('Login Ulang'),
+          ),
+        ],
+      ),
+    ).then((_) {
+      _isShowingExpiredDialog = false;
+    });
+  }
+
+  void _forceLogout() {
+    try {
+      final auth = context.read<AuthProvider>();
+      auth.logout();
+      SignalRService().disconnect();
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        AppRoutes.login,
+        (_) => false,
+      );
+    } catch (e) {
+      debugPrint('Main: Error during force logout: $e');
+    }
   }
 
   // ── Safety-net Polling (data sync only, NO notifications) ──
