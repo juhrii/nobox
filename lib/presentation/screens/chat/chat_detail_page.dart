@@ -91,8 +91,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         if (args is ChatModel) {
           chat = args;
         } else {
-          debugPrint('Warning: ChatDetailPage opened without valid ChatModel. Using dummy fallback.');
+          debugPrint('Error: ChatDetailPage opened without valid ChatModel. Navigating back.');
           chat = ChatModel(id: '', sender: 'Unknown', lastMessage: '', time: '');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          });
         }
       }
       _isInit = true;
@@ -163,6 +168,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       }
     });
     _messageController.addListener(() {
+      if (!mounted) return;
       if (_isSettingQuickReply) return; // Skip if we are injecting a template
       
       final text = _messageController.text;
@@ -539,7 +545,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           if (roomIdInt != null) {
             signalR.sendReadCount(roomIdInt);
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('Error caught at _loadChatHistory (sendReadCount): $e');
+        }
       }
     });
   }

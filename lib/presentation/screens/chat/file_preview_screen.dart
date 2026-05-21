@@ -101,15 +101,15 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
 
     _videoController = VideoPlayerController.file(File(widget.filePath));
     try {
-      await _videoController!.initialize();
-      _videoController!.addListener(_onVideoUpdate);
-      await _videoController!.play();
+      await _videoController?.initialize();
+      _videoController?.addListener(_onVideoUpdate);
+      await _videoController?.play();
       if (mounted) {
         setState(() {
           _isVideoInitialized = true;
           _isVideoPlaying = true;
           _videoActiveMode = true;
-          _videoDuration = _videoController!.value.duration;
+          _videoDuration = _videoController?.value.duration ?? Duration.zero;
         });
         _startControlsAutoHide();
       }
@@ -121,17 +121,18 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
   /// Toggle play/pause in Active mode.
   void _togglePlayPause() {
     if (_videoController == null || !_isVideoInitialized) return;
-    if (_videoController!.value.isPlaying) {
-      _videoController!.pause();
+    if (_videoController?.value.isPlaying == true) {
+      _videoController?.pause();
     } else {
-      _videoController!.play();
+      _videoController?.play();
     }
   }
 
   /// Listener for position/duration/playing state updates.
   void _onVideoUpdate() {
     if (!mounted || _videoController == null) return;
-    final value = _videoController!.value;
+    final value = _videoController?.value;
+    if (value == null) return;
     final playing = value.isPlaying;
     final pos = value.position;
     final dur = value.duration;
@@ -168,7 +169,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
   void _toggleMute() {
     if (_videoController == null) return;
     setState(() => _isMuted = !_isMuted);
-    _videoController!.setVolume(_isMuted ? 0.0 : 1.0);
+    _videoController?.setVolume(_isMuted ? 0.0 : 1.0);
   }
 
   /// Open fullscreen video player overlay.
@@ -447,7 +448,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
         ),
         clipBehavior: Clip.antiAlias,
         child: AspectRatio(
-          aspectRatio: _videoController!.value.aspectRatio.clamp(0.5, 3.0),
+          aspectRatio: (_videoController?.value.aspectRatio ?? 1.0).clamp(0.5, 3.0),
           child: GestureDetector(
             onTap: _toggleControls,
             child: Stack(
@@ -525,7 +526,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                                       final newPosition = Duration(
                                         milliseconds: (value * totalMs).round(),
                                       );
-                                      _videoController!.seekTo(newPosition);
+                                      _videoController?.seekTo(newPosition);
                                     },
                                     onChangeEnd: (_) => _startControlsAutoHide(),
                                   ),

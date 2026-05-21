@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/services/chat_service.dart';
+import '../../core/model/quick_reply_model.dart';
 
 class QuickReplyOverlay extends StatefulWidget {
   final Function(String) onSelectReply;
@@ -14,33 +16,60 @@ class QuickReplyOverlay extends StatefulWidget {
 
 class _QuickReplyOverlayState extends State<QuickReplyOverlay> {
   final TextEditingController _searchController = TextEditingController();
+  final ChatService _chatService = ChatService();
   
-  // Mock Data
-  final List<Map<String, String>> _allRepliesMock = [
-    {'title': 'Greeting', 'content': 'Halo, ada yang bisa kami bantu hari ini?'},
-    {'title': 'Pricing', 'content': 'Berikut adalah daftar harga layanan kami:\n1. Basic: Rp100k\n2. Pro: Rp200k'},
-    {'title': 'Closing', 'content': 'Terima kasih telah menghubungi kami. Semoga harinya menyenangkan!'},
-    {'title': 'Address', 'content': 'Kantor kami berlokasi di Jl. Sudirman No.1, Jakarta Pusat.'},
-  ];
-  
-  
-  List<Map<String, String>> _filteredReplies = [];
+  List<QuickReplyTemplate> _allReplies = [];
+  List<QuickReplyTemplate> _filteredReplies = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _filteredReplies = _allRepliesMock;
+    _fetchQuickReplies();
     
     _searchController.addListener(() {
       final query = _searchController.text.toLowerCase();
       setState(() {
-        _filteredReplies = _allRepliesMock.where((reply) {
-          final title = reply['title']!.toLowerCase();
-          final content = reply['content']!.toLowerCase();
+        _filteredReplies = _allReplies.where((reply) {
+          final title = reply.command.toLowerCase();
+          final content = reply.content.toLowerCase();
           return title.contains(query) || content.contains(query);
         }).toList();
       });
     });
+  }
+
+  Future<void> _fetchQuickReplies() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final response = await _chatService.getQuickReplyTemplates(take: 50, skip: 0);
+      if (!mounted) return;
+
+      if (!response.isError && response.data != null) {
+        setState(() {
+          _allReplies = response.data!;
+          _filteredReplies = _allReplies;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = response.error ?? 'Failed to load quick replies';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('QuickReplyOverlay: Error fetching templates: $e');
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'An error occurred while loading quick replies.';
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -96,39 +125,70 @@ class _QuickReplyOverlayState extends State<QuickReplyOverlay> {
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
               ),
+              enabled: !_isLoading,
             ),
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: _filteredReplies.isEmpty
-                ? const Center(child: Text('No quick replies found.'))
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: _filteredReplies.length,
-                    separatorBuilder: (context, index) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final reply = _filteredReplies[index];
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        title: Text(
-                          reply['title']!,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          reply['content']!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () {
-                          widget.onSelectReply(reply['content']!);
-                          Navigator.pop(context);
-                        },
-                      );
-                    },
-                  ),
+            child: _buildContent(),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _errorMessage!,
+              style: const TextStyle(color: Colors.red),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _fetchQuickReplies,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_filteredReplies.isEmpty) {
+      return const Center(child: Text('No quick replies found.'));
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: _filteredReplies.length,
+      separatorBuilder: (context, index) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final reply = _filteredReplies[index];
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          title: Text(
+            reply.command,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            reply.content,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: () {
+            widget.onSelectReply(reply.content);
+            Navigator.pop(context);
+          },
+        );
+      },
     );
   }
 }

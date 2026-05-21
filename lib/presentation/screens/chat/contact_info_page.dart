@@ -4,6 +4,8 @@ import '../../../core/model/message.dart';
 import '../../../core/providers/chat_provider.dart';
 import 'edit_contact_page.dart';
 import 'conversation_history_page.dart';
+import '../../widgets/tag_selection_dialog.dart';
+import '../../widgets/add_funnel_dialog.dart';
 
 /// Contact Detail page matching the Nobox app design.
 /// Sections: Contact, Conversation, Funnel, Message Tags, Notes,
@@ -284,98 +286,32 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
   }
 
   void _showAddFunnelDialog() {
-    final TextEditingController funnelController = TextEditingController();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-          contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-          actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Add Funnel',
-                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600, fontSize: 18),
-              ),
-              InkWell(
-                onTap: () => Navigator.pop(context),
-                child: const Icon(Icons.close, color: Colors.blue, size: 24),
-              ),
-            ],
-          ),
-          content: TextField(
-            controller: funnelController,
-            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-            decoration: InputDecoration(
-              hintText: 'Enter funnel name...',
-              hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey.shade400),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.blue.shade400, width: 1.5),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-            autofocus: true,
-          ),
-          actions: [
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.blue),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    onPressed: () async {
-                      final newFunnel = funnelController.text.trim();
-                      if (newFunnel.isNotEmpty) {
-                        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                        final success = await chatProvider.updateContactFunnel(widget.chat.id, newFunnel);
-                        if (success) {
-                          setState(() => _currentFunnel = newFunnel);
-                        } else {
-                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update funnel')));
-                        }
-                      }
-                      if (mounted) Navigator.pop(context);
-                    },
-                    child: const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ],
-            ),
-          ],
+        return AddFunnelDialog(
+          roomId: widget.chat.id,
+          initialFunnel: _currentFunnel,
+          onSave: (String funnelName, String funnelId) {
+            if (mounted) {
+              setState(() {
+                _currentFunnel = funnelName;
+              });
+            }
+          },
         );
       },
     );
   }
 
   void _dismissFunnelOverlay() {
-    _funnelOverlayEntry?.remove();
+    try {
+      if (_funnelOverlayEntry != null && _funnelOverlayEntry!.mounted) {
+        _funnelOverlayEntry?.remove();
+      }
+    } catch (e) {
+      debugPrint('Error removing funnel overlay: $e');
+    }
     _funnelOverlayEntry = null;
     if (mounted) setState(() {});
   }
@@ -761,193 +697,19 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
   }
 
   void _showMessageTagsDialog() async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    showDialog(
+    await showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-    
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    final tagsData = await chatProvider.getTags();
-    
-    if (!mounted) return;
-    Navigator.pop(context); // dismiss loading
-    
-    final availableTags = <Map<String, String>>[];
-    
-    // First try the newly fetched tags
-    if (tagsData != null && tagsData.isNotEmpty) {
-      for (final t in tagsData) {
-        final name = t['Name']?.toString() ?? t['Nm']?.toString() ?? '';
-        final id = t['Id']?.toString() ?? '';
-        if (name.isNotEmpty) {
-          availableTags.add({'name': name, 'id': id});
-        }
-      }
-    } else {
-      // Fallback to cache from DetailRoom
-      for (final t in _availableTagsFromServer) {
-        final name = t['Name']?.toString() ?? t['Nm']?.toString() ?? '';
-        final id = t['Id']?.toString() ?? '';
-        if (name.isNotEmpty) {
-          availableTags.add({'name': name, 'id': id});
-        }
-      }
-    }
-    
-    if (availableTags.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tidak ada tags tersedia.')),
-      );
-      return;
-    }
-    
-    // Maintain a local selection state for the dialog
-    List<String> localSelectedTags = List.from(_currentTags);
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-              actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Message Tags',
-                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600, fontSize: 18),
-                  ),
-                  InkWell(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.close, color: Colors.blue, size: 24),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.grey.shade800 : const Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: TextField(
-                        style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                        decoration: InputDecoration(
-                          hintText: 'Search or create new tag...',
-                          hintStyle: TextStyle(color: isDark ? Colors.grey.shade500 : Colors.grey.shade400),
-                          prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Flexible(
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: availableTags.length,
-                        itemBuilder: (context, index) {
-                          final item = availableTags[index];
-                          final isSelected = localSelectedTags.contains(item['name']);
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(
-                              isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                              color: isSelected ? Colors.blue : Colors.grey.shade400,
-                              size: 28,
-                            ),
-                            title: Text(
-                              item['name']!,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                            subtitle: Text(
-                              'ID: ${item['id']}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                            onTap: () {
-                              setDialogState(() {
-                                if (isSelected) {
-                                  localSelectedTags.remove(item['name']);
-                                } else {
-                                  localSelectedTags.add(item['name']!);
-                                }
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.blue),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onPressed: () async {
-                          final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                          
-                          // Convert selected names back to IDs to save to backend
-                          final selectedIds = availableTags
-                              .where((t) => localSelectedTags.contains(t['name']))
-                              .map((t) => t['id']!)
-                              .toList();
-                              
-                          final success = await chatProvider.updateContactTags(widget.chat.id, selectedIds, tagNames: localSelectedTags);
-                          if (success) {
-                            setState(() => _currentTags = List.from(localSelectedTags));
-                          } else {
-                             if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update tags')));
-                          }
-                          if (mounted) Navigator.pop(context);
-                        },
-                        child: Text('Save (${localSelectedTags.length})', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (context) => TagSelectionDialog(
+        roomId: widget.chat.id,
+        initialSelectedTags: _currentTags,
+        onSave: (List<String> updatedTags) {
+          if (mounted) {
+            setState(() {
+              _currentTags = updatedTags;
+            });
+          }
+        },
+      ),
     );
   }
 

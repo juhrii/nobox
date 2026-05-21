@@ -1246,7 +1246,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                 const SizedBox(height: 8),
                 if (latitude != null && longitude != null)
                   Text(
-                    'Lat: ${latitude!.toStringAsFixed(6)}, Lng: ${longitude!.toStringAsFixed(6)}',
+                    'Lat: ${(latitude ?? 0.0).toStringAsFixed(6)}, Lng: ${(longitude ?? 0.0).toStringAsFixed(6)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: isMe ? Colors.white70 : AppTheme.textSecondary,

@@ -1327,7 +1327,7 @@ class ChatService {
   Future<ApiResponse<bool>> updateContactFunnel(String contactId, String funnel) async {
     try {
       debugPrint('🎯 [Update Funnel] Updating funnel for room $contactId to $funnel');
-      final int? fnId = int.tryParse(funnel); 
+      final dynamic fnId = funnel.isEmpty ? null : (int.tryParse(funnel) ?? funnel); 
       
       final requestData = {
         'EntityId': int.tryParse(contactId) ?? contactId,
@@ -2056,11 +2056,11 @@ class ChatService {
   }
 
   /// Memanggil API untuk mendapatkan daftar Quick Reply Templates
-  Future<ApiResponse<List<QuickReplyTemplate>>> getQuickReplyTemplates({String? containsText}) async {
+  Future<ApiResponse<List<QuickReplyTemplate>>> getQuickReplyTemplates({String? containsText, int take = 50, int skip = 0}) async {
     try {
       final payload = {
-        "Take": 20,
-        "Skip": 0,
+        "Take": take,
+        "Skip": skip,
         "ColumnSelection": 1,
         "IncludeColumns": ["Id", "Cmd", "Files", "Cnt", "Type", "In", "InBy", "Up", "UpBy"]
       };

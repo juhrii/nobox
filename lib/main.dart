@@ -125,7 +125,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // Sync data that might have been missed while backgrounded
       try {
         context.read<ChatProvider>().refreshFirstPage();
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Error caught at didChangeAppLifecycleState (refreshFirstPage): $e');
+      }
     }
   }
 
@@ -175,7 +177,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         debugPrint('Main: SignalR reconnected, syncing data...');
         try {
           context.read<ChatProvider>().refreshFirstPage();
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('Error caught at _reconnectSub (refreshFirstPage): $e');
+        }
       }
     });
 

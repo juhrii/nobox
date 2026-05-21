@@ -288,7 +288,9 @@ class SignalRService {
       if (arguments.length > 3 && arguments[3] is String) {
         try {
           senderData = jsonDecode(arguments[3] as String) as Map<String, dynamic>;
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('Error caught at _handleTerimaPesan (parse senderData): $e');
+        }
       }
 
       final parsed = {
