@@ -567,6 +567,124 @@ class ChatService {
     }
   }
 
+  /// Fetch resolved conversation history for a specific contact.
+  /// Uses the ListHistory endpoint with CtId filter and St=3 (Resolved).
+  Future<ApiResponse<List<Conversation>>> getConversationHistory(String contactId) async {
+    try {
+      final Map<String, dynamic> payload = {
+        "Take": 50,
+        "Skip": 0,
+        "Sort": ["TimeMsg DESC"],
+        "IncludeColumns": [
+          "Id", "CtId", "CtRealId", "GrpId", "CtRealNm", "Ct", "Grp",
+          "LastMsg", "TimeMsg", "Uc", "St", "ChId", "ChAcc", "ChNm", "AccNm", "AccId", "BotNm", "CtTmp", "LinkTmp",
+          "IsGrp", "IsPin", "CtIsBlock", "IsMuteBot", "IsNeedReply", "Tags", "Fn", "FnId", "FnNm", "FunnelId", "TagsIds",
+          "UpBy", "AgentId", "AssignedTo", "HandledBy", "AgentName", "AssignedAgentName", "CtImg", "LinkImg", "TagsNm"
+        ],
+        "ColumnSelection": 1,
+        "EqualityFilter": {
+          "CtId": contactId,
+          "St": 3,
+        },
+      };
+
+      debugPrint('ChatService: getConversationHistory CtId=$contactId');
+      final response = await _apiClient.post(AppConfig.chatroomsListHistoryEndpoint, data: payload);
+
+      if (response.statusCode == 200) {
+        final dynamic rawData = response.data;
+
+        if (rawData is Map && rawData['IsError'] == true) {
+          final serverError = rawData['Error']?.toString() ?? 'Unknown server error';
+          debugPrint('ChatService: Server error in getConversationHistory: $serverError');
+          return ApiResponse.failure(serverError, 200);
+        }
+
+        List<dynamic> dataList = [];
+        if (rawData is List) {
+          dataList = rawData;
+        } else if (rawData is Map) {
+          dataList = rawData['Entities'] ?? rawData['Values'] ?? rawData['data'] ?? rawData['list'] ?? [];
+        }
+
+        debugPrint('ChatService: Loaded ${dataList.length} history conversations for CtId=$contactId');
+
+        final conversations = dataList.map((json) {
+          if (json is Map<String, dynamic>) {
+            return Conversation.fromJson(json);
+          }
+          return Conversation(id: '', participantEmail: 'Unknown', lastMessage: '', lastMessageTime: '');
+        }).toList();
+
+        // Inject account names (just like in getConversations)
+        try {
+          final accountsResponse = await getAccounts();
+          if (!accountsResponse.isError && accountsResponse.data != null) {
+            final accounts = accountsResponse.data!;
+            final accountByChannel = <int, String>{};
+            
+            for (final acc in accounts) {
+              final name = acc['Name']?.toString() ?? acc['Nm']?.toString() ?? '';
+              final channel = acc['Channel'];
+              
+              if (name.isNotEmpty) {
+                if (channel is int) {
+                  accountByChannel[channel] = name;
+                } else if (channel is String) {
+                  final channelNum = int.tryParse(channel);
+                  if (channelNum != null) {
+                    accountByChannel[channelNum] = name;
+                  } else {
+                    if (channel.toLowerCase().contains('whatsapp')) accountByChannel[1] = name;
+                    else if (channel.toLowerCase().contains('telegram')) accountByChannel[2] = name;
+                  }
+                }
+              }
+            }
+
+            for (int i = 0; i < conversations.length; i++) {
+              if (conversations[i].channelName.isEmpty && i < dataList.length) {
+                final json = dataList[i];
+                if (json is Map<String, dynamic>) {
+                  final chId = json['ChId'];
+                  final accId = json['AccId']?.toString();
+                  
+                  String? resolvedName;
+                  if (accId != null && _accountById.containsKey(accId)) {
+                    resolvedName = _accountById[accId];
+                  } else if (chId != null && chId is int && accountByChannel.containsKey(chId)) {
+                    resolvedName = accountByChannel[chId];
+                  } else if (accounts.length == 1 && _singleAccountName != null) {
+                    resolvedName = _singleAccountName;
+                  }
+                  
+                  if (resolvedName != null) {
+                    conversations[i] = conversations[i].copyWith(channelName: resolvedName);
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('ChatService: Failed to resolve account names in history: $e');
+        }
+
+        return ApiResponse.success(conversations, response.statusCode!);
+      } else {
+        return ApiResponse.failure(
+          'Failed to load conversation history: ${response.statusCode}',
+          response.statusCode!,
+        );
+      }
+    } on DioException catch (e) {
+      debugPrint('ChatService: getConversationHistory DioException: ${e.message}');
+      return ApiResponse.failure(e.message ?? 'Connection error', e.response?.statusCode ?? 500);
+    } catch (e) {
+      debugPrint('ChatService: getConversationHistory error: $e');
+      return ApiResponse.failure(e.toString(), 500);
+    }
+  }
+
   /// Fetch message history for a chatroom.
   /// [roomId] must be the RoomId (Id from Chatrooms/List), NOT the ContactId (CtId).
   Future<ApiResponse<List<Message>>> getMessageHistory(String roomId, String currentUserEmail, {int skip = 0, int take = 50}) async {

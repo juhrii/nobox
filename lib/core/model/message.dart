@@ -147,7 +147,12 @@ class Message {
   static String _formatIsoTime(String raw) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     try {
-      final dt = DateTime.parse(raw);
+      String timeString = raw;
+      // Jika dari server tidak ada penanda zona waktu (Z atau +), paksa anggap sebagai UTC ('Z')
+      if (!timeString.endsWith('Z') && !timeString.contains('+') && timeString.length >= 19) {
+        timeString += 'Z';
+      }
+      final dt = DateTime.parse(timeString).toLocal();
       return "${dt.day.toString().padLeft(2, '0')} ${months[dt.month - 1]}, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
     } catch (_) {
       return raw; // Return as-is if parsing fails

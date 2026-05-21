@@ -30,7 +30,6 @@ import 'starred_messages_page.dart';
 import 'location_picker_page.dart';
 import '../../widgets/add_agent_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import '../../../core/services/notification_service.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../widgets/message_bubble_widget.dart';
 import '../../widgets/voice_recording_bottom_sheet.dart';
@@ -39,7 +38,8 @@ import 'file_preview_screen.dart';
 
 class ChatDetailPage extends StatefulWidget {
   final ChatModel? chat;
-  const ChatDetailPage({super.key, this.chat});
+  final bool isReadOnly;
+  const ChatDetailPage({super.key, this.chat, this.isReadOnly = false});
 
   @override
   State<ChatDetailPage> createState() => _ChatDetailPageState();
@@ -98,12 +98,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       _isInit = true;
 
       if (chat.id.isNotEmpty) {
-        // Set NotificationService to suppress push notifications while chatting
-        NotificationService.activeChatId = chat.id;
-        // Set PushNotificationService to suppress notifications while in this room
+        // Suppress notifications while chatting in this room
         PushNotificationService.setCurrentRoom(chat.id);
         // Hapus notifikasinya kalau masih ada menggantung
-        NotificationService.clearNotification(chat.id);
         PushNotificationService.cancelNotificationsForRoom(chat.id);
       }
     }
@@ -131,7 +128,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void dispose() {
     // Reset notification suppression when leaving chat
     if (_isInit) {
-      NotificationService.activeChatId = null;
       PushNotificationService.setCurrentRoom(null);
       final provider = _statusProvider;
       final sender = chat.sender;
@@ -1582,7 +1578,7 @@ if (!response.isError) {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!chat.isArchived) ...[
+                      if (!chat.isArchived && !widget.isReadOnly) ...[
                         if (_isShowingQuickReply && _quickReplyTemplates.isNotEmpty) _buildQuickReplyList(isDark),
                         if (_repliedMessage != null) _buildReplyPreview(isDark),
                         _buildInputBar(isDark),

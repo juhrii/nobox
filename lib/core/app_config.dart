@@ -29,6 +29,7 @@ class AppConfig {
   static const String detailRoomEndpoint = 'Services/Chat/Chatrooms/DetailRoom';
   static const String detailArchivedEndpoint = 'Services/Chat/Chatrooms/DetailArchived';
   static const String chatroomsListEndpoint = 'Services/Chat/Chatrooms/List';
+  static const String chatroomsListHistoryEndpoint = 'Services/Chat/Chatrooms/ListHistory';
   static const String quickReplyTemplatesEndpoint = 'Services/Chat/Chattemplates/List';
   
   // Inbox Actions (MVC version as discovered by probe `Inbox/Assign?Id=x`)

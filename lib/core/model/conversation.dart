@@ -195,6 +195,7 @@ class Conversation {
   static String _resolveChannelName(Map<String, dynamic> json) {
     final candidates = [
       json['AccNm'], json['ChNm'], json['ChAcc'], json['ChannelAccount'],
+      json['accountName'], json['AccountName'], json['account_name']
     ];
     for (final val in candidates) {
       if (val != null && val.toString().isNotEmpty && val.toString() != 'Not Found') {

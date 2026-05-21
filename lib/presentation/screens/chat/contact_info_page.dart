@@ -1574,10 +1574,25 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
               title: 'Conversation History',
               trailing: Icon(Icons.chevron_right, color: Colors.grey.shade400),
               onTap: () {
+                // Read ctId from chatProvider's room matching the current room ID
+                final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+                final allChats = chatProvider.chats;
+                String ctId = chat.contactId; // fallback
+                for (final room in allChats) {
+                  if (room.id == chat.id) {
+                    ctId = room.contactId;
+                    break;
+                  }
+                }
+                debugPrint('ConversationHistory: navigating with ctId=$ctId for roomId=${chat.id}');
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ConversationHistoryPage(chat: chat),
+                    builder: (context) => ConversationHistoryPage(
+                      contactId: ctId,
+                      contactName: chat.sender,
+                      contactImage: _currentAvatarUrl ?? chat.avatarUrl,
+                    ),
                   ),
                 );
               },

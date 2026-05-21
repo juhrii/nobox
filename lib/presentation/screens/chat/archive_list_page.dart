@@ -217,7 +217,11 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
   String _formatTime(String rawTime) {
     if (rawTime.isEmpty) return '';
     try {
-      final dt = DateTime.parse(rawTime);
+      String timeString = rawTime;
+      if (!timeString.endsWith('Z') && !timeString.contains('+') && timeString.length >= 19) {
+        timeString += 'Z';
+      }
+      final dt = DateTime.parse(timeString).toLocal();
       final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return '${dt.day} ${months[dt.month - 1]}, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {

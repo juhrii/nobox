@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../../core/model/message.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../../core/model/conversation.dart';
 import '../../../core/services/chat_service.dart';
-import '../../../core/providers/auth_provider.dart';
+import '../../../core/theme/app_theme.dart';
+import 'chat_detail_page.dart';
 
 class ConversationHistoryPage extends StatefulWidget {
-  final ChatModel chat;
+  final String contactId;
+  final String contactName;
+  final String? contactImage;
 
-  const ConversationHistoryPage({super.key, required this.chat});
+  const ConversationHistoryPage({
+    super.key,
+    required this.contactId,
+    required this.contactName,
+    this.contactImage,
+  });
 
   @override
   State<ConversationHistoryPage> createState() => _ConversationHistoryPageState();
@@ -15,117 +24,75 @@ class ConversationHistoryPage extends StatefulWidget {
 
 class _ConversationHistoryPageState extends State<ConversationHistoryPage> {
   final ChatService _chatService = ChatService();
-  List<Message> _messages = [];
-  bool _isLoadingMessages = true;
+  List<Conversation> _historyRooms = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialMessages();
+    _loadConversationHistory();
   }
 
-  void _loadInitialMessages() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final currentUserEmail = authProvider.currentUser ?? '';
-    
+  Future<void> _loadConversationHistory() async {
     setState(() {
-      _isLoadingMessages = true;
+      _isLoading = true;
+      _errorMessage = null;
     });
 
-    final response = await _chatService.getMessageHistory(widget.chat.id, currentUserEmail);
-    
+    final response = await _chatService.getConversationHistory(widget.contactId);
+
     if (mounted) {
       setState(() {
-        _isLoadingMessages = false;
-        if (!response.isError && response.data != null) {
-          _messages = response.data!;
+        _isLoading = false;
+        if (response.isError) {
+          _errorMessage = response.error ?? 'Failed to load conversation history';
+        } else {
+          _historyRooms = response.data ?? [];
         }
       });
     }
   }
 
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
   String _formatTime(String rawTime) {
     if (rawTime.isEmpty) return '';
     try {
-      final dt = DateTime.parse(rawTime);
-      final hr = dt.hour.toString().padLeft(2, '0');
-      final min = dt.minute.toString().padLeft(2, '0');
-      return '$hr:$min';
+      String timeString = rawTime;
+      if (!timeString.endsWith('Z') && !timeString.contains('+') && timeString.length >= 19) {
+        timeString += 'Z';
+      }
+      final dt = DateTime.parse(timeString).toLocal();
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+
+      final timeStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+      if (diff.inDays == 0 && now.day == dt.day) {
+        return timeStr;
+      } else if (diff.inDays == 1 || (diff.inDays == 0 && now.day != dt.day)) {
+        return 'Yesterday';
+      } else if (diff.inDays < 7) {
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        return days[dt.weekday - 1];
+      } else {
+        return '${dt.day.toString().padLeft(2, '0')} ${_months[dt.month - 1]} ${dt.year}';
+      }
     } catch (_) {
       return rawTime;
     }
   }
 
-  Widget _buildChatBubble(Message message, bool isDark) {
-    return Align(
-      alignment: message.isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: message.isMe
-              ? (isDark ? Colors.blue.shade800 : const Color(0xFFDCF8C6))
-              : (isDark ? const Color(0xFF1F2C34) : Colors.white),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(12),
-            topRight: const Radius.circular(12),
-            bottomLeft: message.isMe ? const Radius.circular(12) : const Radius.circular(0),
-            bottomRight: message.isMe ? const Radius.circular(0) : const Radius.circular(12),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 2,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
-        ),
-        child: Column(
-          crossAxisAlignment: message.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Text(
-              message.content,
-              style: TextStyle(
-                fontSize: 15,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _formatTime(message.time),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: (message.isMe && !isDark) ? Colors.black54 : (isDark ? Colors.white60 : Colors.grey.shade600),
-                  ),
-                ),
-                if (message.isMe) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    message.status == MessageStatus.read ? Icons.done_all : Icons.done,
-                    size: 14,
-                    color: message.status == MessageStatus.read ? Colors.blue : (isDark ? Colors.white60 : Colors.grey.shade600),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFF5F8FA),
+      backgroundColor: isDarkMode ? AppTheme.darkBackground : const Color(0xFFF8F9FA),
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
@@ -141,43 +108,427 @@ class _ConversationHistoryPageState extends State<ConversationHistoryPage> {
             ),
             const SizedBox(height: 2),
             Text(
-              widget.chat.sender,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: Colors.white),
+              widget.contactName,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: Colors.white70),
             ),
           ],
         ),
-        backgroundColor: Colors.blue.shade500,
+        backgroundColor: AppTheme.primaryColor,
         elevation: 0,
       ),
       body: SafeArea(
-        child: _isLoadingMessages
-            ? Center(child: CircularProgressIndicator(color: Colors.blue.shade300))
-            : _messages.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+        child: _buildBody(isDarkMode),
+      ),
+    );
+  }
+
+  Widget _buildBody(bool isDarkMode) {
+    // 1. Loading State
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryColor),
+      );
+    }
+
+    // 2. Error State
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                ),
+                onPressed: _loadConversationHistory,
+                child: const Text('Retry', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 3. Empty State
+    if (_historyRooms.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.history, size: 80, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            Text(
+              'No conversation history',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade400,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 4. Data List State
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      itemCount: _historyRooms.length,
+      separatorBuilder: (context, index) => Divider(
+        height: 1,
+        thickness: 0.5,
+        color: isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade300,
+        indent: 72,
+      ),
+      itemBuilder: (context, index) {
+        final conv = _historyRooms[index];
+        return _buildHistoryItem(conv, isDarkMode);
+      },
+    );
+  }
+
+  Widget _buildHistoryItem(Conversation conv, bool isDarkMode) {
+    final chatModel = conv.toChatModel();
+    final contactName = conv.participantEmail;
+    final lastMessage = conv.lastMessage.isNotEmpty ? conv.lastMessage : 'No messages';
+    final timeFormatted = _formatTime(conv.lastMessageTime);
+    final tags = conv.tags;
+    final funnel = conv.funnel;
+    final channelId = conv.chId;
+    final channelName = conv.channelName;
+    final botName = conv.agentName;
+    final avatarUrl = conv.avatarUrl;
+
+    return Container(
+      color: isDarkMode ? AppTheme.darkSurface : Colors.white,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatDetailPage(
+                chat: chatModel,
+                isReadOnly: true,
+              ),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Left: Avatar ──
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
+                backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                    ? CachedNetworkImageProvider(avatarUrl)
+                    : null,
+                child: (avatarUrl == null || avatarUrl.isEmpty)
+                    ? Icon(
+                        conv.isGroup ? Icons.group : Icons.person,
+                        color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade500,
+                        size: 22,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+
+              // ── Right: Content ──
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Row 1: Name + Time
+                    Row(
                       children: [
-                        Icon(Icons.history, size: 80, color: Colors.grey.shade400),
-                        const SizedBox(height: 16),
+                        Expanded(
+                          child: Text(
+                            contactName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDarkMode ? AppTheme.darkTextPrimary : Colors.black,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          'No conversation history',
+                          timeFormatted,
                           style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey.shade400,
+                            fontSize: 12,
+                            color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
                           ),
                         ),
                       ],
                     ),
-                  )
-                : ListView.builder(
-                    reverse: true, // Assuming newest messages are at the top of the list in response
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final message = _messages[index];
-                      return _buildChatBubble(message, isDark);
-                    },
-                  ),
+                    const SizedBox(height: 4),
+
+                    // Row 2: Last Message
+                    Text(
+                      lastMessage,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Row 3: Tags & Funnel (conditional)
+                    if (tags.isNotEmpty || funnel.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            // Tags (max 2 + overflow)
+                            ...tags.take(2).map((tag) => _buildTagChip(tag)),
+                            if (tags.length > 2)
+                              _buildOverflowChip('+${tags.length - 2}'),
+                            // Funnel
+                            if (funnel.isNotEmpty)
+                              _buildFunnelChip(funnel),
+                          ],
+                        ),
+                      ),
+
+                    // Row 4: Channel + Channel Account Name + Status Status
+                    Row(
+                      children: [
+                        _buildChannelIcon(channelId),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _getBotName(conv),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDarkMode ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _getStatusChip(conv.status),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTagChip(String tag) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade200, width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.label, size: 12, color: Colors.blue.shade600),
+          const SizedBox(width: 4),
+          Text(
+            tag,
+            style: TextStyle(fontSize: 11, color: Colors.blue.shade700, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverflowChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade200, width: 0.8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 11, color: Colors.blue.shade700, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
+  Widget _buildFunnelChip(String funnel) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.purple.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.shade200, width: 0.8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.filter_alt, size: 12, color: Colors.purple.shade600),
+          const SizedBox(width: 4),
+          Text(
+            funnel,
+            style: TextStyle(fontSize: 11, color: Colors.purple.shade700, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChannelIcon(String channelId) {
+    final chIdNum = int.tryParse(channelId) ?? 0;
+    // WhatsApp channels - gunakan logo dari asset
+    if (chIdNum == 1 || chIdNum == 1557 || chIdNum == 1561 || channelId.toLowerCase().contains('whatsapp')) {
+      return Container(
+        width: 17,
+        height: 17,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+        ),
+        child: ClipOval(
+          child: Image.asset(
+            'assets/wa.png',
+            width: 14,
+            height: 14,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+
+    // Channel lainnya
+    Color color;
+    IconData icon;
+
+    switch (chIdNum) {
+      case 2:
+        color = const Color(0xFF0088CC);
+        icon = Icons.send;
+        break;
+      case 3:
+        color = const Color(0xFFE4405F);
+        icon = Icons.camera_alt;
+        break;
+      case 4:
+        color = const Color(0xFF0084FF);
+        icon = Icons.messenger;
+        break;
+      case 19:
+        color = const Color(0xFFEA4335);
+        icon = Icons.email;
+        break;
+      default:
+        color = AppTheme.textSecondary;
+        icon = Icons.chat_bubble;
+    }
+
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        icon,
+        color: Colors.white,
+        size: 8,
+      ),
+    );
+  }
+
+  String _getBotName(Conversation conv) {
+    if (conv.agentName.isNotEmpty) {
+      return conv.agentName;
+    }
+    
+    if (conv.channelName.isNotEmpty && conv.channelName != 'Not Found') {
+      return conv.channelName;
+    }
+    
+    final chIdNum = int.tryParse(conv.chId) ?? 0;
+    switch (chIdNum) {
+      case 1:
+      case 1557:
+      case 1561:
+        return 'Bot WA';
+      case 2:
+        return 'Telegram Bot';
+      case 3:
+        return 'Instagram Bot';
+      case 4:
+        return 'Messenger Bot';
+      case 19:
+        return 'Email Bot';
+      default:
+        return 'Bot';
+    }
+  }
+
+  Widget _getStatusChip(String status) {
+    String label = status;
+    Color color;
+
+    final lowerStatus = status.toLowerCase();
+    if (lowerStatus == 'open' || status == '1') {
+      label = 'Open';
+      color = const Color(0xFF10B981);
+    } else if (lowerStatus == 'pending' || status == '2') {
+      label = 'Pending';
+      color = const Color(0xFFF59E0B);
+    } else if (lowerStatus == 'resolved' || status == '3') {
+      label = 'Resolved';
+      color = const Color(0xFF10B981);
+    } else if (lowerStatus == 'archived' || status == '4') {
+      label = 'Archived';
+      color = const Color(0xFF6B7280);
+    } else {
+      label = status.isNotEmpty ? status : 'Open';
+      color = const Color(0xFF10B981);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color, width: 1),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

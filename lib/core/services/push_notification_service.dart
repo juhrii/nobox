@@ -36,7 +36,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     if (roomId != null) {
       // Inisialisasi plugin khusus untuk background isolate ini
       final localNotifications = FlutterLocalNotificationsPlugin();
-      const androidInitSettings = AndroidInitializationSettings('@drawable/launcher_icon');
+      const androidInitSettings = AndroidInitializationSettings('launcher_icon');
       const iosInitSettings = DarwinInitializationSettings();
       const initSettings = InitializationSettings(android: androidInitSettings, iOS: iosInitSettings);
       await localNotifications.initialize(initSettings);

@@ -16,7 +16,7 @@ import 'chat_detail_page.dart';
 import 'archive_list_page.dart';
 import '../../widgets/chat_list_skeleton.dart';
 import '../../widgets/connection_status_banner.dart';
-import '../../../core/services/notification_service.dart';
+
 
 class ChatListPage extends StatefulWidget {
   const ChatListPage({super.key});
@@ -1323,7 +1323,11 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
   String _formatTime(String rawTime) {
     if (rawTime.isEmpty) return '';
     try {
-      final dt = DateTime.parse(rawTime);
+      String timeString = rawTime;
+      if (!timeString.endsWith('Z') && !timeString.contains('+') && timeString.length >= 19) {
+        timeString += 'Z';
+      }
+      final dt = DateTime.parse(timeString).toLocal();
       final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return '${dt.day} ${months[dt.month - 1]}, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {
