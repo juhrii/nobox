@@ -23,6 +23,11 @@ class Conversation {
   final bool isLastMessageFromMe;
   final bool needReply;
   final String accountId;
+  final String ctRealId;
+  final String link;
+  final String campaign;
+  final String deal;
+  final String groupName;
 
   Conversation({
     required this.id,
@@ -46,20 +51,25 @@ class Conversation {
     this.isLastMessageFromMe = false,
     this.needReply = false,
     this.accountId = '',
+    this.ctRealId = '',
+    this.link = '',
+    this.campaign = '',
+    this.deal = '',
+    this.groupName = '',
   });
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
-    // Parse tags from JSON - Prioritize name fields over ID fields
+    // Parse tags from JSON - Safely handle dynamic types (int, String, List)
     List<String> parsedTags = [];
-    if (json['Tags'] != null && json['Tags'] is List && (json['Tags'] as List).isNotEmpty) {
-      parsedTags = (json['Tags'] as List).map((e) => e.toString()).toList();
-    } else if (json['tags'] != null && json['tags'] is List && (json['tags'] as List).isNotEmpty) {
-      parsedTags = (json['tags'] as List).map((e) => e.toString()).toList();
-    } else if (json['TagsNm'] != null && json['TagsNm'].toString().isNotEmpty) {
-      parsedTags = json['TagsNm'].toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-    } else if (json['Tags'] != null && json['Tags'] is String && json['Tags'].toString().isNotEmpty) {
-      // Tags from Chatrooms/List often come as a comma-separated string containing names
-      parsedTags = json['Tags'].toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    dynamic tagsData = json['Tags'] ?? json['tags'] ?? json['TagsNm'];
+    if (tagsData != null) {
+      if (tagsData is List) {
+        parsedTags = tagsData.map((e) => e.toString()).toList();
+      } else if (tagsData is String && tagsData.isNotEmpty) {
+        parsedTags = tagsData.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      } else if (tagsData is int || tagsData is double) {
+        parsedTags = [tagsData.toString()];
+      }
     }
     // We explicitly avoid falling back to TagsIds because it only contains raw ID numbers, not names.
 
@@ -84,7 +94,14 @@ class Conversation {
     }
 
     // Try multiple possible key names for Tags and Funnel IDs based on backend quirks
-    final rawTagsIds = getValue(['TagsIds', 'tags_ids', 'tagsIds'])?.toString() ?? '';
+    // Safely parse TagsIds as it can come back as an int, String, or List
+    dynamic rawTagsIdsData = getValue(['TagsIds', 'tags_ids', 'tagsIds']);
+    String rawTagsIds = '';
+    if (rawTagsIdsData is List) {
+      rawTagsIds = rawTagsIdsData.map((e) => e.toString()).join(',');
+    } else if (rawTagsIdsData != null) {
+      rawTagsIds = rawTagsIdsData.toString();
+    }
     final rawFnId = getValue(['FnId', 'fn_id', 'fnId', 'FunnelId'])?.toString() ?? '';
     final rawFnName = getValue(['FnNm', 'fn_nm', 'Fn', 'fn'])?.toString() ?? '';
 
@@ -124,6 +141,11 @@ class Conversation {
           json['IsNeedReply'] == true ||
           json['isNeedReply'] == 1 ||
           json['isNeedReply'] == true,
+      ctRealId: getValue(['CtRealId', 'ct_real_id'])?.toString() ?? '',
+      link: getValue(['LinkTmp', 'LinkNm', 'LinkName', 'link_name', 'Link'])?.toString() ?? '',
+      campaign: getValue(['CmpNm', 'CampaignNm', 'CampaignName', 'campaign_name', 'Campaign'])?.toString() ?? '',
+      deal: getValue(['DealNm', 'DealName', 'deal_name', 'Deal'])?.toString() ?? '',
+      groupName: getValue(['Grp', 'GroupNm', 'GroupName', 'group_name'])?.toString() ?? '',
     );
 
     return conv;
@@ -152,6 +174,7 @@ class Conversation {
     bool? isLastMessageFromMe,
     bool? needReply,
     String? accountId,
+    String? ctRealId,
   }) {
     return Conversation(
       id: id ?? this.id,
@@ -176,6 +199,7 @@ class Conversation {
       isLastMessageFromMe: isLastMessageFromMe ?? this.isLastMessageFromMe,
       needReply: needReply ?? this.needReply,
       accountId: accountId ?? this.accountId,
+      ctRealId: ctRealId ?? this.ctRealId,
     );
   }
 
@@ -226,6 +250,11 @@ class Conversation {
       isLastMessageFromMe: isLastMessageFromMe,
       needReply: needReply,
       accountId: accountId,
+      ctRealId: ctRealId,
+      link: link,
+      campaign: campaign,
+      deal: deal,
+      groupName: groupName,
     );
   }
 }

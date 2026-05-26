@@ -482,6 +482,7 @@ class ChatService {
             
             // Build lookup maps
             final accountByChannel = <int, String>{};   // Channel number → Name
+            final accountIdByChannel = <int, String>{}; // Channel number → AccountId
             
             for (final acc in accounts) {
               final name = acc['Name']?.toString() ?? acc['Nm']?.toString() ?? '';
@@ -503,14 +504,22 @@ class ChatService {
                 // Handle Channel as both number and string
                 if (channel is int) {
                   accountByChannel[channel] = name;
+                  if (id.isNotEmpty) accountIdByChannel[channel] = id;
                 } else if (channel is String) {
                   final channelNum = int.tryParse(channel);
                   if (channelNum != null) {
                     accountByChannel[channelNum] = name;
+                    if (id.isNotEmpty) accountIdByChannel[channelNum] = id;
                   } else {
                     // String like "WhatsApp" → map to number  
-                    if (channel.toLowerCase().contains('whatsapp')) accountByChannel[1] = name;
-                    else if (channel.toLowerCase().contains('telegram')) accountByChannel[2] = name;
+                    if (channel.toLowerCase().contains('whatsapp')) {
+                      accountByChannel[1] = name;
+                      if (id.isNotEmpty) accountIdByChannel[1] = id;
+                    }
+                    else if (channel.toLowerCase().contains('telegram')) {
+                      accountByChannel[2] = name;
+                      if (id.isNotEmpty) accountIdByChannel[2] = id;
+                    }
                   }
                 }
               }
@@ -520,7 +529,7 @@ class ChatService {
 
             // Inject account name into conversations
             for (int i = 0; i < conversations.length; i++) {
-              if (conversations[i].channelName.isEmpty && i < dataList.length) {
+              if (i < dataList.length) {
                 final json = dataList[i];
                 if (json is Map<String, dynamic>) {
                   final chId = json['ChId'];
@@ -528,16 +537,22 @@ class ChatService {
                   
                   // Try matching by AccId first, then ChId, then fallback to single account
                   String? resolvedName;
+                  String? resolvedAccountId = accId;
                   if (accId != null && _accountById.containsKey(accId)) {
                     resolvedName = _accountById[accId];
                   } else if (chId != null && chId is int && accountByChannel.containsKey(chId)) {
                     resolvedName = accountByChannel[chId];
+                    resolvedAccountId = accountIdByChannel[chId];
                   } else if (accounts.length == 1 && _singleAccountName != null) {
                     resolvedName = _singleAccountName;
+                    resolvedAccountId = _singleAccountId;
                   }
                   
-                  if (resolvedName != null) {
-                    conversations[i] = conversations[i].copyWith(channelName: resolvedName);
+                  if (resolvedName != null || (resolvedAccountId != null && resolvedAccountId.isNotEmpty)) {
+                    conversations[i] = conversations[i].copyWith(
+                      channelName: resolvedName,
+                      accountId: resolvedAccountId,
+                    );
                   }
                 }
               }
@@ -622,44 +637,61 @@ class ChatService {
           if (!accountsResponse.isError && accountsResponse.data != null) {
             final accounts = accountsResponse.data!;
             final accountByChannel = <int, String>{};
+            final accountIdByChannel = <int, String>{};
             
             for (final acc in accounts) {
               final name = acc['Name']?.toString() ?? acc['Nm']?.toString() ?? '';
               final channel = acc['Channel'];
               
+              final id = acc['Id']?.toString() ?? '';
+              
               if (name.isNotEmpty) {
                 if (channel is int) {
                   accountByChannel[channel] = name;
+                  if (id.isNotEmpty) accountIdByChannel[channel] = id;
                 } else if (channel is String) {
                   final channelNum = int.tryParse(channel);
                   if (channelNum != null) {
                     accountByChannel[channelNum] = name;
+                    if (id.isNotEmpty) accountIdByChannel[channelNum] = id;
                   } else {
-                    if (channel.toLowerCase().contains('whatsapp')) accountByChannel[1] = name;
-                    else if (channel.toLowerCase().contains('telegram')) accountByChannel[2] = name;
+                    if (channel.toLowerCase().contains('whatsapp')) {
+                      accountByChannel[1] = name;
+                      if (id.isNotEmpty) accountIdByChannel[1] = id;
+                    }
+                    else if (channel.toLowerCase().contains('telegram')) {
+                      accountByChannel[2] = name;
+                      if (id.isNotEmpty) accountIdByChannel[2] = id;
+                    }
                   }
                 }
               }
             }
 
             for (int i = 0; i < conversations.length; i++) {
-              if (conversations[i].channelName.isEmpty && i < dataList.length) {
+              if (i < dataList.length) {
                 final json = dataList[i];
                 if (json is Map<String, dynamic>) {
                   final chId = json['ChId'];
                   final accId = json['AccId']?.toString();
                   
                   String? resolvedName;
+                  String? resolvedAccountId = accId;
                   if (accId != null && _accountById.containsKey(accId)) {
                     resolvedName = _accountById[accId];
                   } else if (chId != null && chId is int && accountByChannel.containsKey(chId)) {
                     resolvedName = accountByChannel[chId];
+                    resolvedAccountId = accountIdByChannel[chId];
                   } else if (accounts.length == 1 && _singleAccountName != null) {
                     resolvedName = _singleAccountName;
+                    resolvedAccountId = _singleAccountId;
                   }
                   
-                  if (resolvedName != null) {
-                    conversations[i] = conversations[i].copyWith(channelName: resolvedName);
+                  if (resolvedName != null || (resolvedAccountId != null && resolvedAccountId.isNotEmpty)) {
+                    conversations[i] = conversations[i].copyWith(
+                      channelName: resolvedName,
+                      accountId: resolvedAccountId,
+                    );
                   }
                 }
               }
@@ -846,19 +878,27 @@ class ChatService {
       debugPrint('ChatService: │ Content: $content');
       debugPrint('ChatService: │ Endpoint: ${AppConfig.inboxSendEndpoint}?Id=$roomIdStr');
 
+      // Mentor instruction: AccountIds must be a single string (comma-separated if multiple), NOT an array.
+      // Clean up the string to remove any brackets or quotes just in case the source contains them.
+      String safeAccountId = '';
+      if (request.accountId != null && request.accountId!.isNotEmpty) {
+        safeAccountId = request.accountId!;
+      } else if (_singleAccountId != null && _singleAccountId!.isNotEmpty) {
+        safeAccountId = _singleAccountId!;
+      }
+      safeAccountId = safeAccountId.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '').trim();
+
       final payload = {
         'Body': content,
-        'BodyType': (request.attachment != null && request.attachment!.isNotEmpty) ? 2 : 1, // 2 for media/attachment
-        'LinkId': int.tryParse(request.contactId ?? roomIdStr) ?? 0,
+        'BodyType': (request.attachment != null && request.attachment!.isNotEmpty) ? 2 : 1, 
+        'IdExternal': request.contactId ?? '',
         'ChannelId': int.tryParse(request.channelId ?? '1') ?? 1,
-        'AccountIds': (request.accountId != null && request.accountId!.isNotEmpty) 
-            ? request.accountId 
-            : (_singleAccountId ?? ''),
+        'AccountIds': safeAccountId,
         'Attachment': request.attachment ?? '',
       };
 
       final response = await _apiClient.post(
-        AppConfig.inboxSendEndpoint,
+      'https://id.nobox.ai/Inbox/Send?Id=${roomIdStr ?? '0'}',
         data: payload,
       );
 
@@ -1062,20 +1102,26 @@ class ChatService {
       }
       final attachmentData = jsonEncode([attachmentMap]);
 
-      final payload = {
-        "Body": "", // Empty body for media, metadata is in Attachment
-        "BodyType": bodyType,
-        "LinkId": int.tryParse(contactId ?? conversationId) ?? 0,
-        "ChannelId": int.tryParse(channelId ?? '1') ?? 1,
-        "AccountIds": (accountId != null && accountId.isNotEmpty) 
-            ? accountId 
-            : (_singleAccountId ?? ''),
-        "Attachment": attachmentData,
-      };
+    // Mentor instruction: AccountIds must be a single string (comma-separated if multiple), NOT an array.
+    String safeAccountId = '';
+    if (accountId != null && accountId.isNotEmpty) {
+      safeAccountId = accountId;
+    } else if (_singleAccountId != null && _singleAccountId!.isNotEmpty) {
+      safeAccountId = _singleAccountId!;
+    }
+    safeAccountId = safeAccountId.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '').trim();
+
+    final payload = {
+      "Body": "", 
+      "BodyType": bodyType,
+      "ChannelId": int.tryParse(channelId ?? '1') ?? 1,
+      "AccountIds": safeAccountId,
+      "Attachment": attachmentData,
+    };
 
       final sendResponse = await _apiClient.post(
-        AppConfig.inboxSendEndpoint,
-        data: payload,
+      'https://id.nobox.ai/Inbox/Send?Id=$conversationId',
+      data: payload,
       );
 
       if (sendResponse.statusCode == 200) {

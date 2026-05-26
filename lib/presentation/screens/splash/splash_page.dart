@@ -86,7 +86,7 @@ class _SplashPageState extends State<SplashPage> {
               Hero(
                 tag: 'app_logo',
                 child: Image.asset(
-                  'assets/icons/nobox2.png',
+                  'assets/nobox2.png',
                   width: 220,
                   height: 220,
                   fit: BoxFit.contain,

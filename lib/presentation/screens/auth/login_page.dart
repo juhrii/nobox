@@ -102,7 +102,7 @@ class _LoginPageState extends State<LoginPage> {
                       Hero(
                         tag: 'app_logo',
                         child: Image.asset(
-                          'assets/icons/nobox2.png',
+                          'assets/nobox2.png',
                           height: 140,
                           width: 140,
                           fit: BoxFit.contain,

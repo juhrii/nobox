@@ -29,6 +29,7 @@ import 'contact_info_page.dart';
 import 'starred_messages_page.dart';
 import 'location_picker_page.dart';
 import '../../widgets/add_agent_dialog.dart';
+import '../../widgets/channel_icon.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/services/push_notification_service.dart';
 import '../../widgets/message_bubble_widget.dart';
@@ -69,7 +70,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   // ── Quick Reply State ──
   bool _isShowingQuickReply = false;
+  List<QuickReplyTemplate> _masterTemplates = [];
   List<QuickReplyTemplate> _quickReplyTemplates = [];
+  bool _hasFetchedQuickReplies = false;
   bool _isLoadingQuickReply = false;
   Timer? _quickReplyDebounce;
   bool _isSettingQuickReply = false;
@@ -184,7 +187,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           setState(() => _isShowingQuickReply = true);
         }
         
-        // Debounce API call
+        // Debounce local filtering
         if (_quickReplyDebounce?.isActive ?? false) _quickReplyDebounce!.cancel();
         _quickReplyDebounce = Timer(const Duration(milliseconds: 300), () {
           _fetchQuickReplies(searchText);
@@ -214,22 +217,38 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   }
 
   Future<void> _fetchQuickReplies(String searchText) async {
-    setState(() => _isLoadingQuickReply = true);
-    final response = await _chatService.getQuickReplyTemplates(containsText: searchText);
-    if (mounted) {
-      setState(() {
-        _isLoadingQuickReply = false;
-        if (!response.isError && response.data != null) {
-          _quickReplyTemplates = response.data!;
-        } else {
-          _quickReplyTemplates = [];
-        }
-      });
+    if (!_hasFetchedQuickReplies) {
+      setState(() => _isLoadingQuickReply = true);
+      final response = await _chatService.getQuickReplyTemplates(containsText: '');
+      if (mounted) {
+        setState(() {
+          _isLoadingQuickReply = false;
+          _hasFetchedQuickReplies = true;
+          if (!response.isError && response.data != null) {
+            _masterTemplates = response.data!;
+          }
+        });
+      }
     }
+
+    if (!mounted) return;
+
+    setState(() {
+      if (searchText.isEmpty) {
+        _quickReplyTemplates = List.from(_masterTemplates);
+      } else {
+        final query = searchText.toLowerCase();
+        _quickReplyTemplates = _masterTemplates.where((t) {
+          return (t.command.toLowerCase().contains(query)) ||
+                 (t.content.toLowerCase().contains(query));
+        }).toList();
+      }
+    });
   }
 
   Widget _buildQuickReplyList(bool isDark) {
     return Container(
+      key: const ValueKey('quickReplyList'),
       constraints: const BoxConstraints(maxHeight: 250),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1F2C34) : Colors.white,
@@ -300,13 +319,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       _isShowingQuickReply = false; // tutup popup dulu
                     });
 
+                    _messageController.text = newText;
+                    _messageController.selection = TextSelection.collapsed(offset: newText.length);
+
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (!mounted) return;
                       _focusNode.requestFocus();
-                      _messageController.value = TextEditingValue(
-                        text: newText,
-                        selection: TextSelection.collapsed(offset: newText.length),
-                      );
                       _isSettingQuickReply = false; // flag OFF
                     });
                   },
@@ -602,7 +620,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           final uniqueOlder = olderMessages.where((m) => m.id.isEmpty || !existingIds.contains(m.id)).toList();
 
           // Prepend older messages (they come in ASC order from service)
-          _messages.insertAll(0, uniqueOlder);
+          _messages.addAll(uniqueOlder);
           _messageSkip += _messagePageSize;
 
           if (olderMessages.length < _messagePageSize) {
@@ -623,6 +641,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       _statusProvider = Provider.of<ChatStatusProvider>(context, listen: false);
       _loadInitialMessages();
       _subscribeToSignalR();
+      _fetchQuickReplies('');
     });
   }
 
@@ -796,6 +815,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         accountId: chat.accountId,
         channelId: chat.chId,
         contactId: chat.contactId,
+        extId: chat.ctRealId,
       ),
     );
 
@@ -834,9 +854,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void _toggleAttachmentPanel() {
     setState(() {
       _showAttachmentPanel = !_showAttachmentPanel;
-      if (_showAttachmentPanel) {
-        _showEmojiPicker = false;
-      }
     });
   }
 
@@ -1140,7 +1157,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
 
     setState(() {
-      _messages.add(newMessage);
+      _messages.insert(0, newMessage);
     });
 
     _scrollToBottom();
@@ -1154,6 +1171,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         accountId: chat.accountId,
         channelId: chat.chId,
         contactId: chat.contactId,
+        extId: chat.ctRealId,
       ),
     );
 
@@ -1228,7 +1246,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
 
     setState(() {
-      _messages.add(newMessage);
+      _messages.insert(0, newMessage);
     });
 
     _scrollToBottom();
@@ -1378,7 +1396,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       );
 
       setState(() {
-        _messages.add(voiceMessage);
+        _messages.insert(0, voiceMessage);
       });
       _scrollToBottom();
 
@@ -1899,7 +1917,12 @@ if (!response.isError) {
                     if (chat.channelName.isNotEmpty && chat.channelName != 'Not Found') {
                       return Row(
                         children: [
-                          FaIcon(FontAwesomeIcons.whatsapp, size: 13, color: Colors.white70),
+                          ChannelIcon(
+                            chId: chat.chId,
+                            channelName: chat.channelName,
+                            size: 13,
+                            isWhite: true,
+                          ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
@@ -3245,6 +3268,7 @@ if (!response.isError) {
     final bottomPadding = MediaQuery.of(context).padding.bottom + 8;
 
     return Container(
+      key: const ValueKey('inputBar'),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1F2C34) : Colors.white,
@@ -3349,6 +3373,7 @@ if (!response.isError) {
 
   Widget _buildAttachmentPanel(bool isDark) {
     return AnimatedContainer(
+      key: const ValueKey('attachmentPanel'),
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
@@ -3447,6 +3472,7 @@ if (!response.isError) {
 
   Widget _buildEmojiPicker(bool isDark) {
     return SizedBox(
+      key: const ValueKey('emojiPicker'),
       height: 250,
       child: EmojiPicker(
         onEmojiSelected: _onEmojiSelected,
@@ -3508,6 +3534,7 @@ if (!response.isError) {
 
   Widget _buildReplyPreview(bool isDark) {
     return Container(
+      key: const ValueKey('replyPreview'),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1F2C34) : Colors.white,

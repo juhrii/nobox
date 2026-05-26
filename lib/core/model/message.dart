@@ -24,7 +24,12 @@ class ChatModel {
   final String channelName;
   final String chId;
   final String accountId;
+  final String ctRealId;
   final bool isLastMessageFromMe;
+  final String link;
+  final String campaign;
+  final String deal;
+  final String groupName;
 
   ChatModel({
     required this.id,
@@ -49,7 +54,12 @@ class ChatModel {
     this.channelName = '',
     this.chId = '',
     this.accountId = '',
+    this.ctRealId = '',
     this.isLastMessageFromMe = false,
+    this.link = '',
+    this.campaign = '',
+    this.deal = '',
+    this.groupName = '',
   });
 
   ChatModel copyWith({
@@ -75,7 +85,12 @@ class ChatModel {
     String? channelName,
     String? chId,
     String? accountId,
+    String? ctRealId,
     bool? isLastMessageFromMe,
+    String? link,
+    String? campaign,
+    String? deal,
+    String? groupName,
   }) {
     return ChatModel(
       id: id ?? this.id,
@@ -100,7 +115,12 @@ class ChatModel {
       channelName: channelName ?? this.channelName,
       chId: chId ?? this.chId,
       accountId: accountId ?? this.accountId,
+      ctRealId: ctRealId ?? this.ctRealId,
       isLastMessageFromMe: isLastMessageFromMe ?? this.isLastMessageFromMe,
+      link: link ?? this.link,
+      campaign: campaign ?? this.campaign,
+      deal: deal ?? this.deal,
+      groupName: groupName ?? this.groupName,
     );
   }
 }

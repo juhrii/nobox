@@ -60,12 +60,12 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
     return GestureDetector(
       onTap: _showDropdown,
       child: Container(
-        height: 44,
+        height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           border: Border.all(
-            color: _isOpen ? Colors.blue : Colors.grey.shade400,
+            color: _isOpen ? Colors.blue : Colors.grey.shade300,
             width: _isOpen ? 1.5 : 1.0,
           ),
           borderRadius: BorderRadius.circular(8),
@@ -74,11 +74,8 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
           children: [
             Expanded(
               child: Text(
-                widget.value ?? widget.hint,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.black87,
-                ),
+                widget.value == null ? '--select--' : widget.value!,
+                style: const TextStyle(fontSize: 14, color: Colors.black87),
                 overflow: TextOverflow.ellipsis,
               ),
             ),

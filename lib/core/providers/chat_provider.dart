@@ -139,6 +139,16 @@ class ChatProvider with ChangeNotifier {
     fetchChats();
   }
 
+  void clearChatDataForAccountSwitch() {
+    _chats.clear();
+    _cachedFunnels = null;
+    _cachedTags = null;
+    _currentSkip = 0;
+    _hasMore = true;
+    _error = null;
+    notifyListeners();
+  }
+
   /// Maps the active filter string to a status code understood by the API.
   /// 1=Unassigned, 2=Assigned, 3=Resolved, null=All
   int? _statusCodeForFilter(String filter) {
@@ -578,7 +588,16 @@ class ChatProvider with ChangeNotifier {
       filtered = filtered.where((c) => c.sender.toLowerCase().contains(_filterContact!.toLowerCase())).toList();
     }
     if (_filterGroup != null && _filterGroup != '--select--') {
-      filtered = filtered.where((c) => c.sender.toLowerCase().contains(_filterGroup!.toLowerCase())).toList();
+      filtered = filtered.where((c) => c.groupName.toLowerCase().contains(_filterGroup!.toLowerCase())).toList();
+    }
+    if (_filterLink != null && _filterLink != '--select--') {
+      filtered = filtered.where((c) => c.link.toLowerCase().contains(_filterLink!.toLowerCase())).toList();
+    }
+    if (_filterCampaign != null && _filterCampaign != '--select--') {
+      filtered = filtered.where((c) => c.campaign.toLowerCase().contains(_filterCampaign!.toLowerCase())).toList();
+    }
+    if (_filterDeal != null && _filterDeal != '--select--') {
+      filtered = filtered.where((c) => c.deal.toLowerCase().contains(_filterDeal!.toLowerCase())).toList();
     }
     if (_filterFunnel != null && _filterFunnel != '--select--') {
       filtered = filtered.where((c) => c.funnel.toLowerCase().contains(_filterFunnel!.toLowerCase())).toList();

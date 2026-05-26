@@ -5,6 +5,7 @@ class MessageRequest {
   final String? channelId;
   final String? contactId;
   final String? attachment;
+  final String? extId;
 
   MessageRequest({
     required this.receiver,
@@ -13,6 +14,7 @@ class MessageRequest {
     this.channelId,
     this.contactId,
     this.attachment,
+    this.extId,
   });
 
   Map<String, dynamic> toJson() {
@@ -23,6 +25,7 @@ class MessageRequest {
       if (channelId != null) 'ChannelId': channelId,
       if (contactId != null) 'ContactId': contactId,
       if (attachment != null) 'Attachment': attachment,
+      if (extId != null) 'ExtId': extId,
     };
   }
 }

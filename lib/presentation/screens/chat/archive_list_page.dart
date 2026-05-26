@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/providers/chat_provider.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/model/message.dart';
+import '../../widgets/channel_icon.dart';
 import 'chat_detail_page.dart';
 
 class ArchiveListPage extends StatefulWidget {
@@ -415,12 +416,12 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
                           ),
                         ],
 
-                        // WhatsApp channel
+                        // Channel Icon and Name
                         if (chat.channelName.isNotEmpty && chat.channelName != 'Not Found') ...[
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              FaIcon(FontAwesomeIcons.whatsapp, size: 14, color: Colors.green.shade600),
+                              ChannelIcon(chId: chat.chId, channelName: chat.channelName, size: 14),
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(

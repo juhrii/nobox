@@ -16,6 +16,7 @@ import 'chat_detail_page.dart';
 import 'archive_list_page.dart';
 import '../../widgets/chat_list_skeleton.dart';
 import '../../widgets/connection_status_banner.dart';
+import '../../widgets/channel_icon.dart';
 
 
 class ChatListPage extends StatefulWidget {
@@ -195,7 +196,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             : Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: Image.asset(
-                  'assets/icons/nobox.png',
+                  'assets/nobox.png',
                   width: 44,
                   height: 44,
                   fit: BoxFit.contain,
@@ -553,11 +554,11 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
               // Ensure value exists in options, otherwise reset to null
               final safeValue = (value != null && options.contains(value)) ? value : null;
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 child: Row(
                   children: [
                     SizedBox(
-                      width: 90,
+                      width: 80,
                       child: Text(
                         label,
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
@@ -582,11 +583,12 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             final contactNames = toUniqueNames(contacts, ['Name']);
 
             return Dialog(
+              backgroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
               child: SingleChildScrollView(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                   children: [
@@ -597,8 +599,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                         const Text(
                           'New Conversation',
                           style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                             color: Colors.blue,
                           ),
                         ),
@@ -610,7 +612,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
 
                     if (isLoadingData)
                       const Padding(
@@ -656,12 +658,12 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
 
                       // To - Radio buttons
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(
-                              width: 90,
+                              width: 80,
                               child: Padding(
                                 padding: EdgeInsets.only(top: 10),
                                 child: Text(
@@ -673,30 +675,73 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                             const SizedBox(width: 12),
                             Expanded(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   border: Border.all(color: Colors.grey.shade300),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Wrap(
-                                  spacing: 0,
-                                  children: ['Contact', 'Link', 'Manual'].map((option) {
-                                    return Row(
-                                      mainAxisSize: MainAxisSize.min,
+                                child: Column(
+                                  children: [
+                                    Row(
                                       children: [
-                                        Radio<String>(
-                                          value: option,
-                                          groupValue: selectedTo,
-                                          onChanged: (val) {
-                                            if (val != null) setDialogState(() => selectedTo = val);
-                                          },
-                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          visualDensity: VisualDensity.compact,
+                                        Expanded(
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Radio<String>(
+                                                value: 'Contact',
+                                                groupValue: selectedTo,
+                                                onChanged: (val) {
+                                                  if (val != null) setDialogState(() => selectedTo = val);
+                                                },
+                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                visualDensity: VisualDensity.compact,
+                                              ),
+                                              const Text('Contact', style: TextStyle(fontSize: 14)),
+                                            ],
+                                          ),
                                         ),
-                                        Text(option, style: const TextStyle(fontSize: 13)),
+                                        Expanded(
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Radio<String>(
+                                                value: 'Link',
+                                                groupValue: selectedTo,
+                                                onChanged: (val) {
+                                                  if (val != null) setDialogState(() => selectedTo = val);
+                                                },
+                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                visualDensity: VisualDensity.compact,
+                                              ),
+                                              const Text('Link', style: TextStyle(fontSize: 14)),
+                                            ],
+                                          ),
+                                        ),
                                       ],
-                                    );
-                                  }).toList(),
+                                    ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Radio<String>(
+                                                value: 'Manual',
+                                                groupValue: selectedTo,
+                                                onChanged: (val) {
+                                                  if (val != null) setDialogState(() => selectedTo = val);
+                                                },
+                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                visualDensity: VisualDensity.compact,
+                                              ),
+                                              const Text('Manual', style: TextStyle(fontSize: 14)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -715,7 +760,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                           child: Row(
                             children: [
                               const SizedBox(
-                                width: 90,
+                                width: 80,
                                 child: Text('Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                               ),
                               const SizedBox(width: 12),
@@ -738,7 +783,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                           child: Row(
                             children: [
                               const SizedBox(
-                                width: 90,
+                                width: 80,
                                 child: Text('Link', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                               ),
                               const SizedBox(width: 12),
@@ -756,37 +801,6 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                           ),
                         ),
 
-                      // Initial Message field
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(
-                              width: 90,
-                              child: Padding(
-                                padding: EdgeInsets.only(top: 10),
-                                child: Text('Message', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextField(
-                                maxLines: 3,
-                                minLines: 1,
-                                decoration: InputDecoration(
-                                  hintText: 'Type an initial message...',
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                ),
-                                onChanged: (val) => initialMessage = val,
-                                controller: TextEditingController(text: initialMessage),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
                       const SizedBox(height: 24),
 
                       // Cancel & Create buttons
@@ -801,7 +815,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                 padding: const EdgeInsets.symmetric(vertical: 12),
                               ),
-                              child: const Text('Cancel'),
+                              child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w500)),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -835,10 +849,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 }
 
                                 if (initialMessage.trim().isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Pesan tidak boleh kosong')),
-                                  );
-                                  return;
+                                  initialMessage = 'Hello'; // fallback
                                 }
 
                                 // Get selected account Id
@@ -974,6 +985,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
           ),
           TextButton(
             onPressed: () {
+              // Bersihkan cache (tags, funnels, chatrooms) sebelum logout agar tidak bocor ke sesi login akun berikutnya
+              context.read<ChatProvider>().clearChatDataForAccountSwitch();
               context.read<AuthProvider>().logout();
               Navigator.pushNamedAndRemoveUntil(
                 context,
@@ -1168,12 +1181,12 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                       ),
                     ],
 
-                    // Row 4: WhatsApp channel
+                    // Row 4: Channel Icon and Name
                     if (chat.channelName.isNotEmpty && chat.channelName != 'Not Found') ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          FaIcon(FontAwesomeIcons.whatsapp, size: 14, color: Colors.green.shade600),
+                          ChannelIcon(chId: chat.chId, channelName: chat.channelName, size: 14),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
@@ -1432,12 +1445,13 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         SizedBox(
-                          width: 120,
+                          width: 100,
                           child: Text(
                             label,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -1454,8 +1468,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                 }
 
                 return Dialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+                  backgroundColor: Colors.white,
+                  surfaceTintColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                   child: SizedBox(
                     width: double.maxFinite,
                     child: Column(
@@ -1463,21 +1479,21 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                       children: [
                         // Header
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
+                          padding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text(
                                 'Filter Conversation',
                                 style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
                                   color: Colors.blue,
                                 ),
                               ),
                               IconButton(
                                 onPressed: () => Navigator.pop(context),
-                                icon: const Icon(Icons.close, color: Colors.grey),
+                                icon: const Icon(Icons.close, color: Colors.blue),
                               ),
                             ],
                           ),
@@ -1485,7 +1501,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
 
                         // Apply & Reset buttons
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                           child: Row(
                             children: [
                               ElevatedButton.icon(
@@ -1514,8 +1530,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.blue,
                                   foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -1542,22 +1560,23 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 icon: const Icon(Icons.refresh, size: 18),
                                 label: const Text('Reset'),
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.grey.shade700,
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  foregroundColor: Colors.blue,
+                                  elevation: 0,
+                                  side: const BorderSide(color: Colors.blue),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
                           ),
                         ),
-
-                        const Divider(height: 1),
+                        const Divider(height: 1, color: Color(0xFFEEEEEE)),
 
                         // Scrollable filter rows
                         Flexible(
                           child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                             child: Column(
                               children: [
                                 buildDropdownRow('Status', selectedStatus, ['Assigned', 'Unassigned', 'Resolved'], (val) {
@@ -1578,12 +1597,13 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 8),
                                   child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
                                       const SizedBox(
-                                        width: 120,
+                                        width: 100,
                                         child: Text(
                                           'Account',
-                                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
                                         ),
                                       ),
                                       const SizedBox(width: 12),
@@ -1640,10 +1660,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                             );
                                           },
                                           child: Container(
-                                            height: 44,
+                                            height: 48,
                                             padding: const EdgeInsets.symmetric(horizontal: 12),
                                             decoration: BoxDecoration(
-                                              border: Border.all(color: Colors.grey.shade400),
+                                              border: Border.all(color: Colors.grey.shade300),
                                               borderRadius: BorderRadius.circular(8),
                                               color: Colors.white,
                                             ),

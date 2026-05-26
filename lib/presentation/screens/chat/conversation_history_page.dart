@@ -4,6 +4,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/model/conversation.dart';
 import '../../../core/services/chat_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../widgets/channel_icon.dart';
 import 'chat_detail_page.dart';
 
 class ConversationHistoryPage extends StatefulWidget {
@@ -316,7 +317,7 @@ class _ConversationHistoryPageState extends State<ConversationHistoryPage> {
                     // Row 4: Channel + Channel Account Name + Status Status
                     Row(
                       children: [
-                        _buildChannelIcon(channelId),
+                        ChannelIcon(chId: channelId, channelName: channelName, size: 14),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -403,67 +404,7 @@ class _ConversationHistoryPageState extends State<ConversationHistoryPage> {
     );
   }
 
-  Widget _buildChannelIcon(String channelId) {
-    final chIdNum = int.tryParse(channelId) ?? 0;
-    // WhatsApp channels - gunakan logo dari asset
-    if (chIdNum == 1 || chIdNum == 1557 || chIdNum == 1561 || channelId.toLowerCase().contains('whatsapp')) {
-      return Container(
-        width: 17,
-        height: 17,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-        ),
-        child: ClipOval(
-          child: Image.asset(
-            'assets/wa.png',
-            width: 14,
-            height: 14,
-            fit: BoxFit.cover,
-          ),
-        ),
-      );
-    }
 
-    // Channel lainnya
-    Color color;
-    IconData icon;
-
-    switch (chIdNum) {
-      case 2:
-        color = const Color(0xFF0088CC);
-        icon = Icons.send;
-        break;
-      case 3:
-        color = const Color(0xFFE4405F);
-        icon = Icons.camera_alt;
-        break;
-      case 4:
-        color = const Color(0xFF0084FF);
-        icon = Icons.messenger;
-        break;
-      case 19:
-        color = const Color(0xFFEA4335);
-        icon = Icons.email;
-        break;
-      default:
-        color = AppTheme.textSecondary;
-        icon = Icons.chat_bubble;
-    }
-
-    return Container(
-      width: 14,
-      height: 14,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(
-        icon,
-        color: Colors.white,
-        size: 8,
-      ),
-    );
-  }
 
   String _getBotName(Conversation conv) {
     if (conv.agentName.isNotEmpty) {
