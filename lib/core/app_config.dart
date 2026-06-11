@@ -56,10 +56,10 @@ class AppConfig {
   static const String tagsListEndpoint = 'Services/Chat/ChatTags/List';
   
   // Additional Filter Options
-  static const String campaignsListEndpoint = 'Services/Master/Campaign/List';
-  static const String dealsListEndpoint = 'Services/Master/Deal/List';
-  static const String groupsListEndpoint = 'Services/Chat/Groups/List';
-  static const String linksListEndpoint = 'Services/Chat/Links/List';
+  static const String campaignsListEndpoint = 'Services/Nobox/Campaign/ListActive';
+  static const String dealsListEndpoint = 'Services/Nobox/Deals/List';
+  static const String groupsListEndpoint = 'Services/Nobox/Group/List';
+  static const String linksListEndpoint = 'Services/Chat/Chatlinkcontacts/List';
 
   // Form Template & Form Results Endpoints
   static const String formTemplateListEndpoint = 'Services/NoBoxCRM/Form/List';

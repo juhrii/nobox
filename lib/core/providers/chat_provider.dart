@@ -89,6 +89,23 @@ class ChatProvider with ChangeNotifier {
     fetchChats();
   }
 
+  /// Apply advanced filters and trigger a fresh fetch.
+  ///
+  /// Semua parameter ID harus berupa raw ID, bukan display name:
+  /// - [contact]    → CtId (ID kontak)
+  /// - [link]       → LinkTmp / ID link  (client-side filtered)
+  /// - [group]      → Id group           (server-side filtered)
+  /// - [campaign]   → Id campaign        (server-side filtered)
+  /// - [funnel]     → Id funnel          (client-side filtered)
+  /// - [deal]       → Id deal            (server-side filtered)
+  /// - [tags]       → Id tag             (client-side filtered)
+  /// - [humanAgent] → Id / UserId agent  (client-side filtered)
+  ///
+  /// **Jalur 1 – Server-Side** (dikirim via EqualityFilter ke backend):
+  ///   Account, Contact, Group, Campaign, Deal
+  ///
+  /// **Jalur 2 – Client-Side** (di-remove dari payload, filter lokal .where()):
+  ///   ChatType, ReadStatus, Link, Funnel, Tag, HumanAgent
   void applyAdvancedFilters({
     String? muteAi,
     String? readStatus,
@@ -117,7 +134,12 @@ class ChatProvider with ChangeNotifier {
     _filterDeal = deal;
     _filterTags = tags;
     _filterHumanAgent = humanAgent;
+    // Reset pagination lalu trigger fresh fetch dengan filter baru
+    _currentSkip = 0;
+    _hasMore = true;
+    _chats = [];
     notifyListeners();
+    fetchChats();
   }
 
   void resetFilters() {
@@ -143,6 +165,8 @@ class ChatProvider with ChangeNotifier {
     _chats.clear();
     _cachedFunnels = null;
     _cachedTags = null;
+    _cachedAgents = null;
+    _cachedLinks = null;
     _currentSkip = 0;
     _hasMore = true;
     _error = null;
@@ -209,18 +233,30 @@ class ChatProvider with ChangeNotifier {
 
       // Fetch funnels and tags proactively in the background for mapping
       // We explicitly await them here to ensure they format correctly immediately
+      // Pre-fetch semua reference data yang dibutuhkan untuk
+      // client-side ID-to-name resolution (Jalur 2 filters)
       await Future.wait([
         getFunnels(),
         getTags(),
+        getCachedAgents(),
+        getCachedLinks(),
       ]);
 
       // Determine which status to request from the server
       final statusCode = _statusCodeForFilter(_activeFilter);
+      // ── Jalur 1: Server-Side Filters (dikirim via EqualityFilter) ──────────
+      // Hanya Account, Contact, Group, Campaign, Deal yang aman dikirim ke backend.
+      // Link, Funnel, Tag, HumanAgent di-filter client-side untuk hindari Error 500.
       final response = await _chatService.getConversations(
         statusCode: statusCode,
         skip: 0,
         take: _pageSize,
         accountIds: _filterAccountIds.isNotEmpty ? _filterAccountIds.join(',') : null,
+        contactId: _filterContact,   // CtId → server-side aman
+        groupId: _filterGroup,       // GrpId → server-side aman
+        campaignId: _filterCampaign, // CampaignId → server-side aman
+        dealId: _filterDeal,         // DealId → server-side aman
+        // linkId, funnelId, tagsId, humanAgentId → Jalur 2, client-side di `chats` getter
       );
 
       if (!response.isError && response.data != null) {
@@ -330,11 +366,17 @@ class ChatProvider with ChangeNotifier {
 
     try {
       final statusCode = _statusCodeForFilter(_activeFilter);
+      // ── Jalur 1: Server-Side Filters only ──────────────────────────────────
       final response = await _chatService.getConversations(
         statusCode: statusCode,
         skip: 0,
         take: _pageSize,
         accountIds: _filterAccountIds.isNotEmpty ? _filterAccountIds.join(',') : null,
+        contactId: _filterContact,
+        groupId: _filterGroup,
+        campaignId: _filterCampaign,
+        dealId: _filterDeal,
+        // linkId, funnelId, tagsId, humanAgentId → client-side di `chats` getter
       );
 
       if (!response.isError && response.data != null) {
@@ -399,11 +441,17 @@ class ChatProvider with ChangeNotifier {
 
     try {
       final statusCode = _statusCodeForFilter(_activeFilter);
+      // ── Jalur 1: Server-Side Filters only ──────────────────────────────────
       final response = await _chatService.getConversations(
         statusCode: statusCode,
         skip: _currentSkip,
         take: _pageSize,
         accountIds: _filterAccountIds.isNotEmpty ? _filterAccountIds.join(',') : null,
+        contactId: _filterContact,
+        groupId: _filterGroup,
+        campaignId: _filterCampaign,
+        dealId: _filterDeal,
+        // linkId, funnelId, tagsId, humanAgentId → client-side di `chats` getter
       );
 
       if (!response.isError && response.data != null) {
@@ -567,46 +615,88 @@ class ChatProvider with ChangeNotifier {
         break;
     }
 
-    // Apply Advanced Filters
+    // ══════════════════════════════════════════════════════════════════════
+    // Advanced Filters — Arsitektur Dua Jalur
+    // ══════════════════════════════════════════════════════════════════════
+    // Jalur 1 (Server-Side): Account, Contact, Group, Campaign, Deal
+    //   → Sudah difilter API via EqualityFilter. Tidak perlu filter lokal lagi.
+    //
+    // Jalur 2 (Client-Side): MuteAi, Channel, ChatType, ReadStatus,
+    //                         Link, Funnel, Tag, HumanAgent
+    //   → Filter lokal di sini menggunakan .where() + ID-to-name resolution.
+    // ══════════════════════════════════════════════════════════════════════
+
+    // MuteAi — client-side
     if (_filterMuteAi != null && _filterMuteAi != '--select--') {
       final isMuted = _filterMuteAi == 'Yes';
       filtered = filtered.where((c) => c.muteAiAgent == isMuted).toList();
     }
+
+    // ReadStatus — client-side only (backend tidak support filter ini)
     if (_filterReadStatus != null && _filterReadStatus != '--select--') {
       final isRead = _filterReadStatus == 'Read';
       filtered = filtered.where((c) => isRead ? c.unreadCount == 0 : c.unreadCount > 0).toList();
     }
+
+    // Channel — client-side (berdasarkan nama account/channel)
     if (_filterChannel != null && _filterChannel != '--select--') {
       filtered = filtered.where((c) => c.channelName.toLowerCase().contains(_filterChannel!.toLowerCase())).toList();
     }
+
+    // ChatType — client-side only (backend tidak support IsGrp filter via EqualityFilter)
     if (_filterChatType != null && _filterChatType != '--select--') {
       final isGroup = _filterChatType == 'Group';
       filtered = filtered.where((c) => c.isGroup == isGroup).toList();
     }
-    // Removed local filter for _filterAccount since it's handled via API using ChAccId now.
-    if (_filterContact != null && _filterContact != '--select--') {
-      filtered = filtered.where((c) => c.sender.toLowerCase().contains(_filterContact!.toLowerCase())).toList();
-    }
-    if (_filterGroup != null && _filterGroup != '--select--') {
-      filtered = filtered.where((c) => c.groupName.toLowerCase().contains(_filterGroup!.toLowerCase())).toList();
-    }
+
+    // ── Jalur 2: Filters berikut di-remove dari payload API ─────────────────
+
+    // Link — client-side only (mengirim LinkTmp ke backend menyebabkan Error 500)
+    // _filterLink menyimpan ID link → resolve ke nama untuk dibandingkan dengan chat.link
     if (_filterLink != null && _filterLink != '--select--') {
-      filtered = filtered.where((c) => c.link.toLowerCase().contains(_filterLink!.toLowerCase())).toList();
+      final resolvedLinkName = _resolveLinkName(_filterLink!);
+      if (resolvedLinkName != null && resolvedLinkName.isNotEmpty) {
+        filtered = filtered.where((c) => c.link.toLowerCase() == resolvedLinkName.toLowerCase()).toList();
+      } else {
+        // Fallback: bandingkan ID langsung (LinkTmp bisa tersimpan apa adanya di chat.link)
+        filtered = filtered.where((c) => c.link.toLowerCase().contains(_filterLink!.toLowerCase())).toList();
+      }
     }
-    if (_filterCampaign != null && _filterCampaign != '--select--') {
-      filtered = filtered.where((c) => c.campaign.toLowerCase().contains(_filterCampaign!.toLowerCase())).toList();
-    }
-    if (_filterDeal != null && _filterDeal != '--select--') {
-      filtered = filtered.where((c) => c.deal.toLowerCase().contains(_filterDeal!.toLowerCase())).toList();
-    }
+
+    // Funnel — client-side only (mengirim FunnelId ke backend menyebabkan Error 500)
+    // _filterFunnel menyimpan ID funnel → resolve ke nama untuk dibandingkan dengan chat.funnel
     if (_filterFunnel != null && _filterFunnel != '--select--') {
-      filtered = filtered.where((c) => c.funnel.toLowerCase().contains(_filterFunnel!.toLowerCase())).toList();
+      final resolvedFunnelName = _resolveFunnelName(_filterFunnel!);
+      if (resolvedFunnelName != null && resolvedFunnelName.isNotEmpty) {
+        filtered = filtered.where((c) => c.funnel.toLowerCase() == resolvedFunnelName.toLowerCase()).toList();
+      } else {
+        // Fallback: bandingkan ID langsung
+        filtered = filtered.where((c) => c.funnel.toLowerCase().contains(_filterFunnel!.toLowerCase())).toList();
+      }
     }
+
+    // Tag — client-side only (mengirim TagsIds ke backend menyebabkan Error 500)
+    // _filterTags menyimpan ID tag → resolve ke nama untuk dibandingkan dengan chat.tags
     if (_filterTags != null && _filterTags != '--select--') {
-      filtered = filtered.where((c) => c.tags.any((t) => t.toLowerCase() == _filterTags!.toLowerCase())).toList();
+      final resolvedTagName = _resolveTagName(_filterTags!);
+      if (resolvedTagName != null && resolvedTagName.isNotEmpty) {
+        filtered = filtered.where((c) => c.tags.any((t) => t.toLowerCase() == resolvedTagName.toLowerCase())).toList();
+      } else {
+        // Fallback: bandingkan ID langsung
+        filtered = filtered.where((c) => c.tags.any((t) => t.toLowerCase() == _filterTags!.toLowerCase())).toList();
+      }
     }
+
+    // HumanAgent — client-side only (mengirim AgentId ke backend menyebabkan Error 500)
+    // _filterHumanAgent menyimpan ID agent → resolve ke nama untuk dibandingkan dengan chat.agentName
     if (_filterHumanAgent != null && _filterHumanAgent != '--select--') {
-      filtered = filtered.where((c) => c.agentName.toLowerCase().contains(_filterHumanAgent!.toLowerCase())).toList();
+      final resolvedAgentName = _resolveAgentName(_filterHumanAgent!);
+      if (resolvedAgentName != null && resolvedAgentName.isNotEmpty) {
+        filtered = filtered.where((c) => c.agentName.toLowerCase().contains(resolvedAgentName.toLowerCase())).toList();
+      } else {
+        // Fallback: bandingkan ID langsung
+        filtered = filtered.where((c) => c.agentName.toLowerCase().contains(_filterHumanAgent!.toLowerCase())).toList();
+      }
     }
 
     // Sort: Pinned first, then by last message time descending
@@ -970,6 +1060,8 @@ class ChatProvider with ChangeNotifier {
 
   List<Map<String, dynamic>>? _cachedFunnels;
   List<Map<String, dynamic>>? _cachedTags;
+  List<Map<String, dynamic>>? _cachedAgents; // untuk client-side HumanAgent filter
+  List<Map<String, dynamic>>? _cachedLinks;  // untuk client-side Link filter
 
   Future<List<Map<String, dynamic>>?> getFunnels({bool forceRefresh = false}) async {
     if (_cachedFunnels != null && !forceRefresh) return _cachedFunnels;
@@ -991,5 +1083,81 @@ class ChatProvider with ChangeNotifier {
     }
     _error = response.error;
     return null;
+  }
+
+  /// Fetch dan cache list of Agents.
+  /// Digunakan untuk client-side HumanAgent filter (Jalur 2) — ID-to-name resolution.
+  Future<List<Map<String, dynamic>>?> getCachedAgents({bool forceRefresh = false}) async {
+    if (_cachedAgents != null && !forceRefresh) return _cachedAgents;
+    final response = await _chatService.getAgents();
+    if (!response.isError && response.data != null) {
+      _cachedAgents = response.data;
+      return _cachedAgents;
+    }
+    // Soft-fail: agents bersifat opsional untuk filtering, jangan propagate error
+    debugPrint('ChatProvider: getCachedAgents soft-fail: ${response.error}');
+    return null;
+  }
+
+  /// Fetch dan cache list of Links.
+  /// Digunakan untuk client-side Link filter (Jalur 2) — ID-to-name resolution.
+  Future<List<Map<String, dynamic>>?> getCachedLinks({bool forceRefresh = false}) async {
+    if (_cachedLinks != null && !forceRefresh) return _cachedLinks;
+    final response = await _chatService.getLinks();
+    if (!response.isError && response.data != null) {
+      _cachedLinks = response.data;
+      return _cachedLinks;
+    }
+    // Soft-fail: links bersifat opsional untuk filtering, jangan propagate error
+    debugPrint('ChatProvider: getCachedLinks soft-fail: ${response.error}');
+    return null;
+  }
+
+  // ── ID-to-Name Resolvers (untuk Jalur 2 client-side filtering) ─────────────
+
+  /// Resolves Funnel ID → display name menggunakan [_cachedFunnels].
+  /// Returns null jika tidak ditemukan (caller harus fallback ke raw value).
+  String? _resolveFunnelName(String id) {
+    if (_cachedFunnels == null) return null;
+    final matched = _cachedFunnels!.firstWhere(
+      (f) => f['Id']?.toString() == id,
+      orElse: () => <String, dynamic>{},
+    );
+    return matched['Name']?.toString() ?? matched['Nm']?.toString();
+  }
+
+  /// Resolves Tag ID → display name menggunakan [_cachedTags].
+  String? _resolveTagName(String id) {
+    if (_cachedTags == null) return null;
+    final matched = _cachedTags!.firstWhere(
+      (t) => t['Id']?.toString() == id,
+      orElse: () => <String, dynamic>{},
+    );
+    return matched['Name']?.toString() ?? matched['Nm']?.toString();
+  }
+
+  /// Resolves HumanAgent ID → display name menggunakan [_cachedAgents].
+  /// Cek field 'Id' dan 'UserId' untuk handle inkonsistensi backend.
+  String? _resolveAgentName(String id) {
+    if (_cachedAgents == null) return null;
+    final matched = _cachedAgents!.firstWhere(
+      (a) => a['Id']?.toString() == id || a['UserId']?.toString() == id,
+      orElse: () => <String, dynamic>{},
+    );
+    return matched['DisplayName']?.toString() ??
+           matched['Name']?.toString() ??
+           matched['Nm']?.toString();
+  }
+
+  /// Resolves Link ID → template/display name menggunakan [_cachedLinks].
+  String? _resolveLinkName(String id) {
+    if (_cachedLinks == null) return null;
+    final matched = _cachedLinks!.firstWhere(
+      (l) => l['Id']?.toString() == id,
+      orElse: () => <String, dynamic>{},
+    );
+    return matched['Nm']?.toString() ??
+           matched['Name']?.toString() ??
+           matched['LinkTmp']?.toString();
   }
 }

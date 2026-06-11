@@ -204,12 +204,28 @@ class Conversation {
   }
 
   static String? _resolveAvatarUrl(Map<String, dynamic> json) {
-    // Try CtImg first (set after Contact/Update), then LinkImg, then AvatarUrl
-    final raw = json['CtImg']?.toString() ??
-        json['LinkImg']?.toString() ??
-        json['AvatarUrl']?.toString() ??
-        json['avatar_url']?.toString();
-    if (raw == null || raw.isEmpty) return null;
+    // Try multiple avatar source fields in priority order.
+    // IMPORTANT: We must check each individually because ?.toString() on an
+    // empty string "" returns "" (not null), which blocks the ?? fallthrough
+    // and would prevent later fields like LinkImg from being used.
+    final candidates = [
+      json['CtImg'],      // Set after Contact/Update
+      json['LinkImg'],    // Profile photo from Instagram/Tokopedia/etc
+      json['AvatarUrl'],
+      json['avatar_url'],
+    ];
+
+    String? raw;
+    for (final val in candidates) {
+      if (val == null) continue;
+      final str = val.toString().trim();
+      if (str.isNotEmpty && str != 'null') {
+        raw = str;
+        break;
+      }
+    }
+
+    if (raw == null) return null;
     // If already a full URL, use as-is
     if (raw.startsWith('http')) return raw;
     // Prepend base upload URL for relative paths

@@ -33,9 +33,11 @@ class ChannelIcon extends StatelessWidget {
       assetName = 'instagram';
     } else if (channelId == 4 || cName.contains('facebook') || cName.contains('fb')) {
       assetName = 'facebook';
+    } else if (cName.contains('tiktok')) {
+      assetName = 'tiktok';
     } else if (cName.contains('shopee')) {
       assetName = 'shopee';
-    } else if (cName.contains('tokopedia')) {
+    } else if (cName.contains('tokopedia') || cName.contains('toko pedia')) {
       assetName = 'Tokopedia';
     }
 

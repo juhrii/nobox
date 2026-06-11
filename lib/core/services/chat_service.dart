@@ -152,7 +152,13 @@ class ChatService {
   /// Fetch list of campaigns from API
   Future<ApiResponse<List<Map<String, dynamic>>>> getCampaigns() async {
     try {
-      final response = await _apiClient.post(AppConfig.campaignsListEndpoint, data: {"Skip": 0, "Take": 100});
+      final requestData = {
+        'IncludeColumns': ['Id', 'Name', 'DisplayName', 'Title', 'Nm'],
+        'ColumnSelection': 1,
+        'Take': 100,
+        'Skip': 0,
+      };
+      final response = await _apiClient.post(AppConfig.campaignsListEndpoint, data: requestData);
       if (response.statusCode == 200) {
         return ApiResponse.success(_parseGenericList(response.data), response.statusCode!);
       }
@@ -165,7 +171,13 @@ class ChatService {
   /// Fetch list of deals from API
   Future<ApiResponse<List<Map<String, dynamic>>>> getDeals() async {
     try {
-      final response = await _apiClient.post(AppConfig.dealsListEndpoint, data: {"Skip": 0, "Take": 100});
+      final requestData = {
+        'IncludeColumns': ['Id', 'Name', 'DisplayName', 'Title', 'Nm'],
+        'ColumnSelection': 1,
+        'Take': 100,
+        'Skip': 0,
+      };
+      final response = await _apiClient.post(AppConfig.dealsListEndpoint, data: requestData);
       if (response.statusCode == 200) {
         return ApiResponse.success(_parseGenericList(response.data), response.statusCode!);
       }
@@ -178,7 +190,13 @@ class ChatService {
   /// Fetch list of groups from API
   Future<ApiResponse<List<Map<String, dynamic>>>> getGroups() async {
     try {
-      final response = await _apiClient.post(AppConfig.groupsListEndpoint, data: {"Skip": 0, "Take": 100});
+      final requestData = {
+        'IncludeColumns': ['Id', 'Name', 'DisplayName', 'Title', 'Nm'],
+        'ColumnSelection': 1,
+        'Take': 100,
+        'Skip': 0,
+      };
+      final response = await _apiClient.post(AppConfig.groupsListEndpoint, data: requestData);
       if (response.statusCode == 200) {
         return ApiResponse.success(_parseGenericList(response.data), response.statusCode!);
       }
@@ -191,7 +209,13 @@ class ChatService {
   /// Fetch list of links from API
   Future<ApiResponse<List<Map<String, dynamic>>>> getLinks() async {
     try {
-      final response = await _apiClient.post(AppConfig.linksListEndpoint, data: {"Skip": 0, "Take": 100});
+      final requestData = {
+        'IncludeColumns': ['Id', 'Name', 'DisplayName', 'Title', 'Nm', 'LinkTmp'],
+        'ColumnSelection': 1,
+        'Take': 100,
+        'Skip': 0,
+      };
+      final response = await _apiClient.post(AppConfig.linksListEndpoint, data: requestData);
       if (response.statusCode == 200) {
         return ApiResponse.success(_parseGenericList(response.data), response.statusCode!);
       }
@@ -217,10 +241,13 @@ class ChatService {
   /// Fetch list of agents from API
   Future<ApiResponse<List<Map<String, dynamic>>>> getAgents() async {
     try {
-      final response = await _apiClient.post(AppConfig.getAgentsEndpoint, data: {
-        "Skip": 0,
-        "Take": 200,
-      });
+      final requestData = {
+        'IncludeColumns': ['Id', 'UserId', 'DisplayName', 'Username', 'Name', 'Nm'],
+        'ColumnSelection': 1,
+        'Take': 100,
+        'Skip': 0,
+      };
+      final response = await _apiClient.post(AppConfig.getAgentsEndpoint, data: requestData);
 
       if (response.statusCode == 200) {
         final dynamic rawData = response.data;
@@ -412,7 +439,20 @@ class ChatService {
   /// Fetch list of chat rooms filtered by status.
   /// [statusCode] → 1: Unassigned, 2: Assigned, 3: Resolved, null: All
   /// [skip] and [take] control pagination (defaults: skip=0, take=20)
-  Future<ApiResponse<List<Conversation>>> getConversations({int? statusCode, int skip = 0, int take = 20, String? accountIds}) async {
+  Future<ApiResponse<List<Conversation>>> getConversations({
+    int? statusCode,
+    int skip = 0,
+    int take = 20,
+    String? accountIds,
+    String? contactId,
+    String? linkId,
+    String? groupId,
+    String? campaignId,
+    String? funnelId,
+    String? dealId,
+    String? tagsId,
+    String? humanAgentId,
+  }) async {
     try {
       final Map<String, dynamic> payload = {
         "Take": take,
@@ -428,15 +468,60 @@ class ChatService {
       };
 
       // Apply EqualityFilter for status and accountIds
-      if (statusCode != null || (accountIds != null && accountIds.isNotEmpty)) {
+      if (statusCode != null || (accountIds != null && accountIds.isNotEmpty) ||
+          contactId != null ||
+          linkId != null ||
+          groupId != null ||
+          campaignId != null ||
+          funnelId != null ||
+          dealId != null ||
+          tagsId != null ||
+          humanAgentId != null) {
         payload["EqualityFilter"] = {};
+
         if (statusCode != null) {
           payload["EqualityFilter"]["St"] = [statusCode];
         }
+
         if (accountIds != null && accountIds.isNotEmpty) {
           payload["EqualityFilter"]["ChAccId"] = accountIds;
         }
+
+        if (contactId != null && contactId.isNotEmpty) {
+          payload["EqualityFilter"]["CtId"] = contactId;
+        }
+
+        if (linkId != null && linkId.isNotEmpty) {
+          payload["EqualityFilter"]["LinkTmp"] = linkId;
+        }
+
+        if (groupId != null && groupId.isNotEmpty) {
+          payload["EqualityFilter"]["GrpId"] = groupId;
+        }
+
+        if (campaignId != null && campaignId.isNotEmpty) {
+          payload["EqualityFilter"]["CampaignId"] = campaignId;
+        }
+
+        if (funnelId != null && funnelId.isNotEmpty) {
+          payload["EqualityFilter"]["FunnelId"] = funnelId;
+        }
+
+        if (dealId != null && dealId.isNotEmpty) {
+          payload["EqualityFilter"]["DealId"] = dealId;
+        }
+
+        if (tagsId != null && tagsId.isNotEmpty) {
+          // backend likely supports equality on TagsIds
+          payload["EqualityFilter"]["TagsIds"] = tagsId;
+        }
+
+        if (humanAgentId != null && humanAgentId.isNotEmpty) {
+          // filter by assigned/human agent (from Chatrooms/List response: AgentId / AssignedAgentName)
+          payload["EqualityFilter"]["AgentId"] = humanAgentId;
+        }
       }
+
 
       debugPrint('ChatService: fetchConversations statusCode=$statusCode');
       final response = await _apiClient.post(AppConfig.chatroomsListEndpoint, data: payload);
@@ -868,7 +953,9 @@ class ChatService {
     }
   }
 
-  Future<String?> _getExtId(String? contactId) async {
+  /// Retrieve ExtId for a contact. For Telegram (channelId=2), returns a JSON
+  /// string containing ExtId, Username, and AccessHash per mentor instruction.
+  Future<String?> _getExtId(String? contactId, {int channelId = 1}) async {
     if (contactId == null || contactId.isEmpty) return null;
     try {
       final response = await _apiClient.get(
@@ -880,19 +967,53 @@ class ChatService {
         if (data is Map) {
           final entity = data['Entity'];
           if (entity is Map) {
+            String extId = '';
+            String? username;
+            String? accessHash;
+
             // Mentor contract: ExtId must come from Entity.Extra.ExtId ("628...")
             final extraRaw = entity['Extra'];
             if (extraRaw != null) {
               try {
                 final extraMap = extraRaw is String ? jsonDecode(extraRaw) : extraRaw;
-                if (extraMap is Map && extraMap['ExtId'] != null) {
-                  return extraMap['ExtId'].toString();
+                if (extraMap is Map) {
+                  if (extraMap['ExtId'] != null) {
+                    extId = extraMap['ExtId'].toString();
+                  }
+                  // Capture Telegram-specific fields from Extra
+                  username = extraMap['Username']?.toString();
+                  accessHash = extraMap['AccessHash']?.toString();
                 }
               } catch (_) {
                 // ignore parse error, fallback to IdExt below
               }
             }
-            return entity['IdExt']?.toString();
+
+            if (extId.isEmpty) {
+              extId = entity['IdExt']?.toString() ?? '';
+            }
+
+            if (extId.isEmpty) return null;
+
+            // Telegram: wrap ExtId in JSON string with Username & AccessHash
+            if (channelId == 2) {
+              final idExt = entity['IdExt']?.toString();
+              if (idExt != null && idExt.isNotEmpty) {
+                extId = idExt;
+              }
+              final extIdMap = <String, dynamic>{'ExtId': extId};
+              if (username != null && username.isNotEmpty) {
+                extIdMap['Username'] = username;
+              }
+              if (accessHash != null && accessHash.isNotEmpty) {
+                extIdMap['AccessHash'] = accessHash;
+              }
+              final jsonStr = jsonEncode(extIdMap);
+              debugPrint('ChatService: _getExtId Telegram JSON: $jsonStr');
+              return jsonStr;
+            }
+
+            return extId;
           }
 
           // fallback if API shape differs
@@ -932,6 +1053,8 @@ class ChatService {
         data: {'EntityId': request.contactId},
       );
       String extId = '';
+      String? telegramUsername;
+      String? telegramAccessHash;
       if (retrieveResponse.statusCode == 200) {
         final data = retrieveResponse.data;
         // Mentor contract: ExtId should come from Entity.Extra.ExtId ("628...")
@@ -941,45 +1064,71 @@ class ChatService {
           if (extraRaw != null) {
             try {
               final extraMap = extraRaw is String ? jsonDecode(extraRaw) : extraRaw;
-              if (extraMap is Map && extraMap['ExtId'] != null) {
-                extId = extraMap['ExtId']?.toString() ?? '';
+              if (extraMap is Map) {
+                if (extraMap['ExtId'] != null) {
+                  extId = extraMap['ExtId']?.toString() ?? '';
+                }
+                // Capture Telegram-specific fields from Extra
+                telegramUsername = extraMap['Username']?.toString();
+                telegramAccessHash = extraMap['AccessHash']?.toString();
               }
             } catch (_) {
               // ignore parse error; fallback to IdExt
             }
           }
-          extId = (extId.isNotEmpty ? extId : (entity['IdExt']?.toString() ?? ''));
+          final idExt = entity['IdExt']?.toString() ?? '';
+          final int chId = int.tryParse(request.channelId ?? '1') ?? 1;
+          if (chId == 2 && idExt.isNotEmpty) {
+            extId = idExt;
+          } else {
+            extId = (extId.isNotEmpty ? extId : idExt);
+          }
         }
         debugPrint('ChatService: ExtId retrieved = $extId');
       }
 
-
       final int channelId = int.tryParse(request.channelId ?? '1') ?? 1;
 
-      // Telegram (ChannelId=2) backend expects LinkId (long) in addition to ExtId (string)
-      // to avoid error like: 'long' does not contain a definition for 'ExtId'.
+      // Telegram (ChannelId=2): ExtId must be a JSON string containing
+      // ExtId, Username, and AccessHash per mentor's instruction.
+      // If Username/AccessHash not available, include ExtId only.
+      String finalExtId = extId;
+      if (channelId == 2 && extId.isNotEmpty) {
+        final extIdMap = <String, dynamic>{'ExtId': extId};
+        if (telegramUsername != null && telegramUsername.isNotEmpty) {
+          extIdMap['Username'] = telegramUsername;
+        }
+        if (telegramAccessHash != null && telegramAccessHash.isNotEmpty) {
+          extIdMap['AccessHash'] = telegramAccessHash;
+        }
+        finalExtId = jsonEncode(extIdMap);
+        debugPrint('ChatService: Telegram ExtId formatted as JSON: $finalExtId');
+      }
+
       final Map<String, dynamic> payload = {
         'Body': content,
         'BodyType': 1,
-        'ExtId': extId,
+        'ExtId': finalExtId,
         'ChannelId': channelId,
         'AccountIds': safeAccountId,
         'Attachment': request.attachment ?? '',
       };
 
-      if (channelId == 2) {
-        final linkId = int.tryParse(request.contactId ?? '');
+      // NOTE: LinkId dihapus untuk Telegram karena backend error
+      // 'long' does not contain a definition for 'ExtId' — backend
+      // memprioritaskan LinkId (long) dan gagal akses .ExtId di atasnya.
+      // ExtId JSON string sudah cukup mengandung semua info.
 
-        if (linkId != null) {
-          payload['LinkId'] = linkId;
-        }
-      }
 
+      debugPrint('ChatService: ┌── sendMessage PAYLOAD FINAL ──');
+      debugPrint(jsonEncode(payload));
+      debugPrint('ChatService: └──────────────────────────────');
 
       final response = await _apiClient.post(
       'https://id.nobox.ai/Inbox/Send?Id=${roomIdStr ?? '0'}',
         data: payload,
       );
+
 
       debugPrint('ChatService: │ Status: ${response.statusCode}');
 
@@ -1190,20 +1339,30 @@ class ChatService {
     }
     safeAccountId = safeAccountId.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '').trim();
 
-    final extId = await _getExtId(contactId);
+    final int chId = int.tryParse(channelId ?? '1') ?? 1;
+    final extId = await _getExtId(contactId, channelId: chId);
     final payload = {
       "Body": "", 
       "BodyType": bodyType,
       "ExtId": extId ?? "",
-      "ChannelId": int.tryParse(channelId ?? '1') ?? 1,
+      "ChannelId": chId,
       "AccountIds": safeAccountId,
       "Attachment": attachmentData,
     };
+
+    // NOTE: LinkId TIDAK dikirim untuk Telegram karena backend error
+    // 'long' does not contain a definition for 'ExtId'.
+    // ExtId JSON string sudah cukup.
+
+      debugPrint('ChatService: ┌── sendImageMessage PAYLOAD FINAL ──');
+      debugPrint(jsonEncode(payload));
+      debugPrint('ChatService: └──────────────────────────────');
 
       final sendResponse = await _apiClient.post(
       'https://id.nobox.ai/Inbox/Send?Id=$conversationId',
       data: payload,
       );
+
 
       if (sendResponse.statusCode == 200) {
         final rawData = sendResponse.data;

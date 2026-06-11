@@ -61,7 +61,7 @@ class _SearchableDropdownState extends State<SearchableDropdown> {
       onTap: _showDropdown,
       child: Container(
         height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           border: Border.all(
@@ -167,14 +167,14 @@ class _SearchableDropdownPopupState extends State<_SearchableDropdownPopup> {
             color: Colors.white,
             clipBehavior: Clip.antiAlias,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 250),
+              constraints: const BoxConstraints(maxHeight: 200),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Search field
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
                     child: TextField(
                       controller: _searchController,
                       onChanged: _filterOptions,
@@ -183,9 +183,9 @@ class _SearchableDropdownPopupState extends State<_SearchableDropdownPopup> {
                         isDense: true,
                         hintText: 'Search...',
                         hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 13),
-                        prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 18),
+                        prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 20),
                         prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(color: Colors.grey.shade400),
@@ -204,12 +204,27 @@ class _SearchableDropdownPopupState extends State<_SearchableDropdownPopup> {
                   // Options list
                   Flexible(
                     child: _filteredOptions.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text(
-                              'No results found', 
-                              style: TextStyle(color: Colors.grey, fontSize: 14),
-                              textAlign: TextAlign.center,
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 40,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'No results found',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           )
                         : ListView.builder(
@@ -221,7 +236,7 @@ class _SearchableDropdownPopupState extends State<_SearchableDropdownPopup> {
                               return InkWell(
                                 onTap: () => Navigator.pop(context, option),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                   child: Text(
                                     option,
                                     style: const TextStyle(

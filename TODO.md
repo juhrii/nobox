@@ -1,16 +1,23 @@
-# TODO - Perbaikan error pengiriman pesan/file
+# TODO - Fix Filter Conversation (anti-dummy)
 
-## Langkah 1
-- [x] Telusuri kode Flutter: cari tempat pengiriman pesan (`sendMessage`) dan payload `ExtId/AccountIds`.
+## Step 1 (planned)
+- Audit filter inputs/outputs (Name vs Id) untuk dropdown: Contact, Link, Group, Campaign, Deal, Funnel, Tags, HumanAgent.
 
-## Langkah 2
-- [x] Validasi penyebab dari log: payload sudah benar tapi backend error `'long' does not contain a definition for 'ExtId'`.
+## Step 2 (planned)
+- Ubah filter logic dari lokal string matching menjadi server-side EqualityFilter berbasis Id.
 
-## Langkah 3
-- [ ] Update kontrak payload sesuai mentor di `lib/core/services/chat_service.dart` (method `sendMessage()`):
-  - [ ] ambil `ExtId` dari `Entity.Extra.ExtId` (bukan `IdExt`)
-  - [ ] paksa `ExtId` dan `AccountIds` selalu bertipe `String` (termasuk bila perlu koma untuk multiple akun)
+## Step 3
+- Update ChatProvider: ganti filter fields agar menyimpan Id (ctId, FnId, DealId, CampaignId, GrpId, AgentId, LinkId).
 
-## Langkah 4
-- [ ] Jalankan test pengiriman pesan lagi dari aplikasi/terminal log untuk memastikan error hilang.
+## Step 4
+- Update ChatService.getConversations(): tambahkan EqualityFilter untuk field-field Id.
+
+## Step 5
+- Update UI _showFilterDialog(): simpan value dropdown dalam bentuk Id (bukan Name) untuk semua filter yang relevan.
+
+## Step 6
+- Tambahkan fallback lokal (hanya jika server tidak menyediakan field yang dibutuhkan).
+
+## Step 7
+- Testing manual: pilih filter satu per satu dan verifikasi hasil list.
 

@@ -2,38 +2,76 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 void main() async {
-  final token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImN0eSI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiYWtiYXJyaXlhbmRAZ21haWwuY29tIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIxOTIwIiwiZXhwIjoxNzc5Nzg2NTE2LCJpc3MiOiJodHRwczovL2lkLm5vYm94LmFpLyIsImF1ZCI6Imh0dHBzOi8vaWQubm9ib3guYWkvIn0.IIrHiYRKsVmzJFPuCpohJJO8uk7xtqwukt_uaS2XEo8";
+  final token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImN0eSI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiYWtiYXJyaXlhbmRAZ21haWwuY29tIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIxOTIwIiwiZXhwIjoxNzgwNTc1NjcxLCJpc3MiOiJodHRwczovL2lkLm5vYm94LmFpLyIsImF1ZCI6Imh0dHBzOi8vaWQubm9ib3guYWkvIn0.7fV6kU_7myFopRYxOWUk8hIcEL9vgB9Z5BmzWHvt-cU";
+  final roomId = 807686061948933;
   
-  final Map<String, dynamic> body1 = {"CtId": 807686061867013};
-  final Map<String, dynamic> body2 = {"EntityId": 807686061867013};
-  
-  try {
-    print("Testing POST with CtId...");
-    final res1 = await http.post(
-      Uri.parse('https://id.nobox.ai/Services/Chat/Chatlinkcontacts/Retrieve'),
+  Future<void> sendMsg(String name, Map<String, dynamic> payload) async {
+    print("\n--- Testing " + name + " ---");
+    final res = await http.post(
+      Uri.parse('https://id.nobox.ai/Inbox/Send?Id=' + roomId.toString()),
       headers: {
-        'Authorization': 'Bearer $token',
+        'Authorization': 'Bearer ' + token,
         'Content-Type': 'application/json'
       },
-      body: jsonEncode(body1),
+      body: jsonEncode(payload),
     );
-    print("Status: ${res1.statusCode}");
-    print("Body: ${res1.body}");
+    print("Send Response: " + res.statusCode.toString() + " " + res.body);
     
-    if (res1.statusCode == 500 && res1.body.contains("Could not find member")) {
-      print("\nTesting POST with EntityId...");
-      final res2 = await http.post(
-        Uri.parse('https://id.nobox.ai/Services/Chat/Chatlinkcontacts/Retrieve'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json'
-        },
-        body: jsonEncode(body2),
-      );
-      print("Status: ${res2.statusCode}");
-      print("Body: ${res2.body}");
+    // Check if it appeared in messages
+    await Future.delayed(Duration(seconds: 2));
+    final res2 = await http.post(
+      Uri.parse('https://id.nobox.ai/Services/Chat/ChatMessages/List'),
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: jsonEncode({
+        "Take": 5, "Skip": 0, "Sort": ["In DESC"], "ColumnSelection": 1,
+        "EqualityFilter": {"RoomId": [roomId]}
+      }),
+    );
+    if (res2.statusCode == 200) {
+      final json = jsonDecode(res2.body);
+      final entities = json['Entities'] as List;
+      if (entities.isNotEmpty) {
+        print("Latest message in room: " + entities[0]['Msg'].toString());
+      } else {
+        print("No messages found in room");
+      }
+    } else {
+      print("Failed to fetch messages: " + res2.statusCode.toString());
     }
-  } catch (e) {
-    print("Error: $e");
   }
+
+  // 5. JSON String ExtId, WITH LinkId
+  await sendMsg("JSON String ExtId, WITH LinkId", {
+    "Body": "test_json_string_with_lid",
+    "BodyType": 1,
+    "ExtId": "{\"ExtId\":\"6283146206451\",\"Username\":\"akbrryn\",\"AccessHash\":\"-8665298337796580198\"}",
+    "ChannelId": 2,
+    "AccountIds": "807236570021893",
+    "Attachment": "",
+    "LinkId": 807686061867013
+  });
+
+  // 6. JSON String ExtId but using IdExt instead of phone number
+  await sendMsg("JSON String with IdExt inside, with LinkId", {
+    "Body": "test_json_string_idext_inside",
+    "BodyType": 1,
+    "ExtId": "{\"ExtId\":\"6912143766\",\"Username\":\"akbrryn\",\"AccessHash\":\"-8665298337796580198\"}",
+    "ChannelId": 2,
+    "AccountIds": "807236570021893",
+    "Attachment": "",
+    "LinkId": 807686061867013
+  });
+
+  // 7. JSON String with IdExt inside, NO LinkId
+  await sendMsg("JSON String with IdExt inside, NO LinkId", {
+    "Body": "test_json_string_idext_inside_nolid",
+    "BodyType": 1,
+    "ExtId": "{\"ExtId\":\"6912143766\",\"Username\":\"akbrryn\",\"AccessHash\":\"-8665298337796580198\"}",
+    "ChannelId": 2,
+    "AccountIds": "807236570021893",
+    "Attachment": ""
+  });
 }

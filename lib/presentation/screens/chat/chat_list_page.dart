@@ -1443,18 +1443,17 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                 Widget buildDropdownRow(String label, String? value, List<String> options, ValueChanged<String?> onChanged) {
                   final safeValue = (value == null || value == '--select--' || !options.contains(value)) ? null : value;
                   return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.only(bottom: 16),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         SizedBox(
-                          width: 100,
+                          width: 120,
                           child: Text(
                             label,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
                           ),
                         ),
-                        const SizedBox(width: 12),
                         Expanded(
                           child: SearchableDropdown(
                             value: safeValue,
@@ -1471,23 +1470,27 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                   backgroundColor: Colors.white,
                   surfaceTintColor: Colors.transparent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                  insetPadding: EdgeInsets.symmetric(
+                    horizontal: MediaQuery.of(context).size.width * 0.025,
+                    vertical: MediaQuery.of(context).size.height * 0.1,
+                  ),
                   child: SizedBox(
-                    width: double.maxFinite,
-                    child: Column(
+                    width: MediaQuery.of(context).size.width * 0.95,
+                    height: MediaQuery.of(context).size.height * 0.8,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         // Header
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 20, 16, 0),
-                          child: Row(
+                        Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text(
                                 'Filter Conversation',
                                 style: TextStyle(
                                   fontSize: 20,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w600,
                                   color: Colors.blue,
                                 ),
                               ),
@@ -1496,16 +1499,28 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 icon: const Icon(Icons.close, color: Colors.blue),
                               ),
                             ],
-                          ),
                         ),
 
+                        const SizedBox(height: 20),
+
                         // Apply & Reset buttons
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                          child: Row(
+                        Row(
                             children: [
                               ElevatedButton.icon(
                                 onPressed: () {
+                                  // Helper to resolve selected name back to ID
+                                  String? resolveToId(String? name, List<Map<String, dynamic>>? rawData) {
+                                    if (name == null || name == '--select--') return null;
+                                    if (rawData == null) return name;
+                                    for (final item in rawData) {
+                                      final itemName = item['Name']?.toString() ?? item['Nm']?.toString() ?? '';
+                                      if (itemName == name) {
+                                        return item['Id']?.toString() ?? item['CtId']?.toString() ?? name;
+                                      }
+                                    }
+                                    return name;
+                                  }
+
                                   // Apply filter
                                   provider.setActiveFilter(selectedStatus ?? 'All');
                                   provider.applyAdvancedFilters(
@@ -1514,26 +1529,25 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                     channel: selectedChannel,
                                     chatType: selectedChat,
                                     accountIds: selectedAccountIds,
-                                    contact: selectedContact,
-                                    link: selectedLink,
-                                    group: selectedGroup,
-                                    campaign: selectedCampaign,
-                                    funnel: selectedFunnel,
-                                    deal: selectedDeal,
-                                    tags: selectedTags,
-                                    humanAgent: selectedHumanAgent,
+                                    contact: resolveToId(selectedContact, contactsRaw?.data),
+                                    link: resolveToId(selectedLink, linksRaw?.data),
+                                    group: resolveToId(selectedGroup, groupsRaw?.data),
+                                    campaign: resolveToId(selectedCampaign, campaignsRaw?.data),
+                                    funnel: resolveToId(selectedFunnel, funnelsRaw),
+                                    deal: resolveToId(selectedDeal, dealsRaw?.data),
+                                    tags: resolveToId(selectedTags, tagsRaw),
+                                    humanAgent: resolveToId(selectedHumanAgent, agentsRaw),
                                   );
                                   Navigator.pop(context);
                                 },
-                                icon: const Icon(Icons.filter_alt, size: 18),
+                                icon: const Icon(Icons.filter_alt, size: 16),
                                 label: const Text('Apply'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.blue,
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -1557,26 +1571,25 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                   });
                                   provider.resetFilters();
                                 },
-                                icon: const Icon(Icons.refresh, size: 18),
+                                icon: const Icon(Icons.refresh, size: 16),
                                 label: const Text('Reset'),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.blue,
                                   elevation: 0,
                                   side: const BorderSide(color: Colors.blue),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                                  textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                 ),
                               ),
                             ],
-                          ),
                         ),
-                        const Divider(height: 1, color: Color(0xFFEEEEEE)),
+
+                        const SizedBox(height: 20),
 
                         // Scrollable filter rows
                         Flexible(
                           child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                            padding: EdgeInsets.zero,
                             child: Column(
                               children: [
                                 buildDropdownRow('Status', selectedStatus, ['Assigned', 'Unassigned', 'Resolved'], (val) {
@@ -1595,18 +1608,17 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                   setDialogState(() => selectedChat = val);
                                 }),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  padding: const EdgeInsets.only(bottom: 16),
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
                                       const SizedBox(
-                                        width: 100,
+                                        width: 120,
                                         child: Text(
                                           'Account',
-                                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
                                         ),
                                       ),
-                                      const SizedBox(width: 12),
                                       Expanded(
                                         child: InkWell(
                                           onTap: () {
@@ -1688,28 +1700,28 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                     ],
                                   ),
                                 ),
-                                buildDropdownRow('Contact', selectedContact, contacts.isEmpty ? ['All Contacts'] : contacts, (val) {
+                                buildDropdownRow('Contact', selectedContact, contacts.isEmpty ? <String>[] : contacts, (val) {
                                   setDialogState(() => selectedContact = val);
                                 }),
                                 buildDropdownRow('Link', selectedLink, links.isEmpty ? ['Linked', 'Unlinked'] : links, (val) {
                                   setDialogState(() => selectedLink = val);
                                 }),
-                                buildDropdownRow('Group', selectedGroup, groups.isEmpty ? ['All Groups'] : groups, (val) {
+                                buildDropdownRow('Group', selectedGroup, groups.isEmpty ? <String>[] : groups, (val) {
                                   setDialogState(() => selectedGroup = val);
                                 }),
-                                buildDropdownRow('Campaign', selectedCampaign, campaigns.isEmpty ? ['All Campaigns'] : campaigns, (val) {
+                                buildDropdownRow('Campaign', selectedCampaign, campaigns.isEmpty ? <String>[] : campaigns, (val) {
                                   setDialogState(() => selectedCampaign = val);
                                 }),
-                                buildDropdownRow('Funnel', selectedFunnel, funnels.isEmpty ? ['All Funnels'] : funnels, (val) {
+                                buildDropdownRow('Funnel', selectedFunnel, funnels.isEmpty ? <String>[] : funnels, (val) {
                                   setDialogState(() => selectedFunnel = val);
                                 }),
-                                buildDropdownRow('Deal', selectedDeal, deals.isEmpty ? ['All Deals'] : deals, (val) {
+                                buildDropdownRow('Deal', selectedDeal, deals.isEmpty ? <String>[] : deals, (val) {
                                   setDialogState(() => selectedDeal = val);
                                 }),
-                                buildDropdownRow('Tags', selectedTags, tags.isEmpty ? ['All Tags'] : tags, (val) {
+                                buildDropdownRow('Tags', selectedTags, tags.isEmpty ? <String>[] : tags, (val) {
                                   setDialogState(() => selectedTags = val);
                                 }),
-                                buildDropdownRow('Human Agents', selectedHumanAgent, agents.isEmpty ? ['All Agents'] : agents, (val) {
+                                buildDropdownRow('Human Agents', selectedHumanAgent, agents.isEmpty ? <String>[] : agents, (val) {
                                   setDialogState(() => selectedHumanAgent = val);
                                 }),
                               ],
@@ -1718,6 +1730,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                         ),
                       ],
                     ),
+                  ),
                   ),
                 );
               },
