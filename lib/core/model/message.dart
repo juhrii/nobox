@@ -144,6 +144,7 @@ class Message {
   final String? videoUrl;   // remote video URL from server
   final String? documentName; // original filename for document messages
   final String? documentUrl;  // remote URL for document download
+  final int ack; // 1: pending, 2: sent, 3: delivered, 4: failed, 5: read
 
   Message({
     this.id = '',
@@ -161,6 +162,7 @@ class Message {
     this.videoUrl,
     this.documentName,
     this.documentUrl,
+    this.ack = 0,
   });
 
   /// Format ISO timestamp "2026-03-25T05:42:28.107" → "25 Mar, 05:42"
@@ -421,6 +423,15 @@ class Message {
       debugPrint('🔊 Message.fromJson VOICE: id=$id, audioPath=$audioPath, Files=${json['Files']}, File=${json['File']}, Type=$typeVal');
     }
 
+    int parsedAck = 2; // Default to sent if not present
+    final ackVal = json['Ack'] ?? json['ack'] ?? json['ack_status'];
+    if (ackVal != null) {
+      if (ackVal is int) parsedAck = ackVal;
+      else if (ackVal is String) parsedAck = int.tryParse(ackVal) ?? 2;
+    } else {
+      parsedAck = isSystem ? 0 : 2;
+    }
+
     return Message(
       id: id,
       content: content,
@@ -434,6 +445,7 @@ class Message {
       videoUrl: videoUrl,
       documentName: docName,
       documentUrl: docUrl,
+      ack: parsedAck,
     );
   }
 
@@ -453,6 +465,7 @@ class Message {
     String? videoUrl,
     String? documentName,
     String? documentUrl,
+    int? ack,
   }) {
     return Message(
       id: id ?? this.id,
@@ -470,6 +483,7 @@ class Message {
       videoUrl: videoUrl ?? this.videoUrl,
       documentName: documentName ?? this.documentName,
       documentUrl: documentUrl ?? this.documentUrl,
+      ack: ack ?? this.ack,
     );
   }
 }

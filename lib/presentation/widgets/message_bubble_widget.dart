@@ -1314,22 +1314,30 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     IconData icon;
     Color color;
 
-    switch (widget.message.status) {
-      case MessageStatus.sent:
+    switch (widget.message.ack) {
+      case 1: // Pending
+        icon = Icons.access_time;
+        color = Colors.grey;
+        break;
+      case 2: // Sent
         icon = Icons.check;
-        color = AppTheme.textSecondary;
+        color = Colors.grey;
         break;
-      case MessageStatus.delivered:
+      case 3: // Delivered
         icon = Icons.done_all;
-        color = AppTheme.textSecondary;
+        color = Colors.grey;
         break;
-      case MessageStatus.read:
+      case 4: // Failed
+        icon = Icons.error_outline;
+        color = Colors.red;
+        break;
+      case 5: // Read
         icon = Icons.done_all;
         color = AppTheme.primaryColor;
         break;
       default:
-        icon = Icons.access_time;
-        color = AppTheme.textSecondary;
+        icon = Icons.check;
+        color = Colors.grey;
         break;
     }
 

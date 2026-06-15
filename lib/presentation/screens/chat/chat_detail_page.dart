@@ -794,6 +794,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       time: timeString,
       status: MessageStatus.sent,
       repliedMessage: _repliedMessage,
+      ack: 1,
     );
 
     setState(() {
@@ -824,19 +825,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         setState(() {
           _messages[messageIndex] = _messages[messageIndex].copyWith(
             status: MessageStatus.delivered,
+            ack: 2,
           );
         });
-
-        Timer(const Duration(seconds: 2), () {
-          if (mounted && messageIndex < _messages.length) {
-            setState(() {
-              _messages[messageIndex] = _messages[messageIndex].copyWith(
-                status: MessageStatus.read,
-              );
-            });
-          }
-        });
       } else {
+        setState(() {
+          _messages[messageIndex] = _messages[messageIndex].copyWith(
+            ack: 4,
+          );
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to send: ${response.error}'),
@@ -928,6 +925,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       status: MessageStatus.sent,
       messageType: MessageType.image,
       imagePath: pickedFile.path,
+      ack: 1,
     );
 
     setState(() {
@@ -952,9 +950,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           _messages[messageIndex] = _messages[messageIndex].copyWith(
             status: MessageStatus.delivered,
             imageUrl: response.data,
+            ack: 2,
           );
         });
       } else {
+        setState(() {
+          _messages[messageIndex] = _messages[messageIndex].copyWith(
+            ack: 4,
+          );
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to send video: ${response.error}'),
@@ -980,6 +984,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       status: MessageStatus.sent,
       messageType: MessageType.image,
       imagePath: pickedFile.path,
+      ack: 1,
     );
 
     setState(() {
@@ -1004,19 +1009,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           _messages[messageIndex] = _messages[messageIndex].copyWith(
             status: MessageStatus.delivered,
             imageUrl: response.data,
+            ack: 2,
           );
         });
-
-        Timer(const Duration(seconds: 2), () {
-          if (mounted && messageIndex < _messages.length) {
-            setState(() {
-              _messages[messageIndex] = _messages[messageIndex].copyWith(
-                status: MessageStatus.read,
-              );
-            });
-          }
-        });
       } else {
+        setState(() {
+          _messages[messageIndex] = _messages[messageIndex].copyWith(
+            ack: 4,
+          );
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to send image: ${response.error}'),
@@ -1068,6 +1069,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         status: MessageStatus.sent,
         messageType: MessageType.document,
         documentName: file.name,
+        ack: 1,
       );
 
       setState(() {
@@ -1091,19 +1093,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           setState(() {
             _messages[messageIndex] = _messages[messageIndex].copyWith(
               status: MessageStatus.delivered,
+              ack: 2,
             );
           });
-
-          Timer(const Duration(seconds: 2), () {
-            if (mounted && messageIndex < _messages.length) {
-              setState(() {
-                _messages[messageIndex] = _messages[messageIndex].copyWith(
-                  status: MessageStatus.read,
-                );
-              });
-            }
-          });
         } else {
+          setState(() {
+            _messages[messageIndex] = _messages[messageIndex].copyWith(
+              ack: 4,
+            );
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Gagal kirim dokumen: ${response.error}'),
@@ -1154,6 +1152,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       isMe: true,
       time: timeString,
       status: MessageStatus.sent,
+      ack: 1,
     );
 
     setState(() {
@@ -1180,19 +1179,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         setState(() {
           _messages[messageIndex] = _messages[messageIndex].copyWith(
             status: MessageStatus.delivered,
+            ack: 2,
           );
         });
-
-        Timer(const Duration(seconds: 2), () {
-          if (mounted && messageIndex < _messages.length) {
-            setState(() {
-              _messages[messageIndex] = _messages[messageIndex].copyWith(
-                status: MessageStatus.read,
-              );
-            });
-          }
-        });
       } else {
+        setState(() {
+          _messages[messageIndex] = _messages[messageIndex].copyWith(
+            ack: 4,
+          );
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal kirim lokasi: ${response.error}'),

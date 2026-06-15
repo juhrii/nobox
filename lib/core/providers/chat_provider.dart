@@ -73,6 +73,22 @@ class ChatProvider with ChangeNotifier {
   String? get filterTags => _filterTags;
   String? get filterHumanAgent => _filterHumanAgent;
 
+  /// Returns true if any advanced filter is active (used for badge indicator)
+  bool get hasActiveAdvancedFilters =>
+      _filterMuteAi != null ||
+      _filterReadStatus != null ||
+      _filterChannel != null ||
+      _filterChatType != null ||
+      _filterAccountIds.isNotEmpty ||
+      _filterContact != null ||
+      _filterLink != null ||
+      _filterGroup != null ||
+      _filterCampaign != null ||
+      _filterFunnel != null ||
+      _filterDeal != null ||
+      _filterTags != null ||
+      _filterHumanAgent != null;
+
   void setSearchQuery(String query) {
     _searchQuery = query;
     notifyListeners();
