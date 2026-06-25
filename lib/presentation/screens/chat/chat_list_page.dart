@@ -845,61 +845,73 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                               onPressed: () async {
                                 // Find the receiver based on selection
                                 String? receiver;
+                                int? contactId;
+                                int? linkId;
+                                bool isGroup = selectedChat == 'Group';
+                                
                                 if (selectedTo == 'Contact' && selectedContact != null) {
                                   final contact = contacts.firstWhere(
                                     (c) => (c['Name']?.toString() ?? '') == selectedContact,
                                     orElse: () => <String, dynamic>{},
                                   );
-                                  // Use LeadLinks Id (the link between contact and channel)
+                                  // Use LeadLinks Id (the link between contact and channel) for fallback searching
                                   final leadLinks = contact['LeadLinks'];
                                   if (leadLinks is List && leadLinks.isNotEmpty) {
-                                    // Use LeadLink Id as the receiver identifier
                                     receiver = leadLinks[0]['Id']?.toString();
                                   }
-                                  // Fallback to contact Id
                                   receiver ??= contact['Id']?.toString();
+                                  contactId = int.tryParse(contact['Id']?.toString() ?? '');
                                 } else if (selectedTo == 'Manual' || selectedTo == 'Link') {
                                   receiver = manualInput;
+                                  if (selectedTo == 'Link') {
+                                    linkId = int.tryParse(manualInput);
+                                  }
                                 }
 
-                                if (receiver == null || receiver.isEmpty) {
+                                if (!isGroup && (receiver == null || receiver.isEmpty)) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(content: Text('Silakan pilih penerima')),
                                   );
                                   return;
                                 }
 
-                                if (initialMessage.trim().isEmpty) {
-                                  initialMessage = 'Hello'; // fallback
-                                }
-
-                                // Get selected account Id
-                                String? accountId;
+                                // Get selected account Id as integer
+                                int accountIdInt = 0;
                                 if (selectedAccount != null) {
                                   final idx = accountNames.indexOf(selectedAccount!);
                                   if (idx >= 0 && idx < accounts.length) {
-                                    accountId = accounts[idx]['Id']?.toString();
+                                    accountIdInt = int.tryParse(accounts[idx]['Id']?.toString() ?? '') ?? 0;
+                                  }
+                                }
+
+                                // Get selected channel Id as integer
+                                int channelIdInt = 1;
+                                if (selectedChannel != null) {
+                                  final idx = channelNames.indexOf(selectedChannel!);
+                                  if (idx >= 0 && idx < channels.length) {
+                                    channelIdInt = int.tryParse(channels[idx]['Id']?.toString() ?? '') ?? 1;
                                   }
                                 }
 
                                 Navigator.pop(dialogContext);
 
-                                // Send initial message to create conversation
-                                final response = await chatService.sendMessage(
-                                  MessageRequest(
-                                    receiver: receiver,
-                                    content: initialMessage,
-                                    accountId: accountId,
-                                  ),
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Membuat ruangan obrolan...')),
                                 );
 
-                                if (!response.isError) {
+                                // Create room via new endpoint instead of sending a message
+                                final result = await chatService.createNewRoom(
+                                  accountId: accountIdInt,
+                                  channelId: channelIdInt,
+                                  contactId: contactId,
+                                  linkId: linkId,
+                                  manualNumber: selectedTo == 'Manual' ? manualInput : null,
+                                  isGroup: isGroup,
+                                );
+
+                                if (result['success'] == true) {
                                   // Refresh chat list and navigate
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Pesan terkirim, memuat ruangan obrolan...')),
-                                    );
-                                    
                                     // Sesuai kode mentor: Jeda statis lalu fetch ulang paksa
                                     final isManual = manualInput.isNotEmpty;
                                     final delayDuration = isManual 
@@ -920,9 +932,11 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                     final chats = context.read<ChatProvider>().chats;
                                     if (chats.isNotEmpty) {
                                       // Cari chat yang sesuai dengan tujuan yang dipilih pengguna.
-                                      // Mencari berdasarkan target tujuan seperti kode mentor
+                                      String? newRoomIdStr = result['roomId']?.toString();
+                                      
                                       final newChat = chats.firstWhere(
                                         (c) {
+                                          if (newRoomIdStr != null && c.id == newRoomIdStr) return true;
                                           if (receiver != null && c.contactId == receiver) return true;
                                           if (selectedContact != null && selectedContact!.isNotEmpty && c.sender.toLowerCase().contains(selectedContact!.toLowerCase())) return true;
                                           if (manualInput.isNotEmpty && c.sender.contains(manualInput)) return true;
@@ -942,7 +956,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 } else {
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Gagal: ${response.error}')),
+                                      SnackBar(content: Text('Gagal membuat ruangan: ${result['error']}')),
                                     );
                                   }
                                 }
@@ -1242,6 +1256,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                           color: Colors.grey.shade500,
                         ),
                       ),
+                      if (chat.isBlocked) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.person_off, size: 14, color: Colors.red),
+                      ],
                       if (chat.isPinned) ...[
                         const SizedBox(width: 4),
                         Icon(Icons.push_pin, size: 14, color: Colors.blue.shade400),

@@ -1565,11 +1565,18 @@ if (!response.isError) {
 
   @override
   Widget build(BuildContext context) {
+    final chatProvider = Provider.of<ChatProvider>(context);
+    
     if (widget.chat != null) {
       chat = widget.chat!;
     } else {
       chat = ModalRoute.of(context)!.settings.arguments as ChatModel;
     }
+    
+    // Get latest state to reflect block/unblock updates
+    try {
+      chat = chatProvider.chats.firstWhere((c) => c.id == chat.id);
+    } catch (_) {}
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1600,11 +1607,15 @@ if (!response.isError) {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (!chat.isArchived && !widget.isReadOnly) ...[
-                        if (_isShowingQuickReply && _quickReplyTemplates.isNotEmpty) _buildQuickReplyList(isDark),
-                        if (_repliedMessage != null) _buildReplyPreview(isDark),
-                        _buildInputBar(isDark),
-                        if (_showAttachmentPanel) _buildAttachmentPanel(isDark),
-                        if (_showEmojiPicker) _buildEmojiPicker(isDark),
+                        if (chat.isBlocked)
+                          _buildBlockedBanner(isDark)
+                        else ...[
+                          if (_isShowingQuickReply && _quickReplyTemplates.isNotEmpty) _buildQuickReplyList(isDark),
+                          if (_repliedMessage != null) _buildReplyPreview(isDark),
+                          _buildInputBar(isDark),
+                          if (_showAttachmentPanel) _buildAttachmentPanel(isDark),
+                          if (_showEmojiPicker) _buildEmojiPicker(isDark),
+                        ]
                       ],
                     ],
                   ),
@@ -1634,6 +1645,32 @@ if (!response.isError) {
               style: TextStyle(
                 color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
                 fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlockedBanner(bool isDark) {
+    return Container(
+      width: double.infinity,
+      color: Colors.red.withOpacity(0.1),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.block, size: 20, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            Text(
+              'The contact is currently blocked.',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
               ),
             ),
           ],

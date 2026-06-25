@@ -32,6 +32,7 @@ class SignalRService {
   static const String eventTerimaSubSpv = 'TerimaSubSpv';
   static const String eventUcChanged = 'UcChanged';
   static const String eventTerimaExpired = 'TerimaExpired';
+  static const String eventTerimaBlockUnblock = 'TerimaBlockUnblock';
 
   // ── Generic stream (backward-compatible) ──
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
@@ -50,6 +51,9 @@ class SignalRService {
   // ── Connection state stream ──
   final _connectionStateController = StreamController<bool>.broadcast();
   Stream<bool> get onConnectionStateChanged => _connectionStateController.stream;
+
+  final _blockUnblockController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onBlockUnblock => _blockUnblockController.stream;
 
   /// Connect to the SignalR hub with the user's auth token.
   Future<void> connect() async {
@@ -123,6 +127,11 @@ class SignalRService {
       _hubConnection!.on(eventTerimaExpired, (args) {
         debugPrint('SignalR: 🔥 RAW TerimaExpired RECEIVED! args.length=${args?.length}');
         _handleTerimaExpired(args);
+      });
+
+      _hubConnection!.on(eventTerimaBlockUnblock, (args) {
+        debugPrint('SignalR: 🔥 RAW TerimaBlockUnblock RECEIVED! args.length=${args?.length}');
+        _handleTerimaBlockUnblock(args);
       });
 
       // ── Connection state handlers ──
@@ -519,6 +528,28 @@ class SignalRService {
     }
   }
 
+  /// Handle TerimaBlockUnblock event
+  /// args[0] = roomId, args[1] = status, args[2] = contactId, args[3] = blockStatus (1=blocked, 0=unblocked)
+  void _handleTerimaBlockUnblock(List<Object?>? arguments) {
+    if (arguments == null || arguments.length < 4) return;
+    try {
+      final roomId = arguments[0]?.toString() ?? '';
+      final contactId = arguments[2]?.toString() ?? '';
+      final blockStatus = arguments[3];
+      final isBlocked = blockStatus == 1 || blockStatus == '1' || blockStatus == true;
+      
+      debugPrint('SignalR: 🚫 TerimaBlockUnblock | room=$roomId | isBlocked=$isBlocked');
+      
+      _blockUnblockController.add({
+        'roomId': roomId,
+        'contactId': contactId,
+        'isBlocked': isBlocked,
+      });
+    } catch (e) {
+      debugPrint('SignalR: ❌ Error parsing TerimaBlockUnblock: $e');
+    }
+  }
+
   // ══════════════════════════════════════════════
   //  Client → Server Methods
   // ══════════════════════════════════════════════
@@ -548,6 +579,31 @@ class SignalRService {
     }
   }
 
+  /// Invoke ContactBlockUnblock
+  Future<bool> invokeBlockUnblock({
+    required dynamic roomId,
+    required dynamic status,
+    required dynamic contactId,
+    required bool shouldBlock,
+  }) async {
+    final blockValue = shouldBlock ? 1 : 0;
+    try {
+      final roomIdInt = roomId is int ? roomId : int.tryParse(roomId.toString()) ?? 0;
+      final contactIdInt = contactId is int ? contactId : int.tryParse(contactId.toString()) ?? 0;
+      final statusInt = status is int ? status : int.tryParse(status.toString()) ?? 0;
+      
+      debugPrint('SignalR: 🚫 Invoking ContactBlockUnblock: room=$roomIdInt, ct=$contactIdInt, block=$blockValue');
+      await invoke(
+        'ContactBlockUnblock',
+        args: [roomIdInt, statusInt, contactIdInt, blockValue],
+      );
+      return true;
+    } catch (e) {
+      debugPrint('SignalR: ❌ Failed to send ContactBlockUnblock: $e');
+      return false;
+    }
+  }
+
   /// Disconnect from the hub.
   Future<void> disconnect() async {
     if (_hubConnection != null) {
@@ -565,6 +621,7 @@ class SignalRService {
     _terimaSubSpvController.close();
     _ucChangedController.close();
     _connectionStateController.close();
+    _blockUnblockController.close();
     disconnect();
   }
 }

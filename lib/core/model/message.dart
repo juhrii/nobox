@@ -12,6 +12,7 @@ class ChatModel {
   final bool isArchived;
   final bool isFavorite;
   final bool isGroup;
+  final bool isBlocked;
   final String status; // "Resolved", "Assigned", "Unassigned"
   final String agentName;
   final List<String> tags;
@@ -43,6 +44,7 @@ class ChatModel {
     this.isArchived = false,
     this.isFavorite = false,
     this.isGroup = false,
+    this.isBlocked = false,
     this.status = 'Unassigned',
     this.agentName = '',
     this.tags = const [],
@@ -75,6 +77,7 @@ class ChatModel {
     bool? isArchived,
     bool? isFavorite,
     bool? isGroup,
+    bool? isBlocked,
     String? status,
     String? agentName,
     List<String>? tags,
@@ -106,6 +109,7 @@ class ChatModel {
       isArchived: isArchived ?? this.isArchived,
       isFavorite: isFavorite ?? this.isFavorite,
       isGroup: isGroup ?? this.isGroup,
+      isBlocked: isBlocked ?? this.isBlocked,
       status: status ?? this.status,
       agentName: agentName ?? this.agentName,
       tags: tags ?? this.tags,

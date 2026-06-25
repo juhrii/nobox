@@ -15,6 +15,7 @@ class AppConfig {
   static const String channelListEndpoint = 'Services/Master/Channel/List';
   static const String accountListEndpoint = 'Services/Nobox/Account/List';
   static const String inboxSendEndpoint = 'Inbox/Send';
+  static const String createNewRoomEndpoint = 'Inbox/CreateNewRoom';
   static const String uploadBase64Endpoint = 'Inbox/UploadFile/ConvertBase64ToFile';
 
   // Application-specific mappings

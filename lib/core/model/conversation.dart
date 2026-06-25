@@ -21,6 +21,7 @@ class Conversation {
   final String tagsIds;
   final String funnelId;
   final bool isGroup;
+  final bool isBlocked;
   final bool isLastMessageFromMe;
   final bool needReply;
   final String accountId;
@@ -50,6 +51,7 @@ class Conversation {
     this.tagsIds = '',
     this.funnelId = '',
     this.isGroup = false,
+    this.isBlocked = false,
     this.isLastMessageFromMe = false,
     this.needReply = false,
     this.accountId = '',
@@ -134,6 +136,7 @@ class Conversation {
                (json['IsGroup'] == true) || 
                (json['GrpId'] != null) || 
                (json['Grp'] != null),
+      isBlocked: json['CtIsBlock'] == 1 || json['CtIsBlock'] == true,
       isLastMessageFromMe: json['IsMe'] == true ||
           json['LastIsMe'] == true ||
           json['AgentId'] != null ||
@@ -175,6 +178,7 @@ class Conversation {
     String? funnelId,
     // FIX: isGroup harus ikut di-copy, supaya tidak ter-reset ke false
     bool? isGroup,
+    bool? isBlocked,
     bool? isLastMessageFromMe,
     bool? needReply,
     String? accountId,
@@ -201,6 +205,7 @@ class Conversation {
       funnelId: funnelId ?? this.funnelId,
       // FIX: Pastikan isGroup ikut dipertahankan saat copyWith dipanggil
       isGroup: isGroup ?? this.isGroup,
+      isBlocked: isBlocked ?? this.isBlocked,
       isLastMessageFromMe: isLastMessageFromMe ?? this.isLastMessageFromMe,
       needReply: needReply ?? this.needReply,
       accountId: accountId ?? this.accountId,
@@ -269,6 +274,7 @@ class Conversation {
       chId: chId,
       funnel: funnel,
       isGroup: isGroup,
+      isBlocked: isBlocked,
       isLastMessageFromMe: isLastMessageFromMe,
       needReply: needReply,
       accountId: accountId,

@@ -2081,6 +2081,12 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
   }
 
   void _showBlockDialog(BuildContext context, bool isDark, String contactName) {
+    final isCurrentlyBlocked = widget.chat.isBlocked;
+    final actionName = isCurrentlyBlocked ? 'Unblock' : 'Block';
+    final actionDesc = isCurrentlyBlocked 
+        ? 'Are you sure you want to unblock this contact? You will receive messages from them.'
+        : 'Are you sure you want to block this contact? You will not receive messages from them.';
+
     showDialog(
       context: context,
       builder: (context) {
@@ -2095,14 +2101,18 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: (isCurrentlyBlocked ? Colors.green : Colors.blue).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.block, color: Colors.blue.shade600, size: 24),
+                child: Icon(
+                  isCurrentlyBlocked ? Icons.check_circle_outline : Icons.block, 
+                  color: isCurrentlyBlocked ? Colors.green.shade600 : Colors.blue.shade600, 
+                  size: 24
+                ),
               ),
               const SizedBox(width: 12),
               Text(
-                'Block Contact',
+                '$actionName Contact',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -2112,7 +2122,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             ],
           ),
           content: Text(
-            'Are you sure you want to block this contact? You will not receive messages from them.',
+            actionDesc,
             style: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.white70 : Colors.black87,
@@ -2126,22 +2136,47 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                backgroundColor: Colors.blue.shade600,
+                backgroundColor: isCurrentlyBlocked ? Colors.green.shade600 : Colors.blue.shade600,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('$contactName has been blocked'),
-                    backgroundColor: Colors.red.shade600,
-                    behavior: SnackBarBehavior.floating,
-                  ),
+                
+                // Show loading indicator
+                showDialog(
+                  context: this.context,
+                  barrierDismissible: false,
+                  builder: (_) => const Center(child: CircularProgressIndicator()),
                 );
+                
+                final chatProvider = Provider.of<ChatProvider>(this.context, listen: false);
+                final success = await chatProvider.toggleBlockContact(widget.chat.id, widget.chat.contactId, !isCurrentlyBlocked);
+                
+                if (!mounted) return;
+                Navigator.pop(this.context); // hide loading
+                
+                if (success) {
+                  // Minta background hijau agak transparan sesuai request
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(
+                      content: Text(isCurrentlyBlocked ? 'unblock sukses' : 'block sukses'),
+                      backgroundColor: Colors.green.withOpacity(0.8),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to $actionName contact'),
+                      backgroundColor: Colors.red.shade600,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
               },
-              child: const Text('Block', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+              child: Text(actionName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
             ),
           ],
         );

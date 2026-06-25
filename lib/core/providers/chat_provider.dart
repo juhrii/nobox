@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../model/message.dart';
 import '../services/chat_service.dart';
+import '../services/signalr_service.dart';
 import '../model/conversation.dart';
 import '../model/api_response.dart';
 import 'package:flutter/foundation.dart';
@@ -799,7 +800,7 @@ class ChatProvider with ChangeNotifier {
       final response = await _chatService.togglePinRoom(chatId, newPinned);
       
       if (response.isError) {
-        // Rollback on error
+        // Revert on error
         _chats[index] = _chats[index].copyWith(isPinned: !newPinned);
         if (!newPinned) {
           _pinnedIds.add(chatId);
@@ -807,10 +808,35 @@ class ChatProvider with ChangeNotifier {
           _pinnedIds.remove(chatId);
         }
         _savePinnedState();
-        _error = response.error;
         notifyListeners();
       }
     }
+  }
+
+  Future<bool> toggleBlockContact(String roomId, String contactId, bool isBlocked) async {
+    final index = _chats.indexWhere((chat) => chat.id == roomId);
+    if (index != -1) {
+      // Optimistic update
+      _chats[index] = _chats[index].copyWith(isBlocked: isBlocked);
+      notifyListeners();
+
+      // Send to server via SignalR
+      final success = await SignalRService().invokeBlockUnblock(
+        roomId: roomId,
+        contactId: contactId,
+        status: _chats[index].status == 'Resolved' ? 3 : (_chats[index].status == 'Assigned' ? 2 : 1),
+        shouldBlock: isBlocked,
+      );
+
+      if (!success) {
+        // Revert on error
+        _chats[index] = _chats[index].copyWith(isBlocked: !isBlocked);
+        notifyListeners();
+        return false;
+      }
+      return true;
+    }
+    return false;
   }
 
   Future<void> toggleArchive(String chatId) async {

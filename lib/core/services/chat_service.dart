@@ -1031,6 +1031,87 @@ class ChatService {
     return null;
   }
 
+  /// Create a new conversation room via Inbox/CreateNewRoom API
+  /// This matches the mentor project's approach – create room first, then send messages.
+  Future<Map<String, dynamic>> createNewRoom({
+    required int accountId,
+    required int channelId,
+    int? contactId,
+    int? linkId,
+    String? manualNumber,
+    bool isGroup = false,
+  }) async {
+    try {
+      // Determine "To" flag per mentor contract:
+      // 1 = Contact, 2 = Link, 3 = Manual/Group
+      int toType = 1; // default: Contact
+      if (linkId != null) toType = 2;
+      if ((manualNumber != null && manualNumber.isNotEmpty) || isGroup) toType = 3;
+
+      final data = {
+        "AccId": accountId,
+        "ChId": channelId,
+        "LinkId": linkId,
+        "GrpId": null, // Fill if isGroup = true
+        "Chat": isGroup ? 1 : 0,
+        "CtId": contactId,
+        "Manual": manualNumber ?? "",
+        "To": toType,
+      };
+
+      debugPrint('ChatService: ┌── createNewRoom ──');
+      debugPrint('ChatService: │ Endpoint: ${AppConfig.createNewRoomEndpoint}');
+      debugPrint('ChatService: │ Payload: $data');
+
+      final response = await _apiClient.post(
+        AppConfig.createNewRoomEndpoint,
+        data: data,
+      );
+
+      debugPrint('ChatService: │ Response status: ${response.statusCode}');
+      debugPrint('ChatService: │ Response data: ${response.data}');
+      debugPrint('ChatService: └──────────────────');
+
+      if (response.statusCode == 200) {
+        final responseData = response.data;
+
+        if (responseData is Map) {
+          final result = Map<String, dynamic>.from(responseData);
+
+          if (result['IsError'] == true) {
+            return {
+              'success': false,
+              'error': result['ErrorMessage'] ?? result['Error'] ?? 'API error',
+            };
+          }
+
+          return {
+            'success': true,
+            'roomId': result['Data']?['Id'] ?? result['Data']?['RoomId'] ?? result['Id'],
+            'data': result['Data'],
+          };
+        }
+        return {'success': true, 'data': responseData};
+      }
+
+      return {
+        'success': false,
+        'error': 'HTTP ${response.statusCode}: ${response.statusMessage}',
+      };
+    } on DioException catch (e) {
+      debugPrint('ChatService: ❌ CreateNewRoom DioError: ${e.message}');
+      debugPrint('ChatService: ❌ Response: ${e.response?.data}');
+      return {
+        'success': false,
+        'error': 'API Error: ${e.message}',
+        'statusCode': e.response?.statusCode,
+      };
+    } catch (e) {
+      debugPrint('ChatService: ❌ CreateNewRoom error: $e');
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
 
   Future<ApiResponse<bool>> sendMessage(MessageRequest request) async {
     try {
@@ -1052,44 +1133,55 @@ class ChatService {
       }
       safeAccountId = safeAccountId.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '').trim();
 
-      // Retrieve ExtId via POST to Chatlinkcontacts/Retrieve
-      final retrieveResponse = await _apiClient.post(
-        'Services/Chat/Chatlinkcontacts/Retrieve',
-        data: {'EntityId': request.contactId},
-      );
       String extId = '';
       String? telegramUsername;
       String? telegramAccessHash;
-      if (retrieveResponse.statusCode == 200) {
-        final data = retrieveResponse.data;
-        // Mentor contract: ExtId should come from Entity.Extra.ExtId ("628...")
-        final entity = data['Entity'];
-        if (entity is Map) {
-          final extraRaw = entity['Extra'];
-          if (extraRaw != null) {
-            try {
-              final extraMap = extraRaw is String ? jsonDecode(extraRaw) : extraRaw;
-              if (extraMap is Map) {
-                if (extraMap['ExtId'] != null) {
-                  extId = extraMap['ExtId']?.toString() ?? '';
+
+      // Retrieve ExtId via POST to Chatlinkcontacts/Retrieve
+      if (request.contactId != null && request.contactId!.isNotEmpty) {
+        try {
+          final retrieveResponse = await _apiClient.post(
+            'Services/Chat/Chatlinkcontacts/Retrieve',
+            data: {'EntityId': request.contactId},
+          );
+          if (retrieveResponse.statusCode == 200) {
+            final data = retrieveResponse.data;
+            // Mentor contract: ExtId should come from Entity.Extra.ExtId ("628...")
+            final entity = data['Entity'];
+            if (entity is Map) {
+              final extraRaw = entity['Extra'];
+              if (extraRaw != null) {
+                try {
+                  final extraMap = extraRaw is String ? jsonDecode(extraRaw) : extraRaw;
+                  if (extraMap is Map) {
+                    if (extraMap['ExtId'] != null) {
+                      extId = extraMap['ExtId']?.toString() ?? '';
+                    }
+                    // Capture Telegram-specific fields from Extra
+                    telegramUsername = extraMap['Username']?.toString();
+                    telegramAccessHash = extraMap['AccessHash']?.toString();
+                  }
+                } catch (_) {
+                  // ignore parse error; fallback to IdExt
                 }
-                // Capture Telegram-specific fields from Extra
-                telegramUsername = extraMap['Username']?.toString();
-                telegramAccessHash = extraMap['AccessHash']?.toString();
               }
-            } catch (_) {
-              // ignore parse error; fallback to IdExt
+              final idExt = entity['IdExt']?.toString() ?? '';
+              final int chId = int.tryParse(request.channelId ?? '1') ?? 1;
+              if (chId == 2 && idExt.isNotEmpty) {
+                extId = idExt;
+              } else {
+                extId = (extId.isNotEmpty ? extId : idExt);
+              }
             }
+            debugPrint('ChatService: ExtId retrieved = $extId');
           }
-          final idExt = entity['IdExt']?.toString() ?? '';
-          final int chId = int.tryParse(request.channelId ?? '1') ?? 1;
-          if (chId == 2 && idExt.isNotEmpty) {
-            extId = idExt;
-          } else {
-            extId = (extId.isNotEmpty ? extId : idExt);
-          }
+        } catch (e) {
+          debugPrint('ChatService: Error retrieving ExtId: $e');
         }
-        debugPrint('ChatService: ExtId retrieved = $extId');
+      }
+
+      if (extId.isEmpty && request.extId != null && request.extId!.isNotEmpty) {
+        extId = request.extId!;
       }
 
       final int channelId = int.tryParse(request.channelId ?? '1') ?? 1;
