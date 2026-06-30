@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
-/// Shimmer skeleton loading effect for Chat Messages
+// =====================================================================
+// FITUR: Kerangka Loading Balon Chat
+// FILE: lib/presentation/widgets/message_shimmer_widget.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Menampilkan animasi kerangka (shimmer) yang meniru bentuk balon chat saat ruang obrolan sedang memuat pesan.
+// =====================================================================
 class MessageShimmerWidget extends StatefulWidget {
   const MessageShimmerWidget({super.key});
 

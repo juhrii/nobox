@@ -8,6 +8,12 @@ import '../model/conversation.dart';
 import '../model/api_response.dart';
 import 'package:flutter/foundation.dart';
 
+// =====================================================================
+// FITUR: Provider Chat Utama
+// FILE: lib/core/providers/chat_provider.dart
+// BARIS AWAL: 13 (setelah komentar ini)
+// FUNGSI: Mengelola state daftar chat utama, pagination, fitur pencarian, filter lanjutan, dan integrasi SignalR
+// =====================================================================
 class ChatProvider with ChangeNotifier {
   final ChatService _chatService = ChatService();
   List<ChatModel> _chats = [];
@@ -74,7 +80,7 @@ class ChatProvider with ChangeNotifier {
   String? get filterTags => _filterTags;
   String? get filterHumanAgent => _filterHumanAgent;
 
-  /// Returns true if any advanced filter is active (used for badge indicator)
+  /// Mengembalikan true jika ada filter lanjutan yang aktif (digunakan untuk indikator badge)
   bool get hasActiveAdvancedFilters =>
       _filterMuteAi != null ||
       _filterReadStatus != null ||
@@ -106,7 +112,8 @@ class ChatProvider with ChangeNotifier {
     fetchChats();
   }
 
-  /// Apply advanced filters and trigger a fresh fetch.
+  // FITUR: Filter Lanjutan
+  /// Terapkan filter lanjutan dan picu pengambilan data ulang (fresh fetch).
   ///
   /// Semua parameter ID harus berupa raw ID, bukan display name:
   /// - [contact]    → CtId (ID kontak)
@@ -190,7 +197,7 @@ class ChatProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Maps the active filter string to a status code understood by the API.
+  /// Memetakan string filter aktif ke kode status yang dipahami oleh API.
   /// 1=Unassigned, 2=Assigned, 3=Resolved, null=All
   int? _statusCodeForFilter(String filter) {
     switch (filter) {
@@ -201,8 +208,8 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  /// Maps raw funnel IDs and tag IDs on a [ChatModel] to human-readable names
-  /// using the cached funnels/tags lists. Returns a new ChatModel with names applied.
+  /// Memetakan ID funnel dan ID tag mentah pada [ChatModel] ke nama yang mudah dibaca manusia
+  /// menggunakan daftar funnel/tag dari cache. Mengembalikan ChatModel baru dengan nama yang diterapkan.
   ChatModel _applyTagAndFunnelMapping(ChatModel chat, Conversation conv) {
     // Funnel: resolve ID → name
     if ((chat.funnel.isEmpty || int.tryParse(chat.funnel) != null) && conv.funnelId.isNotEmpty) {
@@ -235,17 +242,20 @@ class ChatProvider with ChangeNotifier {
     return chat;
   }
 
-  Future<void> fetchChats() async {
+  // FITUR: Ambil Data Chat
+  // FUNGSI: Mengambil daftar percakapan dari server dengan dukungan pagination dan filter
+    // FITUR 2: Mengambil daftar obrolan utama (20 data pertama) dari server.
+Future<void> fetchChats() async {
     _isLoading = true;
     _error = null;
-    // Reset pagination state on fresh fetch
+    // Reset state pagination saat pengambilan data baru
     _currentSkip = 0;
     _hasMore = true;
     _isLoadingMore = false;
     notifyListeners();
 
     try {
-      // Load persisted local state first
+      // Muat state lokal yang tersimpan terlebih dahulu
       await _loadPersistedState();
 
       // Fetch funnels and tags proactively in the background for mapping
@@ -260,7 +270,7 @@ class ChatProvider with ChangeNotifier {
         getCachedAccounts(), // FIX: Fetch accounts untuk resolusi channel type (ChId → Code)
       ]);
 
-      // Determine which status to request from the server
+      // Tentukan status mana yang akan diminta dari server
       final statusCode = _statusCodeForFilter(_activeFilter);
       // ── Jalur 1: Server-Side Filters (dikirim via EqualityFilter) ──────────
       // Account, Contact, Group, Campaign, Deal, HumanAgent → server-side aman
@@ -301,17 +311,17 @@ class ChatProvider with ChangeNotifier {
           // Apply locally cached mapping for tags and funnel
           chat = _applyTagAndFunnelMapping(chat, c);
 
-          // Check if unread count increased compared to previous state
+          // Cek apakah jumlah pesan belum dibaca meningkat dibanding state sebelumnya
           final oldChat = oldChatsMap[chat.id];
           if ((oldChat != null && chat.unreadCount > oldChat.unreadCount) || 
               (oldChat == null && chat.unreadCount > 0)) {
-            // New message arrived! Remove from read suppression so badge appears
+            // Pesan baru tiba! Hapus dari daftar terbaca agar badge muncul
             _readIds.remove(chat.id);
             _saveReadState();
           }
 
-          // Apply persisted local state (archive, read)
-          // Status and Pin comes directly from server 
+          // Terapkan state lokal yang tersimpan (arsip, dibaca)
+          // Status dan Pin berasal langsung dari server 
           return chat.copyWith(
             isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
             isArchived: _archivedIds.contains(chat.id),
@@ -319,12 +329,12 @@ class ChatProvider with ChangeNotifier {
           );
         }).toList();
 
-        // Update pagination state
+        // Perbarui state pagination
         _currentSkip = response.data!.length;
         _hasMore = response.data!.length >= _pageSize;
         debugPrint('📄 [Pagination] Initial fetch: loaded ${response.data!.length} items, hasMore=$_hasMore');
 
-        // Also fetch server-side archived conversations and merge them
+        // Ambil juga percakapan yang diarsipkan dari server dan gabungkan
         try {
           final archivedResponse = await _chatService.getArchivedConversations();
           if (!archivedResponse.isError && archivedResponse.data != null) {
@@ -352,12 +362,13 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  /// Update a single room's data directly from a SignalR TerimaSubSpv event.
-  /// This avoids an API call and provides instant UI updates.
+  /// Memperbarui data satu ruang chat langsung dari event SignalR TerimaSubSpv.
+  /// Ini menghindari pemanggilan API dan memberikan pembaruan UI instan.
   ///
   /// [roomData] is the parsed JSON from TerimaSubSpv with keys like:
   /// Id, Ct, LastMsg, Uc, TimeMsg, IsPin, St, IsNeedReply, SdrMsg, etc.
-  void updateRoomFromSignalR(Map<String, dynamic> roomData) {
+    // FITUR 3: Menyinkronkan status obrolan secara instan dari event SignalR.
+void updateRoomFromSignalR(Map<String, dynamic> roomData) {
     final roomId = roomData['Id']?.toString() ?? '';
     if (roomId.isEmpty) return;
 
@@ -398,8 +409,8 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  /// Refresh only the first page of conversations without resetting pagination.
-  /// Used by SignalR and polling to update data without breaking infinite scroll.
+  /// Hanya merefresh halaman pertama percakapan tanpa mereset pagination.
+  /// Digunakan oleh SignalR dan polling untuk memperbarui data tanpa merusak scroll tanpa batas.
   Future<void> refreshFirstPage() async {
     if (_isLoading || _isLoadingMore) return;
 
@@ -487,9 +498,10 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  /// Fetch more chats for infinite scroll pagination.
-  /// Appends new data to existing list. Guards against duplicate requests.
-  Future<void> fetchMoreChats() async {
+  /// Mengambil lebih banyak chat untuk pagination scroll tanpa batas.
+  /// Menambahkan data baru ke daftar yang sudah ada. Menjaga dari request ganda.
+    // FITUR 2: Paging untuk mengambil data chat berikutnya berdasarkan posisi scroll.
+Future<void> fetchMoreChats() async {
     // Guard: prevent duplicate fetch
     if (_isLoadingMore || !_hasMore) return;
 
@@ -614,7 +626,7 @@ class ChatProvider with ChangeNotifier {
   }
 
 
-  // ── Computed getters ──
+  // ── Getter Terkomputasi ──
 
   int get unassignedCount => _chats.where((c) => !c.isArchived && c.status == 'Unassigned').length;
   int get assignedCount => _chats.where((c) => !c.isArchived && c.status == 'Assigned').length;
@@ -631,7 +643,8 @@ class ChatProvider with ChangeNotifier {
   List<Map<String, dynamic>> get starredMessages => List.unmodifiable(_starredMessages);
   bool isStarred(String messageId) => _starredMessageIds.contains(messageId);
 
-  void toggleStar(String messageId, {String? content, String? sender, String? time}) {
+    // FITUR 12: Menyimpan pesan-pesan tertentu yang dianggap penting oleh user.
+void toggleStar(String messageId, {String? content, String? sender, String? time}) {
     if (_starredMessageIds.contains(messageId)) {
       _starredMessageIds.remove(messageId);
       _starredMessages.removeWhere((m) => m['id'] == messageId);
@@ -766,7 +779,7 @@ class ChatProvider with ChangeNotifier {
     }
 
 
-    // Sort: Pinned first, then by last message time descending
+    // Urutkan: Sematan (Pinned) pertama, lalu berdasarkan waktu pesan terakhir menurun
     filtered.sort((a, b) {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
@@ -884,7 +897,8 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  Future<void> toggleArchive(String chatId) async {
+    // FITUR 11: Menyembunyikan chat aktif ke ruang arsip dan mengembalikannya.
+Future<void> toggleArchive(String chatId) async {
     final index = _chats.indexWhere((chat) => chat.id == chatId);
     if (index != -1) {
       final newArchived = !_chats[index].isArchived;

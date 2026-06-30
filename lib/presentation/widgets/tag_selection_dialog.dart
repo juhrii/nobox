@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import '../../core/services/filter_api_service.dart';
 import '../../core/services/tag_service.dart';
 
+// =====================================================================
+// FITUR: Dialog Pemilihan Label (Tag)
+// FILE: lib/presentation/widgets/tag_selection_dialog.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Menampilkan pop-up untuk menambahkan, menghapus, dan mencari label (tag) pada suatu obrolan/kontak.
+// =====================================================================
 class TagSelectionDialog extends StatefulWidget {
   final String roomId;
   final List<String> initialSelectedTags;

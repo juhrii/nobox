@@ -6,13 +6,13 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../app_config.dart';
 import 'push_notification_service.dart';
 
-/// SignalR service for real-time messaging via the NoBox messagehub.
-///
-/// Listens to these server events:
-/// - TerimaPesan: incoming chat message
-/// - TerimaSubSpv: room/conversation data update
-/// - UcChanged: total unread count changed
-/// - TerimaExpired: session expired
+// =====================================================================
+// FITUR: Layanan SignalR (Real-time / WebSocket)
+// FILE: lib/core/services/signalr_service.dart
+// BARIS AWAL: 17 (setelah komentar ini)
+// FUNGSI: Mengelola koneksi real-time via SignalR untuk pesan instan. 
+//         Mendengarkan event: TerimaPesan, TerimaSubSpv, UcChanged, TerimaExpired.
+// =====================================================================
 class SignalRService {
   static final SignalRService _instance = SignalRService._internal();
   factory SignalRService() => _instance;
@@ -23,8 +23,8 @@ class SignalRService {
   bool _isSubscribed = false;
   bool get isConnected => _isConnected;
 
-  /// Callback when server signals session/room expired (TerimaExpired).
-  /// Set this from the app layer to show a dialog or force logout.
+  /// Callback ketika server memberi sinyal bahwa sesi/room kedaluwarsa (TerimaExpired).
+  /// Atur ini dari lapisan aplikasi untuk menampilkan dialog atau memaksa logout.
   Function? onSessionExpired;
 
   // ── NoBox Server Event Names ──
@@ -55,8 +55,9 @@ class SignalRService {
   final _blockUnblockController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get onBlockUnblock => _blockUnblockController.stream;
 
-  /// Connect to the SignalR hub with the user's auth token.
-  Future<void> connect() async {
+  /// Hubungkan ke SignalR hub menggunakan token autentikasi pengguna.
+    // FITUR 3: Terhubung ke server hub SignalR menggunakan Token JWT.
+Future<void> connect() async {
     if (_hubConnection != null) {
       if (_hubConnection!.state == HubConnectionState.Connected) {
         debugPrint('SignalR: Already connected');
@@ -182,7 +183,7 @@ class SignalRService {
   //  User Subscription (CRITICAL - dari project mentor)
   // ══════════════════════════════════════════════
 
-  /// Subscribe user ke SignalR hub agar menerima event.
+  /// Mendaftarkan (subscribe) pengguna ke hub SignalR agar menerima event.
   /// Tanpa ini, server TIDAK akan mengirim TerimaPesan, TerimaSubSpv, dll.
   Future<void> _subscribeUser() async {
     if (_hubConnection == null || _hubConnection!.state != HubConnectionState.Connected) {

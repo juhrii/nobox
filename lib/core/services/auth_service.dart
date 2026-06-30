@@ -4,6 +4,12 @@ import '../app_config.dart';
 import '../model/api_response.dart';
 import '../model/login_request.dart';
 
+// =====================================================================
+// FITUR: Layanan Autentikasi (API)
+// FILE: lib/core/services/auth_service.dart
+// BARIS AWAL: 8 (setelah komentar ini)
+// FUNGSI: Mengelola panggilan API terkait login dan pembuatan token
+// =====================================================================
 class AuthService {
   final ApiClient _apiClient = ApiClient();
 

@@ -1,9 +1,15 @@
 import 'message.dart';
 
+// =====================================================================
+// FITUR: Model Percakapan (Conversation/Chatroom)
+// FILE: lib/core/model/conversation.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Class model untuk menampung data list chat/room di halaman utama chat
+// =====================================================================
 class Conversation {
 
   final String id;
-  final String contactId; // CtId from Chatrooms/List — needed for Inbox/Send and Inbox/Get
+  final String contactId; // CtId dari Chatrooms/List — dibutuhkan untuk Inbox/Send dan Inbox/Get
   final String participantEmail;
   final String lastMessage;
   final String lastMessageTime;
@@ -62,8 +68,10 @@ class Conversation {
     this.groupName = '',
   });
 
+  // FITUR: Parse dari JSON
+  // FUNGSI: Mengubah response JSON list chat API menjadi objek Conversation
   factory Conversation.fromJson(Map<String, dynamic> json) {
-    // Parse tags from JSON - Safely handle dynamic types (int, String, List)
+    // Parse tags dari JSON - Menangani tipe dinamis dengan aman (int, String, List)
     List<String> parsedTags = [];
     dynamic tagsData = json['Tags'] ?? json['tags'] ?? json['TagsNm'];
     if (tagsData != null) {
@@ -75,9 +83,9 @@ class Conversation {
         parsedTags = [tagsData.toString()];
       }
     }
-    // We explicitly avoid falling back to TagsIds because it only contains raw ID numbers, not names.
+    // Kita secara eksplisit menghindari fallback ke TagsIds karena hanya berisi angka ID mentah, bukan nama.
 
-    // Map St (integer) from Chatrooms/List → human-readable status string
+    // Map St (integer) dari Chatrooms/List → string status yang bisa dibaca manusia
     // 1 = Unassigned, 2 = Assigned, 3 = Resolved
     String resolveStatus(dynamic stValue) {
       final st = stValue is int ? stValue : int.tryParse(stValue?.toString() ?? '');
@@ -89,7 +97,7 @@ class Conversation {
       }
     }
 
-    // Case-insensitive lookup helper
+    // Helper pencarian (lookup) tidak peka huruf besar/kecil (Case-insensitive)
     dynamic getValue(List<String> keys) {
       for (final k in keys) {
         if (json.containsKey(k) && json[k] != null) return json[k];
@@ -97,8 +105,8 @@ class Conversation {
       return null;
     }
 
-    // Try multiple possible key names for Tags and Funnel IDs based on backend quirks
-    // Safely parse TagsIds as it can come back as an int, String, or List
+    // Coba beberapa kemungkinan nama kunci (key) untuk Tags dan Funnel IDs berdasarkan format backend
+    // Parse TagsIds dengan aman karena nilainya bisa berupa int, String, atau List
     dynamic rawTagsIdsData = getValue(['TagsIds', 'tags_ids', 'tagsIds']);
     String rawTagsIds = '';
     if (rawTagsIdsData is List) {
@@ -157,6 +165,8 @@ class Conversation {
     return conv;
   }
 
+  // FITUR: Copy With (Duplikasi Object)
+  // FUNGSI: Mengganti sebagian property dari object yang sudah ada tanpa merubah aslinya
   Conversation copyWith({
     String? id,
     String? contactId,
@@ -213,14 +223,16 @@ class Conversation {
     );
   }
 
+  // FITUR: Resolve Avatar URL
+  // FUNGSI: Menentukan sumber gambar profile (Avatar) prioritas tertinggi dari JSON
   static String? _resolveAvatarUrl(Map<String, dynamic> json) {
-    // Try multiple avatar source fields in priority order.
-    // IMPORTANT: We must check each individually because ?.toString() on an
-    // empty string "" returns "" (not null), which blocks the ?? fallthrough
-    // and would prevent later fields like LinkImg from being used.
+    // Coba beberapa field sumber avatar sesuai urutan prioritas.
+    // PENTING: Kita harus mengecek satu per satu karena ?.toString() pada string
+    // kosong "" mengembalikan "" (bukan null), yang akan memblokir fallback ?? 
+    // dan mencegah penggunaan field selanjutnya seperti LinkImg.
     final candidates = [
-      json['CtImg'],      // Set after Contact/Update
-      json['LinkImg'],    // Profile photo from Instagram/Tokopedia/etc
+      json['CtImg'],      // Diatur setelah Contact/Update
+      json['LinkImg'],    // Foto profil dari Instagram/Tokopedia/dll
       json['AvatarUrl'],
       json['avatar_url'],
     ];
@@ -236,12 +248,14 @@ class Conversation {
     }
 
     if (raw == null) return null;
-    // If already a full URL, use as-is
+    // Jika sudah berupa URL penuh, gunakan apa adanya
     if (raw.startsWith('http')) return raw;
-    // Prepend base upload URL for relative paths
+    // Tambahkan awalan base upload URL untuk path relatif
     return 'https://id.nobox.ai/upload/$raw';
   }
 
+  // FITUR: Resolve Channel Name
+  // FUNGSI: Menentukan nama channel yang dipakai (WhatsApp, IG, dll)
   static String _resolveChannelName(Map<String, dynamic> json) {
     final candidates = [
       json['AccNm'], json['ChNm'], json['ChAcc'], json['ChannelAccount'],
@@ -255,6 +269,8 @@ class Conversation {
     return '';
   }
 
+  // FITUR: Konversi ke ChatModel
+  // FUNGSI: Mapping dari tipe Conversation (API Nobox) ke tipe ChatModel (UI Presentation)
   ChatModel toChatModel() {
     return ChatModel(
       id: id,

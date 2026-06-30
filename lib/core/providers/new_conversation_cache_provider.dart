@@ -1,5 +1,11 @@
 import 'package:flutter/foundation.dart';
 
+// =====================================================================
+// FITUR: Provider Cache Percakapan Baru
+// FILE: lib/core/providers/new_conversation_cache_provider.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Menyimpan sementara (cache) data kontak, grup, channel, dll untuk membuat percakapan baru
+// =====================================================================
 class NewConversationCacheProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _contacts = [];
   List<Map<String, dynamic>> _groups = [];
@@ -10,7 +16,7 @@ class NewConversationCacheProvider extends ChangeNotifier {
   
   bool _isDataLoaded = false;
   
-  // Getters
+  // Getter (pengambil data)
   List<Map<String, dynamic>> get contacts => _contacts;
   List<Map<String, dynamic>> get groups => _groups;
   List<Map<String, dynamic>> get channels => _channels;
@@ -19,7 +25,8 @@ class NewConversationCacheProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get campaigns => _campaigns;
   bool get isDataLoaded => _isDataLoaded;
 
-  /// Update all conversation setup data at once and notify listeners
+  // FITUR: Perbarui Data Percakapan
+  /// Memperbarui semua data setup percakapan sekaligus dan memberitahu UI
   void updateConversationData({
     required List<Map<String, dynamic>> contacts,
     required List<Map<String, dynamic>> groups,
@@ -38,7 +45,8 @@ class NewConversationCacheProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clear the cache
+  // FITUR: Hapus Cache
+  /// Mengosongkan/menghapus data cache percakapan baru
   void invalidateCache() {
     _contacts = [];
     _groups = [];

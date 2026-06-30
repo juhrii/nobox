@@ -2,6 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+// =====================================================================
+// FITUR: Pemutar Video Layar Penuh
+// FILE: lib/presentation/screens/media/video_player_screen.dart
+// BARIS AWAL: 9 (setelah komentar ini)
+// FUNGSI: Menampilkan pemutar video kustom dengan kontrol play/pause, durasi, progress bar, dan fungsi mute.
+// =====================================================================
 class VideoPlayerScreen extends StatefulWidget {
   final String videoUrl;
   final String? caption;

@@ -2,6 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 
+// =====================================================================
+// FITUR: Perekam Suara Bawah (Voice Note)
+// FILE: lib/presentation/widgets/voice_recording_bottom_sheet.dart
+// BARIS AWAL: 6 (setelah komentar ini)
+// FUNGSI: Menampilkan antarmuka untuk merekam, memutar ulang, dan mengirim voice note.
+// =====================================================================
 class VoiceRecordingBottomSheet extends StatefulWidget {
   final int initialSeconds;
   final bool isRecording;

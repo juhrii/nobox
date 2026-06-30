@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import '../../core/services/filter_api_service.dart';
 import '../../core/services/chat_service.dart';
 
+// =====================================================================
+// FITUR: Dialog Ubah Status Funnel
+// FILE: lib/presentation/widgets/add_funnel_dialog.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Menampilkan pop-up untuk memilih dan mengubah status pipeline/funnel pelanggan.
+// =====================================================================
 class AddFunnelDialog extends StatefulWidget {
   final String roomId;
   final String? initialFunnel;

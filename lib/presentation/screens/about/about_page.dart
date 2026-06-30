@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// About page with app info, version, and developer details
+// =====================================================================
+// FITUR: Halaman Tentang Aplikasi (About)
+// FILE: lib/presentation/screens/about/about_page.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Menampilkan informasi aplikasi, versi, detail pengembang, dan tautan kebijakan.
+// =====================================================================
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
@@ -18,7 +23,7 @@ class AboutPage extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 40),
-            // App Icon
+            // Ikon Aplikasi
             Container(
               width: 100,
               height: 100,
@@ -74,7 +79,7 @@ class AboutPage extends StatelessWidget {
 
             const SizedBox(height: 32),
 
-            // Info Cards
+            // Kartu Informasi
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(

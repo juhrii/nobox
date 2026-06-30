@@ -1,3 +1,8 @@
+// =====================================================================
+// FITUR 4: Detail Ruang Obrolan (Message Bubble Widget)
+// TUJUAN: Mengelola antarmuka visual satu gelembung pesan, termasuk teks, media, jam pengiriman, dan indikator centang baca.
+// CARA KERJA: Centang dipetakan berdasarkan status ack: 1 (Abu 1), 2 (Abu 2), 3 (Biru 2).
+// =====================================================================
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +24,12 @@ import 'audio_player_widget.dart';
 
 import '../../../core/theme/app_theme.dart';
 
+// =====================================================================
+// FITUR: Komponen Balon Chat
+// FILE: lib/presentation/widgets/message_bubble_widget.dart
+// BARIS AWAL: 23 (setelah komentar ini)
+// FUNGSI: Widget utama yang merender setiap pesan di ruang obrolan (teks, gambar, video, dokumen).
+// =====================================================================
 class MessageBubbleWidget extends StatefulWidget {
   final Message message;
   final List<Message>? allMessages;

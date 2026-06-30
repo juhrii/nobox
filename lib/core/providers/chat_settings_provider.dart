@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// =====================================================================
+// FITUR: Provider Pengaturan Chat
+// FILE: lib/core/providers/chat_settings_provider.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Mengelola pengaturan tampilan chat, seperti background warna atau gambar
+// =====================================================================
 class ChatSettingsProvider with ChangeNotifier {
   Color? _backgroundColor;
   String? _backgroundImagePath;
@@ -11,7 +17,8 @@ class ChatSettingsProvider with ChangeNotifier {
   Color? get backgroundColor => _backgroundColor;
   String? get backgroundImagePath => _backgroundImagePath;
 
-  /// Load saved settings from SharedPreferences
+  // FITUR: Muat Pengaturan
+  /// Memuat pengaturan yang tersimpan dari SharedPreferences
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     
@@ -26,14 +33,14 @@ class ChatSettingsProvider with ChangeNotifier {
 
   void setBackgroundColor(Color? color) {
     _backgroundColor = color;
-    _backgroundImagePath = null; // clear image when color is set
+    _backgroundImagePath = null; // hapus gambar jika warna diatur
     _saveSettings();
     notifyListeners();
   }
 
   void setBackgroundImage(String? path) {
     _backgroundImagePath = path;
-    _backgroundColor = null; // clear color when image is set
+    _backgroundColor = null; // hapus warna jika gambar diatur
     _saveSettings();
     notifyListeners();
   }

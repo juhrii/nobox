@@ -20,6 +20,13 @@ import '../../widgets/chat_list_skeleton.dart';
 import '../../widgets/connection_status_banner.dart';
 import '../../widgets/channel_icon.dart';
 
+// =====================================================================
+// FITUR: Halaman Utama Daftar Chat (Inbox)
+// FILE: lib/presentation/screens/chat/chat_list_page.dart
+// FUNGSI: Menampilkan daftar seluruh percakapan aktif. Menyediakan fitur
+//         pencarian, filter (unread, tag, dsb), serta indikator status
+//         koneksi WebSocket secara real-time.
+// =====================================================================
 
 class ChatListPage extends StatefulWidget {
   const ChatListPage({super.key});
@@ -49,6 +56,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     });
   }
 
+  // FITUR: Infinite Scroll / Pagination
+  // FUNGSI: Mendeteksi saat pengguna menggulir ke bawah daftar chat untuk memuat data tambahan (lazy loading).
   void _onScroll() {
     if (!_scrollController.hasClients) return;
     
@@ -64,6 +73,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     }
   }
 
+  // FITUR: Filter Tab Chat (Semua, Belum Ditetapkan, dll)
+  // FUNGSI: Mengubah filter daftar chat berdasarkan status tab yang dipilih oleh pengguna.
   void _onTabChanged() {
     if (_tabController.indexIsChanging) return;
     if (!mounted) return;
@@ -81,6 +92,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     super.dispose();
   }
 
+  // FITUR: Appbar Mode Seleksi (Bulk Action)
+  // FUNGSI: Menampilkan AppBar khusus ketika pengguna memilih satu atau lebih chat, memungkinkan aksi massal seperti Archive atau Pin.
   PreferredSizeWidget _buildSelectionAppBar(BuildContext context) {
     final chatProvider = context.read<ChatProvider>();
     return AppBar(
@@ -176,6 +189,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     final isDark = themeProvider.isDarkMode;
 
     return Scaffold(
+      // FITUR: Header AppBar (Normal / Mode Pencarian)
+      // FUNGSI: Menampilkan judul dan tombol aksi di atas, serta berubah menjadi form input teks saat mode pencarian aktif.
       appBar: _selectedChats.isNotEmpty
           ? _buildSelectionAppBar(context)
           : AppBar(
@@ -451,6 +466,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     });
   }
 
+  // FITUR: Dialog Pencarian Bawaan (Cadangan)
+  // FUNGSI: Menampilkan input text sederhana dalam sebuah dialog sebagai metode alternatif untuk mencari daftar obrolan aktif.
   void _showSearchDialog() {
     showDialog(
       context: context,
@@ -490,7 +507,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     );
   }
 
-  // ── New Conversation Dialog ──
+  // FITUR: Dialog Buat Percakapan Baru
+  // FUNGSI: Menampilkan popup form (Channel, Akun, Kontak) untuk memulai obrolan baru dengan kontak tertentu atau manual.
   void _showNewConversationDialog() {
     String selectedChat = 'Private';
     String? selectedChannel;
@@ -1007,6 +1025,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     );
   }
 
+  // FITUR: Dialog Konfirmasi Keluar (Logout)
+  // FUNGSI: Menampilkan popup peringatan dan menghapus cache lokal (provider) sebelum membawa pengguna kembali ke layar login.
   void _showLogoutDialog() {
     showDialog(
       context: context,
@@ -1044,7 +1064,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     return _ShimmerLoadingWidget(isDark: isDark);
   }
 
-  // ── Status badge helper ──
+  // FITUR: Status Badge (Assigned/Resolved/dll)
+  // FUNGSI: Merender label kecil di kanan bawah chat tile berdasarkan status tiket obrolan, dengan warna yang disesuaikan.
   Widget _buildStatusBadge(String status) {
     Color color;
     switch (status) {
@@ -1321,6 +1342,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     );
   }
 
+  // FITUR: Preview Pesan Terakhir (Indikator Warna & Tipe)
+  // FUNGSI: Menampilkan cuplikan pesan terakhir di daftar chat, memberikan warna khusus (merah jika butuh balasan dari pelanggan), dan membedakan ikon lampiran.
   Widget _buildLastMessageRow(ChatModel chat, bool isDark) {
     // Logika warna berdasarkan pengirim (menggunakan properti needReply dari API):
     // Jika needReply = true -> Pesan butuh balasan (dari customer) -> Merah
@@ -1381,6 +1404,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     );
   }
 
+  // FITUR: Format Waktu Relatif
+  // FUNGSI: Mengonversi waktu standar UTC dari server menjadi format string yang ramah pembaca untuk menampilkan jam atau tanggal obrolan terakhir.
   String _formatTime(String rawTime) {
     if (rawTime.isEmpty) return '';
     try {
@@ -1397,7 +1422,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     }
   }
 
-  // ── Filter Conversation Dialog ──
+  // FITUR: Dialog Filter Lanjutan (Advanced Filter)
+  // FUNGSI: Membuka modal popup besar yang memuat API Master Data (Campaign, Funnel, Label, dll) untuk memfilter daftar obrolan secara presisi.
   void _showFilterDialog() {
     final provider = context.read<ChatProvider>();
     final chatService = ChatService(); // Create locally for services not exposed through provider
@@ -1854,6 +1880,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     );
   }
 
+  // FITUR: Bottom Sheet Opsi Chat (Pin, Archive, Assign)
+  // FUNGSI: Menampilkan menu pop-up di bawah layar ketika sebuah chat ditekan lama, memungkinkan agen untuk menyematkan, mengarsipkan, atau mengubah status tiket obrolan (Assign/Resolve).
   void _showChatOptions(BuildContext context, ChatModel chat, ChatProvider chatProvider) {
     showModalBottomSheet(
       context: context,
@@ -2005,8 +2033,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
 }
 
 // ── Swipeable Chat Tile Widget ──
-// Widget terpisah untuk membungkus setiap chat tile dengan aksi geser (swipe).
-// Geser ke kanan = Pin/Unpin, Geser ke kiri = Arsip.
+// FITUR: Wrapper Widget Chat Tile
+// FUNGSI: Membungkus chat tile individu. (Logika swipe sudah dinonaktifkan atas permintaan bisnis, namun widget tetap dipertahankan untuk kompatibilitas struktur).
 class _SwipeableChatTile extends StatefulWidget {
   final ChatModel chat;
   final ChatProvider chatProvider;
@@ -2033,8 +2061,8 @@ class _SwipeableChatTileState extends State<_SwipeableChatTile> {
   }
 }
 
-/// Shimmer loading widget for infinite scroll pagination.
-/// Shows 3 skeleton items with animated shimmer effect.
+// FITUR: Animasi Shimmer Loading
+// FUNGSI: Menampilkan 3 kerangka (skeleton) berbentuk chat tile dengan efek mengkilap (shimmer) saat memuat daftar obrolan berikutnya via pagination (infinite scroll).
 class _ShimmerLoadingWidget extends StatefulWidget {
   final bool isDark;
   const _ShimmerLoadingWidget({required this.isDark});

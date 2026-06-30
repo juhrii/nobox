@@ -1,6 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
+// =====================================================================
+// FITUR: Provider Status Chat
+// FILE: lib/core/providers/chat_status_provider.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Mengelola status pengguna seperti 'Online', 'Offline', 'Typing', dan 'Last seen'
+// =====================================================================
 class ChatStatusProvider with ChangeNotifier {
   final Map<String, String> _userStatus = {};
   final Set<String> _typingUsers = {};
@@ -30,7 +36,7 @@ class ChatStatusProvider with ChangeNotifier {
   void setLastSeen(String sender) {
     final now = DateTime.now();
     final timeString = DateFormat('HH:mm').format(now);
-    _userStatus[sender] = 'Last seen $timeString';
+    _userStatus[sender] = 'Terakhir dilihat $timeString'; // Diterjemahkan dari 'Last seen'
     notifyListeners();
   }
 }

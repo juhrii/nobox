@@ -1,3 +1,7 @@
+// =====================================================================
+// FITUR 1: Autentikasi Pengguna (Auth Provider)
+// TUJUAN: Mengelola state login pengguna, menyimpan token JWT, dan memvalidasi kredensial.
+// =====================================================================
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -9,6 +13,12 @@ import '../app_config.dart';
 import '../utils/globals.dart';
 import '../utils/app_routes.dart';
 
+// =====================================================================
+// FITUR: Provider Autentikasi
+// FILE: lib/core/providers/auth_provider.dart
+// BARIS AWAL: 13 (setelah komentar ini)
+// FUNGSI: Mengelola state login, logout, penyimpanan token, dan sesi pengguna
+// =====================================================================
 class AuthProvider with ChangeNotifier {
   String? _currentUser;
   bool _isLoading = true;
@@ -17,7 +27,7 @@ class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   String? _token;
 
-  // Secure storage for sensitive data (tokens)
+  // Penyimpanan aman (Secure storage) untuk data sensitif (seperti token)
   static const _secureStorage = FlutterSecureStorage();
   static const String _secureTokenKey = 'auth_token';
 
@@ -25,7 +35,7 @@ class AuthProvider with ChangeNotifier {
     ApiClient().onUnauthorized = logout;
   }
 
-  // SharedPreferences keys (non-sensitive data only)
+  // Kunci SharedPreferences (hanya untuk data yang tidak sensitif)
   static const String _userEmailKey = 'user_email';
   static const String _rememberEmailKey = 'remembered_email';
 
@@ -34,20 +44,22 @@ class AuthProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isAuthenticating => _isAuthenticating;
 
+  // FITUR: Cek Status Autentikasi
+  // FUNGSI: Memeriksa apakah user sudah login atau belum saat aplikasi pertama dibuka
   Future<void> checkAuth() async {
     final prefs = await SharedPreferences.getInstance();
     _currentUser = prefs.getString(_userEmailKey);
     
-    // Read token from secure storage
+    // Baca token dari secure storage
     _token = await _secureStorage.read(key: _secureTokenKey);
     
-    // Auto-migrate token if it exists in SharedPreferences but not in secure storage
+    // Migrasi token otomatis jika ada di SharedPreferences tetapi tidak di secure storage
     if (_token == null) {
-      final oldToken = prefs.getString(_secureTokenKey); // previously used same key
+      final oldToken = prefs.getString(_secureTokenKey); // sebelumnya menggunakan kunci yang sama
       if (oldToken != null) {
-        // Migrate to secure storage
+        // Migrasi ke secure storage
         await _secureStorage.write(key: _secureTokenKey, value: oldToken);
-        // Remove from SharedPreferences for security
+        // Hapus dari SharedPreferences demi keamanan
         await prefs.remove(_secureTokenKey);
         _token = oldToken;
         debugPrint('AuthProvider: Migrated token from SharedPreferences to Secure Storage');
@@ -72,7 +84,7 @@ class AuthProvider with ChangeNotifier {
       }
     }
 
-    // Restore token in AuthService/ApiClient if it exists
+    // Pulihkan token di AuthService/ApiClient jika ada
     if (_token != null) {
       ApiClient().setToken(_token);
     }
@@ -95,6 +107,8 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  // FITUR: Login
+  // FUNGSI: Memproses permintaan login dari user ke API
   Future<ApiResponse<String>> login(String email, String password) async {
     _isAuthenticating = true;
     notifyListeners();
@@ -108,7 +122,7 @@ class AuthProvider with ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_userEmailKey, email);
         
-        // Store token in secure storage instead of SharedPreferences
+        // Simpan token di secure storage, bukan di SharedPreferences
         await _secureStorage.write(key: _secureTokenKey, value: response.data!);
         
         // Simpan credentials untuk auto re-login saat token expired
@@ -135,6 +149,7 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  // FITUR: Auto Re-Login (Silent)
   /// Silent re-login menggunakan saved credentials.
   /// Dipanggil dari splash_page, chat_detail, atau interceptor.
   /// Return true jika berhasil, false jika gagal.
@@ -176,10 +191,12 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  // FITUR: Logout
+  // FUNGSI: Menghapus sesi, menghapus token, dan mengarahkan kembali ke halaman login
   void logout() async {
-    // Guard: if already logged out, don't re-run logout logic.
-    // This prevents repeated background 401/AccessDenied responses from
-    // re-pushing the login page and clearing the user's typed credentials.
+    // Guard: jika sudah logout, jangan jalankan ulang logika logout.
+    // Ini mencegah respons 401/AccessDenied dari background process agar
+    // tidak berulang kali mendorong halaman login dan menghapus teks input pengguna.
     if (_currentUser == null && _token == null) {
       return;
     }
@@ -190,7 +207,7 @@ class AuthProvider with ChangeNotifier {
     }
     await prefs.remove(_userEmailKey);
     
-    // Delete token from secure storage
+    // Hapus token dari secure storage
     await _secureStorage.delete(key: _secureTokenKey);
     
     // JANGAN hapus last_username & last_password saat logout
@@ -202,7 +219,7 @@ class AuthProvider with ChangeNotifier {
     ApiClient().setToken(null);
     notifyListeners();
 
-    // Navigate to login screen automatically
+    // Arahkan kembali ke layar login secara otomatis
     if (navigatorKey.currentState != null) {
       navigatorKey.currentState!.pushNamedAndRemoveUntil(
         AppRoutes.login,

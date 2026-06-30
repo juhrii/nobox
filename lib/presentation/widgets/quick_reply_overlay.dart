@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import '../../core/services/chat_service.dart';
 import '../../core/model/quick_reply_model.dart';
 
+// =====================================================================
+// FITUR: Overlay Balasan Cepat (Quick Reply)
+// FILE: lib/presentation/widgets/quick_reply_overlay.dart
+// BARIS AWAL: 6 (setelah komentar ini)
+// FUNGSI: Menampilkan daftar template pesan balasan cepat agar agen/admin dapat membalas dengan lebih efisien.
+// =====================================================================
 class QuickReplyOverlay extends StatefulWidget {
   final Function(String) onSelectReply;
 

@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/chat_provider.dart';
 
+// =====================================================================
+// FITUR: Dialog Tambah Agen
+// FILE: lib/presentation/widgets/add_agent_dialog.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Menampilkan pop-up untuk menugaskan seorang agen/operator manusia ke dalam obrolan tertentu.
+// =====================================================================
 class AddAgentDialog extends StatefulWidget {
   final String chatId;
   final String contactId;

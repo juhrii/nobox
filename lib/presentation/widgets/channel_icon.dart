@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+// =====================================================================
+// FITUR: Ikon Saluran (Channel)
+// FILE: lib/presentation/widgets/channel_icon.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Menampilkan ikon sumber obrolan (WhatsApp, Telegram, IG, dll.) berdasarkan channel ID.
+// =====================================================================
 class ChannelIcon extends StatelessWidget {
   final String chId;
   final String? channelName;

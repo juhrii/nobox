@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/model/message.dart';
 
+// =====================================================================
+// FITUR: Dialog Teruskan Pesan
+// FILE: lib/presentation/widgets/forward_dialog.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Menampilkan pop-up peringatan bahwa fitur meneruskan (forward) pesan belum diimplementasikan.
+// =====================================================================
 class ForwardDialog extends StatelessWidget {
   final Message message;
 

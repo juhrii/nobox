@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+// =====================================================================
+// FITUR: Penampil Gambar Tunggal
+// FILE: lib/presentation/screens/media/image_viewer_screen.dart
+// BARIS AWAL: 7 (setelah komentar ini)
+// FUNGSI: Menampilkan satu gambar secara layar penuh (fullscreen) dengan dukungan zoom dan caption.
+// =====================================================================
 class ImageViewerScreen extends StatelessWidget {
   final String imageUrl;
   final String? caption;

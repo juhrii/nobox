@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'api_client.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-// Menangani pesan di background
+// FITUR: Tangani Pesan Latar Belakang (Background)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('📨 Background message received: ${message.messageId}');
@@ -72,6 +72,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 }
 
+// =====================================================================
+// FITUR: Layanan Notifikasi Push (FCM & Local)
+// FILE: lib/core/services/push_notification_service.dart
+// BARIS AWAL: 76 (setelah komentar ini)
+// FUNGSI: Mengelola integrasi Firebase Cloud Messaging (FCM), notifikasi lokal, dan aksi ketukan notifikasi.
+// =====================================================================
 class PushNotificationService {
   static final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   static const MethodChannel _notificationChannel = MethodChannel('ai.nobox.android/notification');
@@ -89,7 +95,7 @@ class PushNotificationService {
     _onNotificationTap = onNotificationTap;
 
     try {
-      // Menangkap ketukan dari Native notification
+      // Menangkap ketukan dari Native notification (Notifikasi bawaan Android/iOS)
       _notificationChannel.setMethodCallHandler((call) async {
         if (call.method == 'openChat') {
           final roomId = call.arguments['roomId'] as String?;
@@ -130,7 +136,7 @@ class PushNotificationService {
       'chat_notifications',
       'Chat Notifications',
       description: 'Notifications for new chat messages',
-      importance: Importance.max, // Agar melayang
+      importance: Importance.max, // Penting maksimal agar notifikasi muncul melayang (heads-up)
       playSound: true,
       enableVibration: true,
       enableLights: true,
@@ -149,7 +155,7 @@ class PushNotificationService {
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       debugPrint('✅ Push notification permission granted');
       
-      // FCM token retrieval - non-fatal jika Google Play Services tidak tersedia
+      // Pengambilan token FCM - non-fatal jika Google Play Services tidak tersedia
       try {
         String? token = await _firebaseMessaging.getToken();
         if (token != null) {
@@ -185,7 +191,7 @@ class PushNotificationService {
       final secureStorage = const FlutterSecureStorage();
       await secureStorage.write(key: 'fcm_token', value: token);
       
-      // Kirim token ke backend agar server bisa kirim push notification
+      // Mengirim token ke backend agar server bisa mengirim push notification ke perangkat ini
       try {
         await ApiClient().post('Notify/Subs', data: {
           'Endpoint': token,

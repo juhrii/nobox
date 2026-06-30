@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// Shimmer skeleton loading effect for Chat Room List (Inbox)
-/// Meniru tampilan daftar obrolan saat sedang dimuat
+// =====================================================================
+// FITUR: Kerangka Loading Daftar Ruang Obrolan
+// FILE: lib/presentation/widgets/room_shimmer_widget.dart
+// BARIS AWAL: 6 (setelah komentar ini)
+// FUNGSI: Menampilkan animasi kerangka (shimmer) saat daftar kontak/ruang obrolan di halaman inbox sedang dimuat.
+// =====================================================================
 class RoomShimmerWidget extends StatefulWidget {
   final int itemCount;
 

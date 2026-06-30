@@ -1,5 +1,11 @@
 import 'package:flutter/foundation.dart';
 
+// =====================================================================
+// FITUR: Provider Cache Filter
+// FILE: lib/core/providers/filter_cache_provider.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Menyimpan sementara (cache) data list tag, funnel, channel, dan akun untuk filter
+// =====================================================================
 class FilterCacheProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _tags = [];
   List<Map<String, dynamic>> _funnels = [];
@@ -8,14 +14,15 @@ class FilterCacheProvider extends ChangeNotifier {
   
   bool _isDataLoaded = false;
   
-  // Getters
+  // Getter (pengambil data)
   List<Map<String, dynamic>> get tags => _tags;
   List<Map<String, dynamic>> get funnels => _funnels;
   List<Map<String, dynamic>> get channels => _channels;
   List<Map<String, dynamic>> get accounts => _accounts;
   bool get isDataLoaded => _isDataLoaded;
 
-  /// Update all filter data at once and notify listeners
+  // FITUR: Perbarui Data Filter
+  /// Memperbarui semua data filter secara bersamaan dan memberitahu UI
   void updateFilterData({
     required List<Map<String, dynamic>> tags,
     required List<Map<String, dynamic>> funnels,
@@ -30,7 +37,8 @@ class FilterCacheProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clear the cache
+  // FITUR: Hapus Cache
+  /// Mengosongkan/menghapus data cache filter
   void invalidateCache() {
     _tags = [];
     _funnels = [];

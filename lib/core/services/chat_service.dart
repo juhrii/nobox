@@ -17,6 +17,13 @@ class SignalRNull {
   dynamic toJson() => null;
 }
 
+// =====================================================================
+// FITUR: Layanan Chat Utama (API Utama)
+// FILE: lib/core/services/chat_service.dart
+// BARIS AWAL: 20 (setelah komentar ini)
+// FUNGSI: Service terbesar yang menangani mayoritas interaksi API Chat: mengambil pesan, 
+//         mengirim pesan, manajemen status chat, dan banyak fungsi lainnya.
+// =====================================================================
 class ChatService {
   final ApiClient _apiClient = ApiClient();
   String? currentTenantId;
@@ -28,7 +35,8 @@ class ChatService {
   static String? _singleAccountName;
 
   /// Fetch list of channels from API (WhatsApp, Telegram, etc.)
-  Future<ApiResponse<List<Map<String, dynamic>>>> getChannels() async {
+    // FITUR 6: Integrasi Saluran Multi-Platform (Mengambil daftar Channel).
+Future<ApiResponse<List<Map<String, dynamic>>>> getChannels() async {
     try {
       final response = await _apiClient.post(AppConfig.channelListEndpoint, data: {
         "Skip": 0,
@@ -70,7 +78,8 @@ class ChatService {
   }
 
   /// Fetch list of accounts from API
-  Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
+    // FITUR 6: Integrasi Saluran Multi-Platform (Mengambil daftar Akun).
+Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
     try {
       final response = await _apiClient.post(AppConfig.accountListEndpoint, data: {
         "Skip": 0,
@@ -1225,15 +1234,25 @@ class ChatService {
       final Map<String, dynamic> payload = {
         'Body': content,
         'BodyType': 1,
-        'ExtId': finalExtId,
         'ChannelId': channelId,
         'AccountIds': safeAccountId,
         'Attachment': request.attachment ?? '',
       };
 
-      // Wajib menyertakan LinkId agar Telegram background worker tahu routingnya
-      if (request.contactId != null && request.contactId!.isNotEmpty) {
-        payload['LinkId'] = int.tryParse(request.contactId!) ?? request.contactId;
+      if (channelId == 2) {
+        // Telegram wajib menggunakan object JSON untuk ExtId dan LinkId
+        if (finalExtId.isNotEmpty) {
+          try {
+            payload['ExtId'] = jsonDecode(finalExtId);
+          } catch (_) {
+            payload['ExtId'] = {"ExtId": finalExtId};
+          }
+        }
+        if (request.contactId != null && request.contactId!.isNotEmpty) {
+          payload['LinkId'] = int.tryParse(request.contactId!) ?? request.contactId;
+        }
+      } else {
+        payload['ExtId'] = finalExtId;
       }
 
       debugPrint('ChatService: ┌── sendMessage PAYLOAD FINAL ──');
@@ -1252,6 +1271,25 @@ class ChatService {
         final rawData = response.data;
         if (rawData is Map && rawData['IsError'] == true) {
           final errorMsg = rawData['Error']?.toString() ?? 'Send error';
+          
+          if (errorMsg.contains('ExtId') || errorMsg.contains('long')) {
+            debugPrint('ChatService: Terdeteksi error ExtId backend (Teks)! Mengalihkan ke SignalR...');
+            final signalRSuccess = await SignalRService().invokeKirimPesan(
+              idLink: request.contactId,
+              idAccount: safeAccountId,
+              idRoom: roomIdStr,
+              idGroup: null,
+              type: "1", 
+              msg: request.content,
+            );
+            
+            if (signalRSuccess) {
+              return ApiResponse.success(true, 200);
+            } else {
+              return ApiResponse.failure('Gagal mengirim teks Telegram via SignalR (Fallback)', 500);
+            }
+          }
+          
           debugPrint('ChatService: │ ❌ Server error: $errorMsg');
           debugPrint('ChatService: └─────────────────────────');
           return ApiResponse.failure(errorMsg, 200);
@@ -1322,6 +1360,8 @@ class ChatService {
     String? accountId,
     String? channelId,
     String? contactId,
+    String? link, // IdLink for SignalR (LinkTmp/LinkNm from conversation)
+    bool forceDocument = false,
   }) async {
     try {
       final normalizedPath = filePath.replaceAll('/', Platform.pathSeparator);
@@ -1434,6 +1474,10 @@ class ChatService {
           break;
       }
 
+      if (forceDocument) {
+        bodyType = 5; // Force as document if requested by the user
+      }
+
       // Create attachment data in JSON format as required by Pin point
       final attachmentMap = <String, dynamic>{
         'Filename': serverFileName,
@@ -1457,47 +1501,54 @@ class ChatService {
 
     final int chId = int.tryParse(channelId ?? '1') ?? 1;
     final extId = await _getExtId(contactId, channelId: chId);
-    final payload = {
+    final payload = <String, dynamic>{
       "Body": "", 
       "BodyType": bodyType,
-      "ExtId": extId ?? "",
       "ChannelId": chId,
       "AccountIds": safeAccountId,
       "Attachment": attachmentData,
     };
 
-    // NOTE: LinkId TIDAK dikirim untuk Telegram karena backend error
-    // 'long' does not contain a definition for 'ExtId'.
-    // ExtId JSON string sudah cukup.
+    if (chId == 2) {
+      // Use SignalR for Telegram media message to bypass broken Inbox/Send backend
+      final fileJsonObj = <String, dynamic>{
+        "Filename": serverFileName,
+        "OriginalName": fileName,
+        "FileSize": "${(bytes.length / 1024).toStringAsFixed(1)} KB"
+      };
+      if (bodyType == 2) {
+        fileJsonObj["Ptt"] = true; // IMPORTANT for Voice Notes
+      }
+      // Use link (LinkTmp) if available, fallback to contactId — same logic as sendMessageViaSignalR in ChatProvider
+      final idLinkValue = (link != null && link.isNotEmpty) ? link : contactId;
+      debugPrint('ChatService: SignalR Telegram media → idLink=$idLinkValue, idRoom=$conversationId, idAccount=$safeAccountId, type=${bodyType.toString()}');
+      final signalRSuccess = await SignalRService().invokeKirimPesan(
+        idLink: idLinkValue,
+        idAccount: safeAccountId,
+        idRoom: conversationId,
+        idGroup: null,
+        type: bodyType.toString(), // 3=Image, 4=Video, 5=Document, 2=Voice
+        fileJson: jsonEncode(fileJsonObj),
+      );
+      if (signalRSuccess) {
+        final fullUrl = (serverFileName != null && !serverFileName.startsWith('http'))
+            ? '${AppConfig.uploadUrl}$serverFileName'
+            : serverFileName;
+        return ApiResponse.success(fullUrl ?? filePath, 200);
+      } else {
+        return ApiResponse.failure('Gagal mengirim media Telegram via SignalR', 500);
+      }
+    }
+
+    // Only for non-Telegram channels
+    payload["ExtId"] = extId ?? "";
 
       debugPrint('ChatService: ┌── sendImageMessage PAYLOAD FINAL ──');
       debugPrint(jsonEncode(payload));
       debugPrint('ChatService: └──────────────────────────────');
 
-      if (chId == 2) {
-        // Use SignalR for Telegram media message
-        final fileJsonObj = {
-          "Filename": serverFileName,
-          "OriginalName": fileName,
-          "FileSize": "${(bytes.length / 1024).toStringAsFixed(1)} KB"
-        };
-        final signalRSuccess = await SignalRService().invokeKirimPesan(
-          idLink: contactId,
-          idAccount: safeAccountId,
-          idRoom: conversationId,
-          idGroup: null,
-          type: "3", // Media
-          fileJson: jsonEncode(fileJsonObj),
-        );
-        if (signalRSuccess) {
-          final fullUrl = (serverFileName != null && !serverFileName.startsWith('http'))
-              ? '${AppConfig.uploadUrl}$serverFileName'
-              : serverFileName;
-          return ApiResponse.success(fullUrl ?? filePath, 200);
-        } else {
-          return ApiResponse.failure('Gagal mengirim media Telegram via SignalR', 500);
-        }
-      }
+      // Pengiriman media Telegram (chId == 2) kini juga menggunakan Inbox/Send API
+      // karena API ini terbukti lebih andal dalam mengirimkan payload 'Ptt' untuk Voice Note.
 
       final sendResponse = await _apiClient.post(
       'https://id.nobox.ai/Inbox/Send?Id=$conversationId',
@@ -1509,6 +1560,39 @@ class ChatService {
         final rawData = sendResponse.data;
         if (rawData is Map && rawData['IsError'] == true) {
           final errorMsg = rawData['Error']?.toString() ?? 'Send error';
+          
+          // SMART FALLBACK: Jika backend C# memuntahkan error ExtId, ini berarti
+          // chat tersebut adalah Telegram (tapi gagal terdeteksi oleh pengecekan chId).
+          // Kita otomatis alihkan menggunakan SignalR.
+          if (errorMsg.contains('ExtId') || errorMsg.contains('long')) {
+            debugPrint('ChatService: Terdeteksi error ExtId backend! Mengalihkan ke SignalR...');
+            final fileJsonObj = <String, dynamic>{
+              "Filename": serverFileName,
+              "OriginalName": fileName,
+              "FileSize": "${(bytes.length / 1024).toStringAsFixed(1)} KB"
+            };
+            if (bodyType == 2) {
+              fileJsonObj["Ptt"] = true; // Voice note flag
+            }
+            final signalRSuccess = await SignalRService().invokeKirimPesan(
+              idLink: contactId,
+              idAccount: safeAccountId,
+              idRoom: conversationId,
+              idGroup: null,
+              type: bodyType.toString(), 
+              fileJson: jsonEncode(fileJsonObj),
+            );
+            
+            if (signalRSuccess) {
+              final fullUrl = (serverFileName != null && !serverFileName.startsWith('http'))
+                  ? '${AppConfig.uploadUrl}$serverFileName'
+                  : serverFileName;
+              return ApiResponse.success(fullUrl ?? filePath, 200);
+            } else {
+              return ApiResponse.failure('Gagal mengirim media Telegram via SignalR (Fallback)', 500);
+            }
+          }
+          
           debugPrint('ChatService: sendImageMessage error: $errorMsg');
           return ApiResponse.failure(errorMsg, 200);
         }
@@ -1541,7 +1625,7 @@ class ChatService {
         data: {
           'media': {
             'filename': fileName,
-            'mimetype': mimeType,
+            'mimetype': mimeType, 
             'data': base64String,
           },
         },

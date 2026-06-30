@@ -8,6 +8,13 @@ import '../../../core/services/signalr_service.dart';
 import '../../../core/services/chat_service.dart';
 import '../../../core/utils/app_routes.dart';
 
+// =====================================================================
+// FITUR: Halaman Splash Screen
+// FILE: lib/presentation/screens/splash/splash_page.dart
+// BARIS AWAL: 15 (setelah komentar ini)
+// FUNGSI: Layar pertama yang muncul saat aplikasi dibuka. Menjalankan fungsi inisialisasi 
+//         seperti cek status login, muat tema, dan koneksi awal sebelum pindah halaman.
+// =====================================================================
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
 

@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/chat_provider.dart';
 
+// =====================================================================
+// FITUR: Daftar Pesan Berbintang
+// FILE: lib/presentation/screens/chat/starred_messages_page.dart
+// FUNGSI: Menampilkan kumpulan pesan yang ditandai bintang (bookmark)
+//         dari berbagai percakapan untuk akses cepat.
+// =====================================================================
+
 /// Page that displays all starred/bookmarked messages
 class StarredMessagesPage extends StatelessWidget {
   const StarredMessagesPage({super.key});
@@ -16,6 +23,8 @@ class StarredMessagesPage extends StatelessWidget {
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
       ),
+      // FITUR: Daftar List Berbintang (Membaca Provider)
+      // FUNGSI: Mendengarkan perubahan data `starredMessages` dari ChatProvider dan me-rebuild UI ketika ada perubahan.
       body: Consumer<ChatProvider>(
         builder: (context, chatProvider, _) {
           final starred = chatProvider.starredMessages;
@@ -58,6 +67,8 @@ class StarredMessagesPage extends StatelessWidget {
               final time = msg['time'] ?? '';
               final msgId = msg['id'] ?? '';
 
+              // FITUR: Hapus Bintang dengan Gestur Geser (Swipe to Unstar)
+              // FUNGSI: Memungkinkan pengguna menghapus pesan dari daftar berbintang dengan menggesernya ke kiri.
               return Dismissible(
                 key: Key(msgId),
                 direction: DismissDirection.endToStart,

@@ -12,6 +12,12 @@ class ImageGalleryItem {
   });
 }
 
+// =====================================================================
+// FITUR: Penampil Galeri Gambar
+// FILE: lib/presentation/screens/media/image_gallery_viewer_screen.dart
+// BARIS AWAL: 19 (setelah komentar ini)
+// FUNGSI: Menampilkan beberapa gambar secara interaktif (bisa digeser/swipe dan di-zoom), dilengkapi dengan caption.
+// =====================================================================
 class ImageGalleryViewerScreen extends StatefulWidget {
   final List<ImageGalleryItem> images;
   final int initialIndex;

@@ -7,6 +7,13 @@ import 'conversation_history_page.dart';
 import '../../widgets/tag_selection_dialog.dart';
 import '../../widgets/add_funnel_dialog.dart';
 
+// =====================================================================
+// FITUR: Halaman Detail Kontak (Info)
+// FILE: lib/presentation/screens/chat/contact_info_page.dart
+// FUNGSI: Menampilkan dan mengelola informasi rinci dari kontak/chat room,
+//         termasuk tag, funnel, note, status, dan data profil pengguna.
+// =====================================================================
+
 /// Contact Detail page matching the Nobox app design.
 /// Sections: Contact, Conversation, Funnel, Message Tags, Notes,
 /// Campaign, Deal, Form Template, Form Result, Human Agent.
@@ -78,6 +85,8 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
     super.dispose();
   }
 
+  // FITUR: Sinkronisasi Data Room & Kontak (API Call)
+  // FUNGSI: Menarik data terbaru dari server mengenai obrolan ini, termasuk tag, funnel, notes, status bot, dsb.
   Future<void> _loadDetailRoom() async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     final data = await chatProvider.getDetailRoom(widget.chat.id);

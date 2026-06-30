@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// =====================================================================
+// FITUR: Provider Tema Aplikasi
+// FILE: lib/core/providers/theme_provider.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Mengelola tema aplikasi (Mode Terang/Gelap) dan penyimpanannya
+// =====================================================================
 class ThemeProvider extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   static const String _themeKey = 'is_dark_mode';

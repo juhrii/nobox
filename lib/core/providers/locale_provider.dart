@@ -1,13 +1,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Supported locales
+/// Bahasa (locale) yang didukung
 enum AppLocale { id, en }
 
-/// Provides locale/language switching with persistence
+// =====================================================================
+// FITUR: Provider Bahasa (Locale)
+// FILE: lib/core/providers/locale_provider.dart
+// BARIS AWAL: 9 (setelah komentar ini)
+// FUNGSI: Menyediakan fitur ganti bahasa aplikasi beserta penyimpanannya
+// =====================================================================
 class LocaleProvider with ChangeNotifier {
   static const String _localeKey = 'app_locale';
-  AppLocale _locale = AppLocale.id; // Default: Indonesian
+  AppLocale _locale = AppLocale.id; // Default: Bahasa Indonesia
 
   AppLocale get locale => _locale;
   bool get isEnglish => _locale == AppLocale.en;
@@ -39,7 +44,8 @@ class LocaleProvider with ChangeNotifier {
     await setLocale(_locale == AppLocale.id ? AppLocale.en : AppLocale.id);
   }
 
-  /// Get translated string by key
+  // FITUR: Ambil Terjemahan
+  /// Mengambil string terjemahan berdasarkan kunci (key)
   String t(String key) {
     final map = _locale == AppLocale.id ? _id : _en;
     return map[key] ?? key;

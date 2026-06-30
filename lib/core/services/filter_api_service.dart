@@ -1,32 +1,36 @@
 import '../model/api_response.dart';
 import 'chat_service.dart';
 
-/// Service khusus untuk mengambil data filter (Tags, Funnels, Agents).
-/// Mendelegasikan panggilan ke ChatService yang sudah teruji.
+// =====================================================================
+// FITUR: Layanan Filter API
+// FILE: lib/core/services/filter_api_service.dart
+// BARIS AWAL: 6 (setelah komentar ini)
+// FUNGSI: Service khusus untuk mengambil data filter (Tags, Funnels, Agents). Mendelegasikan panggilan ke ChatService yang sudah teruji.
+// =====================================================================
 class FilterApiService {
   final ChatService _chatService = ChatService();
 
-  /// Fetch list of Tags
+  /// Mengambil daftar Tags
   Future<ApiResponse<List<Map<String, dynamic>>>> getTags() {
     return _chatService.getTags();
   }
 
-  /// Fetch list of Funnels
+  /// Mengambil daftar Funnels
   Future<ApiResponse<List<Map<String, dynamic>>>> getFunnels() {
     return _chatService.getFunnels();
   }
 
-  /// Fetch list of Agents
+  /// Mengambil daftar Agents (Agen)
   Future<ApiResponse<List<Map<String, dynamic>>>> getAgents() {
     return _chatService.getAgents();
   }
 
-  /// Fetch list of Channels
+  /// Mengambil daftar Channels (Saluran)
   Future<ApiResponse<List<Map<String, dynamic>>>> getChannels() {
     return _chatService.getChannels();
   }
 
-  /// Fetch list of Accounts
+  /// Mengambil daftar Accounts (Akun)
   Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() {
     return _chatService.getAccounts();
   }

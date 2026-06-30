@@ -1,3 +1,9 @@
+// =====================================================================
+// FITUR: Model Request Pesan (Message)
+// FILE: lib/core/model/message_request.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Class model untuk membungkus data pengiriman pesan sebelum dikirim ke API
+// =====================================================================
 class MessageRequest {
   final String receiver;
   final String content;
@@ -17,6 +23,8 @@ class MessageRequest {
     this.extId,
   });
 
+  // FITUR: Convert ke JSON
+  // FUNGSI: Mengubah objek MessageRequest menjadi format JSON (Map) sesuai standar body request API
   Map<String, dynamic> toJson() {
     return {
       'To': receiver,

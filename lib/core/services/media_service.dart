@@ -3,11 +3,17 @@ import 'package:dio/dio.dart';
 import 'api_client.dart';
 import '../app_config.dart';
 
+// =====================================================================
+// FITUR: Layanan Media (API)
+// FILE: lib/core/services/media_service.dart
+// BARIS AWAL: 7 (setelah komentar ini)
+// FUNGSI: Mengelola pengunggahan (upload) file media ke server (gambar, dokumen, suara, dll)
+// =====================================================================
 class MediaService {
   final ApiClient _apiClient = ApiClient();
 
-  /// Uploads media to the server using Base64 string format.
-  /// Returns the uploaded file name on the server if successful, or null if it fails.
+  /// Mengunggah media ke server menggunakan format string Base64.
+  /// Mengembalikan nama file yang diunggah di server jika berhasil, atau null jika gagal.
   Future<String?> uploadMedia({
     required String filename,
     required String mimetype,

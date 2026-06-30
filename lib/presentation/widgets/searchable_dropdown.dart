@@ -3,6 +3,12 @@ import 'package:provider/provider.dart';
 import '../../core/providers/theme_provider.dart';
 import '../../core/theme/app_theme.dart';
 
+// =====================================================================
+// FITUR: Dropdown dengan Pencarian
+// FILE: lib/presentation/widgets/searchable_dropdown.dart
+// BARIS AWAL: 6 (setelah komentar ini)
+// FUNGSI: Komponen dropdown kustom yang memungkinkan pengguna mencari item di dalam daftar pilihan.
+// =====================================================================
 /// A custom searchable dropdown that shows a popup with search field + scrollable list,
 /// matching the NoBox web UI design exactly. Supports generic types like DropdownSearch.
 class SearchableDropdown<T> extends StatefulWidget {

@@ -6,7 +6,15 @@ import '../../../core/providers/chat_provider.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/model/message.dart';
 import '../../widgets/channel_icon.dart';
+import '../../widgets/room_shimmer_widget.dart';
 import 'chat_detail_page.dart';
+
+// =====================================================================
+// FITUR: Halaman Daftar Arsip
+// FILE: lib/presentation/screens/chat/archive_list_page.dart
+// FUNGSI: Menampilkan daftar percakapan yang diarsipkan dengan fitur
+//         pencarian dan filter yang serupa dengan halaman utama chat.
+// =====================================================================
 
 class ArchiveListPage extends StatefulWidget {
   const ArchiveListPage({super.key});
@@ -26,6 +34,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
     super.dispose();
   }
 
+  // FITUR: Appbar Mode Seleksi (Bulk Action)
+  // FUNGSI: Menggantikan AppBar normal ketika pengguna memilih satu atau lebih chat, memungkinkan untuk unarchive secara massal.
   PreferredSizeWidget _buildSelectionAppBar(BuildContext context) {
     final chatProvider = context.read<ChatProvider>();
     return AppBar(
@@ -107,6 +117,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
     );
   }
 
+  // FITUR: Appbar Mode Normal
+  // FUNGSI: Menampilkan judul standar halaman ketika tidak ada percakapan yang sedang dipilih.
   PreferredSizeWidget _buildNormalAppBar(BuildContext context) {
     return AppBar(
       backgroundColor: Colors.blue,
@@ -125,6 +137,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
 
+    // FITUR: Navigasi Kembali (PopScope)
+    // FUNGSI: Mencegah tombol kembali (back) menutup halaman jika masih ada pesan yang terpilih, dan membersihkan seleksi tersebut alih-alih keluar.
     return PopScope(
       canPop: _selectedChats.isEmpty,
       onPopInvoked: (didPop) {
@@ -151,6 +165,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
                   ),
                 ),
               ),
+              // FITUR: Kolom Pencarian Arsip
+              // FUNGSI: Input teks untuk memfilter daftar chat arsip secara lokal (berdasarkan nama pengirim atau isi pesan terakhir).
               child: TextField(
                 controller: _searchController,
                 onChanged: (value) => setState(() => _searchQuery = value),
@@ -170,6 +186,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
               ),
             ),
             
+            // FITUR: Daftar Pesan Arsip
+            // FUNGSI: Mengambil daftar percakapan arsip dari ChatProvider dan me-render list UI-nya beserta logika filter pencarian.
             Expanded(
               child: Consumer<ChatProvider>(
                 builder: (context, chatProvider, _) {
@@ -214,7 +232,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
     );
   }
 
-  // Helper Widget Format waktu (Sama dengan chat_list_page)
+  // FITUR: Format Waktu Relatif
+  // FUNGSI: Mengonversi string waktu UTC dari server ke dalam format lokal (Tanggal Bulan, Jam:Menit) untuk ditampilkan di daftar.
   String _formatTime(String rawTime) {
     if (rawTime.isEmpty) return '';
     try {
@@ -230,7 +249,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
     }
   }
 
-  // Helper Widget Status Badge (Khusus Halaman Arsip)
+  // FITUR: Status Badge (Arsip)
+  // FUNGSI: Menampilkan label status "Archived" bergaya abu-abu pada setiap item percakapan di daftar arsip.
   Widget _buildStatusBadge(String status, bool isDark) {
     // Untuk halaman arsip, kita paksa statusnya selalu "Archived"
     // dengan tampilan abu-abu yang lebih pas sesuai gambar referensi.
@@ -252,7 +272,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
     );
   }
 
-  // Builder pesan terakhir (Sama dengan chat_list_page)
+  // FITUR: Preview Pesan Terakhir
+  // FUNGSI: Merender baris preview teks pesan terakhir, dengan pengecekan khusus jika pesannya unsupported atau format attachment tertentu.
   Widget _buildLastMessageRow(ChatModel chat, bool isDark) {
     final messageColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600; 
     if (chat.lastMessageType != null && chat.lastMessageType!.isNotEmpty) {
@@ -284,7 +305,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
     );
   }
 
-  // Rendering Chat Tile utuh dengan Selectable Mode
+  // FITUR: Chat Tile Item (Daftar List)
+  // FUNGSI: Merender UI utuh untuk satu baris chat, menangani transisi warna latar belakang saat chat dipilih, serta menampilkan avatar, info pengirim, dan trailing indicator.
   Widget _buildChatTile(BuildContext context, ChatModel chat, ChatProvider chatProvider, bool isDark) {
     final isSelected = _selectedChats.contains(chat.id);
     
@@ -293,6 +315,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
       child: Column(
         children: [
           InkWell(
+            // FITUR: Tap Chat (Buka Room atau Pilih)
+            // FUNGSI: Jika dalam mode seleksi massal, menambah/menghapus pilihan. Jika mode normal, menavigasi pengguna ke layar ChatDetailPage.
             onTap: () {
               // Jika dalam mode pilih, ketuk chat menambah pilihan
               if (_selectedChats.isNotEmpty) {
@@ -311,6 +335,8 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
                 ),
               );
             },
+            // FITUR: Long Press Chat (Aktifkan Mode Seleksi)
+            // FUNGSI: Memulai mode seleksi massal saat pengguna menahan chat tile, yang mengubah AppBar ke mode unarchive.
             onLongPress: () {
               // Masuk ke Selectable Mode untuk Unarchive massal
               if (_selectedChats.isEmpty) {

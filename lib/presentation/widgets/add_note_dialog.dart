@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+// =====================================================================
+// FITUR: Dialog Tambah Catatan
+// FILE: lib/presentation/widgets/add_note_dialog.dart
+// BARIS AWAL: 3 (setelah komentar ini)
+// FUNGSI: Menampilkan pop-up input teks untuk menambah atau mengubah catatan (notes) pada kontak.
+// =====================================================================
 class AddNoteDialog extends StatefulWidget {
   final String? existingNote;
   final Function(String) onSave;

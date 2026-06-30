@@ -5,6 +5,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 import '../../core/theme/app_theme.dart';
 
+// =====================================================================
+// FITUR: Komponen Pemutar Audio (Voice Note)
+// FILE: lib/presentation/widgets/audio_player_widget.dart
+// BARIS AWAL: 9 (setelah komentar ini)
+// FUNGSI: Menampilkan pemutar audio khusus untuk Voice Note dalam balon chat, lengkap dengan progress bar.
+// =====================================================================
 class AudioPlayerWidget extends StatefulWidget {
   final String audioUrl;
   final bool isMe;

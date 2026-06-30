@@ -6,6 +6,13 @@ import '../../../core/services/signalr_service.dart';
 import 'package:nobox_chat_basic/core/providers/theme_provider.dart';
 import 'package:nobox_chat_basic/core/utils/app_routes.dart';
 
+// =====================================================================
+// FITUR: Halaman Login
+// FILE: lib/presentation/screens/auth/login_page.dart
+// BARIS AWAL: 13 (setelah komentar ini)
+// FUNGSI: Menampilkan antarmuka login, menerima input email & password, 
+//         serta mengeksekusi autentikasi melalui AuthProvider.
+// =====================================================================
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -55,7 +62,7 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       if (!response.isError) {
-        // Handle remember me
+        // Tangani "Ingat Saya" (Remember me)
         if (_rememberMe) {
           await auth.saveRememberedEmail(_emailController.text);
         } else {
@@ -63,7 +70,7 @@ class _LoginPageState extends State<LoginPage> {
         }
 
         if (!mounted) return;
-        // Start SignalR connection for real-time messaging
+        // Mulai koneksi SignalR untuk pesan real-time
         SignalRService().connect();
         Navigator.pushReplacementNamed(context, AppRoutes.home);
       } else {

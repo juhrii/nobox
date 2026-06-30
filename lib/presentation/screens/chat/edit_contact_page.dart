@@ -6,6 +6,13 @@ import 'package:provider/provider.dart';
 import '../../../core/providers/chat_provider.dart';
 import '../../../core/model/message.dart';
 
+// =====================================================================
+// FITUR: Halaman Edit Kontak
+// FILE: lib/presentation/screens/chat/edit_contact_page.dart
+// FUNGSI: Formulir untuk mengubah data pelanggan (nama, alamat, lokasi)
+//         dan foto profil kontak.
+// =====================================================================
+
 class EditContactPage extends StatefulWidget {
   final ChatModel chat;
 
@@ -64,7 +71,8 @@ class _EditContactPageState extends State<EditContactPage> {
     _loadContactData();
   }
 
-  /// Memuat data contact yang sudah tersimpan dari server
+  // FITUR: Memuat Data Kontak (API Call)
+  // FUNGSI: Mengambil detail data kontak dari server untuk mengisi form default sebelum diedit.
   Future<void> _loadContactData() async {
     try {
       final chatProvider = Provider.of<ChatProvider>(context, listen: false);

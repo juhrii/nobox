@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// Shimmer skeleton loading effect for chat list
+// =====================================================================
+// FITUR: Kerangka Loading Daftar Chat
+// FILE: lib/presentation/widgets/chat_list_skeleton.dart
+// BARIS AWAL: 4 (setelah komentar ini)
+// FUNGSI: Menampilkan animasi kerangka (shimmer skeleton) saat daftar percakapan sedang dimuat.
+// =====================================================================
 class ChatListSkeleton extends StatefulWidget {
   const ChatListSkeleton({super.key});
 

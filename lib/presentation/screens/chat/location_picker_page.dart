@@ -3,6 +3,13 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 
+// =====================================================================
+// FITUR: Pemilih Lokasi (Map)
+// FILE: lib/presentation/screens/chat/location_picker_page.dart
+// FUNGSI: Menampilkan peta interaktif yang dapat digeser untuk memilih
+//         titik koordinat lokasi sebelum dikirim sebagai attachment.
+// =====================================================================
+
 /// WhatsApp-style location picker with draggable map.
 /// Returns a LatLng when user confirms, or null if cancelled.
 class LocationPickerPage extends StatefulWidget {
@@ -24,6 +31,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     _goToCurrentLocation();
   }
 
+  // FITUR: Ambil Lokasi Saat Ini (GPS)
+  // FUNGSI: Mengecek izin akses GPS perangkat, mendapatkan koordinat lokasi pengguna saat ini, dan memindahkan pusat peta (map) ke titik tersebut.
   Future<void> _goToCurrentLocation() async {
     try {
       setState(() => _isLoadingCurrentLocation = true);
@@ -69,6 +78,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
   }
 
+  // FITUR: Deteksi Pergeseran Peta
+  // FUNGSI: Memperbarui koordinat titik tengah (_selectedLocation) secara real-time saat pengguna menggeser peta.
   void _onMapPositionChanged(MapCamera camera, bool hasGesture) {
     setState(() {
       _selectedLocation = camera.center;
@@ -76,6 +87,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     });
   }
 
+  // FITUR: Event Selesai Menggeser Peta
+  // FUNGSI: Mendeteksi saat gesekan/pan pada peta berakhir untuk menghentikan animasi 'melayang' pada ikon pin di tengah layar.
   void _onMapEvent(MapEvent event) {
     if (event is MapEventMoveEnd) {
       setState(() => _isMapMoving = false);
@@ -97,7 +110,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       ),
       body: Stack(
         children: [
-          // Map
+          // FITUR: UI Peta Interaktif
+          // FUNGSI: Menampilkan komponen FlutterMap dengan TileLayer dari OpenStreetMap yang merender peta secara visual.
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -262,7 +276,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Send button
+                  // FITUR: Tombol Konfirmasi Lokasi
+                  // FUNGSI: Menutup halaman dan mengirimkan koordinat (LatLng) yang terakhir kali dipilih kembali ke halaman pemanggil (chat).
                   SizedBox(
                     width: double.infinity,
                     height: 48,

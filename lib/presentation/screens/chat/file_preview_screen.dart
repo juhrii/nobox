@@ -5,6 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart' as vt;
 
+// =====================================================================
+// FITUR: Layar Pratinjau File
+// FILE: lib/presentation/screens/chat/file_preview_screen.dart
+// FUNGSI: Menampilkan pratinjau media (foto, video, dokumen) secara
+//         full-screen sebelum file tersebut dikirim ke ruang obrolan.
+// =====================================================================
+
 /// Tipe file yang didukung oleh preview screen.
 enum FilePreviewType { photo, video, document }
 
@@ -71,7 +78,8 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     super.dispose();
   }
 
-  /// Generate video thumbnail from local file.
+  // FITUR: Generate Thumbnail Video
+  // FUNGSI: Menggunakan pustaka video_thumbnail untuk mengekstrak frame gambar pertama dari file video lokal agar bisa ditampilkan sebelum video diputar.
   Future<void> _loadVideoThumbnail() async {
     try {
       final thumbnailData = await vt.VideoThumbnail.thumbnailData(
@@ -94,8 +102,8 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     }
   }
 
-  /// Transition from Initial → Active: init controller and start playback.
-  /// Called only once when user taps the thumbnail play button.
+  // FITUR: Inisialisasi Player Video
+  // FUNGSI: Memulai instansiasi VideoPlayerController untuk membaca file video secara penuh saat pengguna menekan tombol play pertama kalinya.
   Future<void> _activateVideoPlayer() async {
     if (_videoActiveMode) return; // Already active
 
@@ -118,7 +126,8 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     }
   }
 
-  /// Toggle play/pause in Active mode.
+  // FITUR: Toggle Play/Pause Video
+  // FUNGSI: Mengganti status putar dan jeda pada video controller yang aktif.
   void _togglePlayPause() {
     if (_videoController == null || !_isVideoInitialized) return;
     if (_videoController?.value.isPlaying == true) {
@@ -128,7 +137,8 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     }
   }
 
-  /// Listener for position/duration/playing state updates.
+  // FITUR: Listener Status Video (Durasi & Posisi)
+  // FUNGSI: Memantau dan memperbarui UI berdasarkan posisi durasi video (progress bar) dan status 'isPlaying' secara real-time.
   void _onVideoUpdate() {
     if (!mounted || _videoController == null) return;
     final value = _videoController?.value;

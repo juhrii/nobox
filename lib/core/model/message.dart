@@ -1,9 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
+// =====================================================================
+// FITUR: Model Obrolan Utama (ChatModel)
+// FILE: lib/core/model/message.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Class utama UI untuk data chat/room yang ditampilkan di screen utama
+// =====================================================================
 class ChatModel {
   final String id;
-  final String contactId; // CtId — used by Inbox/Send and Inbox/Get
+  final String contactId; // CtId — digunakan oleh Inbox/Send dan Inbox/Get
   final String sender;
   final String lastMessage;
   final String time;
@@ -13,11 +19,11 @@ class ChatModel {
   final bool isFavorite;
   final bool isGroup;
   final bool isBlocked;
-  final String status; // "Resolved", "Assigned", "Unassigned"
+  final String status; // "Selesai", "Ditugaskan", "Belum Ditugaskan"
   final String agentName;
   final List<String> tags;
   final String? avatarUrl;
-  final String? lastMessageType; // "Sticker", "Unsupported Message", etc.
+  final String? lastMessageType; // "Sticker", "Pesan Tidak Didukung", dll.
   final bool needReply;
   final bool muteAiAgent;
   final String funnel;
@@ -66,6 +72,8 @@ class ChatModel {
     this.groupName = '',
   });
 
+  // FITUR: Copy With (ChatModel)
+  // FUNGSI: Meng-copy objek ChatModel untuk mempermudah perubahan state di provider
   ChatModel copyWith({
     String? id,
     String? contactId,
@@ -136,6 +144,12 @@ class ChatModel {
 enum MessageStatus { sent, delivered, read }
 enum MessageType { text, voice, image, video, document, sticker }
 
+// =====================================================================
+// FITUR: Model Pesan (Message)
+// FILE: lib/core/model/message.dart
+// BARIS AWAL: 165 (setelah komentar ini)
+// FUNGSI: Class utama untuk menampung satu gelembung pesan (teks, gambar, audio) di ruang chat
+// =====================================================================
 class Message {
   final String id;
   final String content;
@@ -146,13 +160,13 @@ class Message {
   final bool isSystemMessage;
   final MessageType messageType;
   final String? audioPath;
-  final int audioDuration; // in seconds
-  final String? imagePath;  // local file path
-  final String? imageUrl;   // remote URL from server
-  final String? videoUrl;   // remote video URL from server
-  final String? documentName; // original filename for document messages
-  final String? documentUrl;  // remote URL for document download
-  final int ack; // 1: pending, 2: sent, 3: delivered, 4: failed, 5: read
+  final int audioDuration; // dalam detik
+  final String? imagePath;  // path file lokal
+  final String? imageUrl;   // URL remote dari server
+  final String? videoUrl;   // URL video remote dari server
+  final String? documentName; // nama file asli untuk pesan dokumen
+  final String? documentUrl;  // URL remote untuk unduh dokumen
+  final int ack; // 1: pending, 2: terkirim, 3: diterima, 4: gagal, 5: dibaca
 
   Message({
     this.id = '',
@@ -185,26 +199,28 @@ class Message {
       final dt = DateTime.parse(timeString).toLocal();
       return "${dt.day.toString().padLeft(2, '0')} ${months[dt.month - 1]}, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
     } catch (_) {
-      return raw; // Return as-is if parsing fails
+      return raw; // Kembalikan apa adanya jika proses parse gagal
     }
   }
 
-  /// Check if a filename looks like an image
+  /// Cek apakah nama file terlihat seperti gambar
   static bool _isImageFile(String fileName) {
     final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].contains(ext);
   }
 
+  // FITUR: Parse Pesan dari JSON
+  // FUNGSI: Mengubah response JSON list messages API menjadi objek Message
   factory Message.fromJson(Map<String, dynamic> json, String currentUserEmail, {String? tenantId}) {
     final id = json['Id']?.toString() ?? '';
-    // ChatMessages/List uses Type: 6 for system messages, Type: 1/2 for regular messages
+    // ChatMessages/List menggunakan Type: 6 untuk pesan sistem, Type: 1/2 untuk pesan biasa
     final typeVal = json['Type']?.toString();
     final isSystem = json['IsSystemMessage'] == true || 
                      typeVal?.toLowerCase() == 'system' ||
                      typeVal == '6';
 
-    // Determine message content — ChatMessages/List uses 'Msg' field
-    // Handle both String and Map for 'Msg'
+    // Tentukan konten pesan — ChatMessages/List menggunakan field 'Msg'
+    // Tangani format String maupun Map untuk 'Msg'
     String content = '';
     final rawMsg = json['Msg'];
     if (rawMsg is String) {
@@ -215,15 +231,15 @@ class Message {
       content = json['Body']?.toString() ?? json['Message']?.toString() ?? json['message']?.toString() ?? json['Content']?.toString() ?? '';
     }
     
-    // System messages (Type: 6) have JSON in Msg like {"msg":"Site.Inbox.UnmuteBotByAgent",...}
-    // Parse it to show a readable label
+    // Pesan sistem (Type: 6) memiliki JSON di Msg seperti {"msg":"Site.Inbox.UnmuteBotByAgent",...}
+    // Parse untuk menampilkan label yang mudah dibaca
     if (isSystem && content.startsWith('{')) {
       try {
         final parsed = Map<String, dynamic>.from(
           content is Map ? content : (json['Msg'] is Map ? json['Msg'] : {}),
         );
         final msgKey = parsed['msg']?.toString() ?? '';
-        // Convert "Site.Inbox.UnmuteBotByAgent" → "Bot diaktifkan"
+        // Ubah "Site.Inbox.UnmuteBotByAgent" → "Bot diaktifkan"
         if (msgKey.contains('UnmuteBot')) {
           content = '🤖 Bot diaktifkan';
         } else if (msgKey.contains('MuteBot')) {
@@ -236,46 +252,46 @@ class Message {
           content = '📋 $msgKey';
         }
       } catch (_) {
-        // Keep original content if parsing fails
+        // Pertahankan konten asli jika proses parse gagal
       }
     }
 
-    // Determine if message is from "me" (the agent/user)
-    // ChatMessages/List: if AgentId is set, it's an agent message (isMe = true)
-    // Also check the older field names for backward compatibility
+    // Tentukan apakah pesan berasal dari "saya" (agen/pengguna)
+    // ChatMessages/List: jika AgentId ada, itu adalah pesan agen (isMe = true)
+    // Cek juga nama field lama untuk kompatibilitas mundur
     bool isMe = false;
     if (!isSystem) {
       if (json['AgentId'] != null) {
-        // AgentId is present → message was sent by an agent (us)
+        // AgentId ada → pesan dikirim oleh agen (kita)
         isMe = true;
       } else if (json['IsMe'] == true) {
         isMe = true;
       } else {
-        // Fallback: check email match
+        // Fallback: cek kecocokan email
         final senderId = json['SenderId']?.toString() ?? json['FromId']?.toString() ?? json['sender_email'] ?? '';
         isMe = senderId == currentUserEmail;
       }
     }
 
-    // Parse media files — check Files array first (any Type), then File field, then fallback by Type
+    // Parse file media — cek array Files terlebih dahulu, lalu field File, lalu fallback berdasarkan Type
     MessageType msgType = MessageType.text;
     String? imgUrl;
     String? audioPath;
     String? videoUrl;
     
-    // Helper to check if a filename is a video
+    // Helper untuk mengecek apakah nama file adalah video
     bool isVideoFile(String fileName) {
       final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
       return ['mp4', 'avi', 'mov', 'mkv', '3gp', 'webm', 'ogg_video'].contains(ext);
     }
     
-    // Helper to check if a filename is an audio file
+    // Helper untuk mengecek apakah nama file adalah file audio
     bool isAudioFile(String fileName) {
       final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
       return ['mp3', 'wav', 'ogg', 'opus', 'm4a', 'aac', 'weba', 'amr'].contains(ext);
     }
 
-    // Debug: log raw JSON for media-related messages
+    // Debug: catat raw JSON untuk pesan terkait media
     if (typeVal == '2' || typeVal == '16' || typeVal == '3' || typeVal == '4' ||
         json['Files'] != null || json['File'] != null) {
       assert(() {
@@ -284,11 +300,11 @@ class Message {
       }());
     }
 
-    // Helper to extract file path from Files array or File field
+    // Helper untuk mengekstrak path file dari array Files atau field File
     String extractFilePath(dynamic fileData) {
       String filePath = fileData.toString();
       
-      // Fix for backend serialization bug where it sends the class name instead of a file
+      // Perbaikan untuk bug serialisasi backend yang mengirimkan nama class alih-alih file
       if (filePath.contains('NoboxWhatsapp') || filePath.contains('MessageResponse')) {
         return '';
       }
@@ -304,7 +320,7 @@ class Message {
         } catch (_) {}
       }
       
-      // Clean up MIME types or query params (e.g., .ogg; codecs=opus)
+      // Bersihkan tipe MIME atau parameter query (misal: .ogg; codecs=opus)
       if (filePath.contains(';')) {
         filePath = filePath.split(';').first;
       }
@@ -314,7 +330,7 @@ class Message {
       return filePath.trim();
     }
 
-    // Helper to extract OriginalName from file data (for type detection fallback)
+    // Helper untuk mengekstrak OriginalName dari data file (untuk fallback deteksi tipe)
     String extractOriginalName(dynamic fileData) {
       if (fileData is Map) {
         return fileData['OriginalName']?.toString() ?? '';
@@ -334,11 +350,17 @@ class Message {
       final firstFile = (json['Files'] as List).first;
       final filePath = extractFilePath(firstFile);
       final originalName = extractOriginalName(firstFile);
-      // Sticker detection FIRST (typeVal == '16') — before extension checks
+      // Deteksi stiker PERTAMA (typeVal == '16') — sebelum pengecekan ekstensi
       if (typeVal == '16' && filePath.isNotEmpty) {
         msgType = MessageType.sticker;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
         content = '🌟 Sticker';
+      } else if (typeVal == '5') {
+        // Jika dari API diset sebagai Dokumen (5), paksa sebagai dokumen meskipun ekstensinya .jpg!
+        msgType = MessageType.document;
+        docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
+        docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        content = '📄 $docName';
       } else if (isAudioFile(filePath) || isAudioFile(originalName)) {
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -352,7 +374,7 @@ class Message {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '2') {
-        // Fallback by API Type when extension is unrecognized
+        // Fallback berdasarkan API Type saat ekstensi tidak dikenali
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '4') {
@@ -365,7 +387,7 @@ class Message {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (filePath.isNotEmpty) {
-        // Unrecognized file type → treat as document
+        // Tipe file tidak dikenali → anggap sebagai dokumen
         msgType = MessageType.document;
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
         docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -379,6 +401,11 @@ class Message {
         msgType = MessageType.sticker;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
         content = '🌟 Sticker';
+      } else if (typeVal == '5') {
+        msgType = MessageType.document;
+        docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
+        docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        content = '📄 $docName';
       } else if (isAudioFile(filePath) || isAudioFile(originalName)) {
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -421,7 +448,7 @@ class Message {
     if (msgType == MessageType.image && content.trim().isEmpty) {
       content = '📷 Photo';
     }
-
+    
     // Format time — parse ISO timestamp to readable format
     final rawTime = json['In']?.toString() ?? json['timestamp']?.toString() ?? json['CreatedAt']?.toString() ?? '';
     final formattedTime = rawTime.contains('T') ? _formatIsoTime(rawTime) : rawTime;

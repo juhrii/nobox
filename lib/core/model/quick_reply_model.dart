@@ -1,5 +1,11 @@
 import 'dart:convert';
 
+// =====================================================================
+// FITUR: Model Template Balasan Cepat (Quick Reply)
+// FILE: lib/core/model/quick_reply_model.dart
+// BARIS AWAL: 7 (setelah komentar ini)
+// FUNGSI: Class model untuk menampung data template balasan cepat (command & content)
+// =====================================================================
 class QuickReplyTemplate {
   final String id;
   final String command;
@@ -23,14 +29,16 @@ class QuickReplyTemplate {
     required this.updatedBy,
   });
 
+  // FITUR: Parse dari JSON
+  // FUNGSI: Mengubah JSON API menjadi objek QuickReplyTemplate
   factory QuickReplyTemplate.fromJson(Map<String, dynamic> json) {
-    // Parse files from JSON string
+    // Parse data files dari string JSON
     List<String> fileList = [];
     try {
       if (json['Files'] != null && json['Files'] is String) {
         final filesStr = json['Files'] as String;
         if (filesStr.isNotEmpty && filesStr != '[]') {
-          // Parse JSON array string
+          // Parse string format array JSON
           final dynamic parsed = jsonDecode(filesStr);
           if (parsed is List) {
             fileList = parsed.map((e) => e.toString()).toList();
@@ -38,7 +46,7 @@ class QuickReplyTemplate {
         }
       }
     } catch (e) {
-      print('Error parsing files for template ${json['Cmd']}: $e');
+      print('Gagal melakukan parse files untuk template ${json['Cmd']}: $e');
     }
 
     return QuickReplyTemplate(
@@ -58,6 +66,8 @@ class QuickReplyTemplate {
     );
   }
 
+  // FITUR: Convert ke JSON
+  // FUNGSI: Mengubah objek ini menjadi JSON map
   Map<String, dynamic> toJson() {
     return {
       'Id': id,
@@ -77,3 +87,4 @@ class QuickReplyTemplate {
     return 'QuickReplyTemplate(id: $id, command: $command, content: $content)';
   }
 }
+

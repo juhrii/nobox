@@ -1,3 +1,9 @@
+// =====================================================================
+// FITUR: Base Model Data Filter
+// FILE: lib/core/model/filter_data_item.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Class dasar untuk data yang akan ditampilkan di dalam dropdown/list filter (Id & Name)
+// =====================================================================
 class FilterDataItem {
   final String id;
   final String name;
@@ -5,6 +11,10 @@ class FilterDataItem {
   FilterDataItem({required this.id, required this.name});
 }
 
+// =====================================================================
+// FITUR: Model Agen (Human Agent)
+// FUNGSI: Turunan dari FilterDataItem, menampung id & nama Agen
+// =====================================================================
 class HumanAgentItem extends FilterDataItem {
   HumanAgentItem({required super.id, required super.name});
   
@@ -16,6 +26,10 @@ class HumanAgentItem extends FilterDataItem {
   }
 }
 
+// =====================================================================
+// FITUR: Model Deal (Transaksi)
+// FUNGSI: Turunan dari FilterDataItem, menampung id & nama Deal
+// =====================================================================
 class DealItem extends FilterDataItem {
   DealItem({required super.id, required super.name});
   
@@ -27,6 +41,10 @@ class DealItem extends FilterDataItem {
   }
 }
 
+// =====================================================================
+// FITUR: Model Campaign (Kampanye)
+// FUNGSI: Turunan dari FilterDataItem, menampung id & nama Campaign
+// =====================================================================
 class CampaignItem extends FilterDataItem {
   CampaignItem({required super.id, required super.name});
   
@@ -38,6 +56,10 @@ class CampaignItem extends FilterDataItem {
   }
 }
 
+// =====================================================================
+// FITUR: Model Link Item
+// FUNGSI: Turunan dari FilterDataItem, menampung id & nama Tautan/Link
+// =====================================================================
 class LinkItem extends FilterDataItem {
   LinkItem({required super.id, required super.name});
   
@@ -49,6 +71,10 @@ class LinkItem extends FilterDataItem {
   }
 }
 
+// =====================================================================
+// FITUR: Model Contact Item
+// FUNGSI: Turunan dari FilterDataItem, menampung id & nama Kontak
+// =====================================================================
 class ContactItem extends FilterDataItem {
   ContactItem({required super.id, required super.name});
   
@@ -60,6 +86,10 @@ class ContactItem extends FilterDataItem {
   }
 }
 
+// =====================================================================
+// FITUR: Model Group Item
+// FUNGSI: Turunan dari FilterDataItem, menampung id & nama Group
+// =====================================================================
 class GroupItem extends FilterDataItem {
   GroupItem({required super.id, required super.name});
   
@@ -71,6 +101,10 @@ class GroupItem extends FilterDataItem {
   }
 }
 
+// =====================================================================
+// FITUR: Model Funnel Item
+// FUNGSI: Turunan dari FilterDataItem, menampung id & nama Funnel
+// =====================================================================
 class FunnelItem extends FilterDataItem {
   FunnelItem({required super.id, required super.name});
   
@@ -82,6 +116,10 @@ class FunnelItem extends FilterDataItem {
   }
 }
 
+// =====================================================================
+// FITUR: Model Tag Item
+// FUNGSI: Turunan dari FilterDataItem, menampung id & nama Tag
+// =====================================================================
 class TagItem extends FilterDataItem {
   TagItem({required super.id, required super.name});
   

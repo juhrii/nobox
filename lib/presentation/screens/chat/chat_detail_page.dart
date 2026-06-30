@@ -37,6 +37,14 @@ import '../../widgets/voice_recording_bottom_sheet.dart';
 import '../../widgets/message_shimmer_widget.dart';
 import 'file_preview_screen.dart';
 
+// =====================================================================
+// FITUR: Halaman Detail Chat (Room)
+// FILE: lib/presentation/screens/chat/chat_detail_page.dart
+// FUNGSI: Halaman utama untuk satu ruang obrolan. Menangani pesan real-time
+//         via SignalR, fallback sinkronisasi, attachment media, dan UI
+//         interaktif chat bubble.
+// =====================================================================
+
 class ChatDetailPage extends StatefulWidget {
   final ChatModel? chat;
   final bool isReadOnly;
@@ -50,6 +58,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   late ChatModel chat;
   final TextEditingController _messageController = TextEditingController();
   final ChatService _chatService = ChatService();
+  // FITUR: State Pesan Utama
+  // FUNGSI: Menyimpan data daftar pesan (_messages) dan state loading saat memuat histori.
   List<Message> _messages = [];
   bool _isLoadingMessages = true;
   Message? _repliedMessage;
@@ -61,14 +71,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   bool _showAttachmentPanel = false;
   final FocusNode _focusNode = FocusNode();
 
-  // ── Message Selection State ──
+  // FITUR: Mode Seleksi Pesan (Multiple Selection)
+  // FUNGSI: Digunakan saat pengguna menahan pesan untuk memilih beberapa pesan (misal untuk forward/delete).
   bool _isSelectionMode = false;
   final Set<int> _selectedMessageIndices = {};
 
   bool _isInit = false;
   String _archivedDateLabel = '';
 
-  // ── Quick Reply State ──
+  // FITUR: Quick Reply (Balasan Cepat)
+  // FUNGSI: Menyimpan template balasan cepat (dipicu dengan karakter '/') dan cache template dari server.
   bool _isShowingQuickReply = false;
   List<QuickReplyTemplate> _masterTemplates = [];
   List<QuickReplyTemplate> _quickReplyTemplates = [];
@@ -77,7 +89,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   Timer? _quickReplyDebounce;
   bool _isSettingQuickReply = false;
 
-  // ── Message Pagination State ──
+  // FITUR: Paginasi Pesan (Infinite Scroll ke atas)
+  // FUNGSI: Mengelola pengambilan pesan terdahulu berdasarkan batas (_messagePageSize) saat menggulir.
   static const int _messagePageSize = 50;
   int _messageSkip = 0;
   bool _isLoadingOlderMessages = false;
@@ -249,6 +262,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
   }
 
+  // FITUR: Tampilan List Quick Reply
+  // FUNGSI: Merender daftar popup yang berisi template balasan cepat sesuai dengan filter pencarian dari input text.
   Widget _buildQuickReplyList(bool isDark) {
     return Container(
       key: const ValueKey('quickReplyList'),
@@ -376,6 +391,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   String _debugApiState = '';
 
+  // FITUR: Memuat Daftar Pesan (API Call)
+  // FUNGSI: Mengambil daftar pesan dari backend untuk ruang chat aktif (menggunakan GraphQL/REST) atau arsip (REST), kemudian di-parse ke model Message.
   void _loadInitialMessages() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final currentUserEmail = authProvider.currentUser ?? '';
@@ -519,9 +536,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
-  /// Starts a silent background polling to update acks if there are pending messages (ack < 3).
-  /// This is necessary because some channels (like WhatsApp) might not trigger push events for acks.
-  void _startChatSyncPolling() {
+  // FITUR: Sinkronisasi Pesan Latar Belakang (Ack Polling)
+  // FUNGSI: Memulai proses polling interval untuk memperbarui status baca/terkirim (ack) pada pesan, jika koneksi real-time tidak memadai.
+    // FITUR 4: Timer polling untuk memperbarui status centang di layar secara berkala.
+void _startChatSyncPolling() {
     debugPrint('ChatSync: Started polling timer.');
     _ackPollTimer?.cancel();
     _ackPollTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
@@ -543,32 +561,36 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           bool hasNewMessages = false;
           final currentIds = _messages.map((m) => m.id).where((id) => id.isNotEmpty).toSet();
           
-          for (final msg in newMessages) {
-            // 1. New message not in local list
-            if (msg.id.isNotEmpty && !currentIds.contains(msg.id)) {
-               _messages.add(msg);
-               hasNewMessages = true;
-            } 
-            // 2. Existing message, update ack
-            else if (msg.id.isNotEmpty) {
-               final existingIdx = _messages.indexWhere((m) => m.id == msg.id);
-               if (existingIdx != -1) {
-                 final oldMsg = _messages[existingIdx];
-                 if (msg.ack > oldMsg.ack) {
-                   _messages[existingIdx] = _messages[existingIdx].copyWith(
-                     ack: msg.ack,
-                     status: msg.ack >= 3 ? MessageStatus.delivered : MessageStatus.sent,
-                   );
-                 }
-               }
-            }
-          }
-
-          // 3. Match locally sent messages (without ID) to server messages
+          // 1. Match locally sent messages (without ID) to server messages FIRST
           for (var i = 0; i < _messages.length; i++) {
              final oldMsg = _messages[i];
              if (oldMsg.isMe && oldMsg.id.isEmpty) {
-                 final newMsgIdx = newMessages.indexWhere((m) => m.content.trim() == oldMsg.content.trim() && m.isMe);
+                 final newMsgIdx = newMessages.indexWhere((m) {
+                   if (!m.isMe) return false; // Harus sama-sama dari pengirim (isMe)
+                   // Coba cocokkan berdasarkan konten teks persis
+                   if (m.content.trim() == oldMsg.content.trim()) return true;
+                   
+                   // Coba cocokkan berdasarkan nama file lampiran (gambar/dokumen)
+                   if (oldMsg.messageType == MessageType.document && oldMsg.documentName != null) {
+                     if (m.imageUrl?.contains(oldMsg.documentName!) == true || 
+                         m.documentUrl?.contains(oldMsg.documentName!) == true ||
+                         m.content.contains(oldMsg.documentName!)) {
+                       return true;
+                     }
+                   } else if (oldMsg.messageType == MessageType.image && oldMsg.imagePath != null) {
+                     final localFileName = oldMsg.imagePath!.split('/').last;
+                     if (m.imageUrl?.contains(localFileName) == true || m.content.contains(localFileName)) {
+                       return true;
+                     }
+                   } else if (oldMsg.messageType == MessageType.voice && oldMsg.audioPath != null) {
+                     final localFileName = oldMsg.audioPath!.split('/').last;
+                     if (m.audioPath?.contains(localFileName) == true || m.content.contains(localFileName)) {
+                       return true;
+                     }
+                   }
+                   return false;
+                 });
+                 
                  if (newMsgIdx != -1) {
                     final updatedMsg = newMessages[newMsgIdx];
                     if (updatedMsg.id.isNotEmpty) {
@@ -580,6 +602,26 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     }
                  }
              }
+          }
+
+          // 2. Add or update messages from server
+          final updatedCurrentIds = _messages.map((m) => m.id).where((id) => id.isNotEmpty).toSet();
+          for (final msg in newMessages) {
+            if (msg.id.isNotEmpty && !updatedCurrentIds.contains(msg.id)) {
+               _messages.add(msg);
+               hasNewMessages = true;
+            } else if (msg.id.isNotEmpty) {
+               final existingIdx = _messages.indexWhere((m) => m.id == msg.id);
+               if (existingIdx != -1) {
+                 final oldMsg = _messages[existingIdx];
+                 if (msg.ack > oldMsg.ack) {
+                   _messages[existingIdx] = _messages[existingIdx].copyWith(
+                     ack: msg.ack,
+                     status: msg.ack >= 3 ? MessageStatus.delivered : MessageStatus.sent,
+                   );
+                 }
+               }
+            }
           }
           
           if (hasNewMessages) {
@@ -599,7 +641,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
   }
 
-  /// Subscribe to SignalR for real-time incoming messages
+  // FITUR: Koneksi Pesan Real-time (SignalR)
+  // FUNGSI: Mendaftarkan listener WebSocket (SignalR) untuk menerima pesan masuk secara instan ke dalam UI, dan mengirim status "sudah dibaca".
   void _subscribeToSignalR() {
     final signalR = SignalRService();
 
@@ -702,6 +745,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     return "${dt.day.toString().padLeft(2, '0')} ${months[dt.month - 1]}, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
   }
 
+  // FITUR: Scroll Otomatis ke Bawah
+  // FUNGSI: Menganimasi daftar pesan secara instan ke pesan yang paling baru saat ada pesan masuk atau saat form dibuka.
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       Future.delayed(const Duration(milliseconds: 100), () {
@@ -715,7 +760,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
-  /// Load older messages when user scrolls to top of chat
+  // FITUR: Memuat Pesan Terdahulu (Pagination)
+  // FUNGSI: Meminta data histori pesan yang lebih lama saat pengguna menggulir obrolan ke paling atas.
   Future<void> _loadOlderMessages() async {
     if (_isLoadingOlderMessages || !_hasMoreMessages || chat.isArchived) return;
 
@@ -757,6 +803,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
+  // FITUR: Inisialisasi State Obrolan
+  // FUNGSI: Mengonfigurasi parameter ruangan obrolan saat halaman pertama kali dibuka, serta memicu pemuatan pesan awal dan listener WebSocket.
   void _initializeChat() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.chat != null) {
@@ -772,6 +820,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
   }
 
+  // FITUR: Hapus Semua Pesan (Clear Chat Lokal)
+  // FUNGSI: Menampilkan dialog konfirmasi dan mengosongkan state pesan saat ini secara lokal di perangkat.
   void _showClearConfirmationDialog() {
     showDialog(
       context: context,
@@ -800,6 +850,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
+  // FITUR: Kustomisasi Latar Belakang Chat (Wallpaper/Warna)
+  // FUNGSI: Menampilkan modal bagi pengguna untuk mengubah tampilan latar belakang ruangan obrolan (warna solid atau gambar galeri).
   void _showBackgroundPicker() {
     final settings = Provider.of<ChatSettingsProvider>(context, listen: false);
     final colors = [
@@ -908,9 +960,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
+  bool _isSending = false;
+
+  // FITUR: Kirim Pesan Teks (REST API / SignalR)
+  // FUNGSI: Mengirimkan teks yang diinputkan pengguna ke server. Menggunakan SignalR khusus untuk Telegram (karena REST API backend memiliki bug ExtId untuk Telegram), dan REST API standar untuk channel lainnya.
   void _sendMessage() async {
+    if (_isSending) return; // Mencegah pengiriman ganda (double-tap)
+    
     final content = _messageController.text.trim();
     if (content.isEmpty) return;
+
+    setState(() {
+      _isSending = true;
+    });
 
     final now = DateTime.now();
     final timeString = _formatFullTime(now);
@@ -935,14 +997,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     final messageIndex = _messages.indexOf(newMessage);
 
     // Check if it's Telegram (channel type or chId)
-    final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram');
+    final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
     bool isSuccess = false;
     String? errorMsg;
 
     if (isTelegram) {
-      // Use SignalR for Telegram text message
+      // Gunakan SignalR untuk Telegram (karena backend API Inbox/Send crash jika ExtId kosong)
       isSuccess = await chatProvider.sendMessageViaSignalR(
         chat: chat,
         type: "1", // 1 is for Text
@@ -950,7 +1012,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       );
       if (!isSuccess) errorMsg = 'Failed to send via SignalR';
     } else {
-      // Use REST API for other channels
+      // Gunakan REST API untuk channel lain
       final response = await _chatService.sendMessage(
         MessageRequest(
           receiver: chat.id,
@@ -961,6 +1023,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           extId: chat.ctRealId,
         ),
       );
+      
       isSuccess = !response.isError;
       errorMsg = response.error;
     }
@@ -972,6 +1035,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             status: MessageStatus.delivered,
             ack: 2,
           );
+          _isSending = false;
         });
         _startChatSyncPolling();
       } else {
@@ -979,6 +1043,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           _messages[messageIndex] = _messages[messageIndex].copyWith(
             ack: 4,
           );
+          _isSending = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -987,13 +1052,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           ),
         );
       }
+    } else if (mounted) {
+      setState(() {
+        _isSending = false;
+      });
     }
   }
+
 
   // ─────────────────────────────────────────────
   //  ATTACHMENT PANEL TOGGLE
   // ─────────────────────────────────────────────
 
+  // FITUR: Toggle Panel Lampiran
+  // FUNGSI: Membuka atau menutup panel menu lampiran (attachment) yang berisi opsi Kamera, Galeri, Video, Lokasi, dll.
   void _toggleAttachmentPanel() {
     setState(() {
       _showAttachmentPanel = !_showAttachmentPanel;
@@ -1004,6 +1076,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //  PICK & SEND IMAGE FROM CAMERA
   // ─────────────────────────────────────────────
 
+  // FITUR: Ambil Foto/Kamera & Pratinjau
+  // FUNGSI: Membuka antarmuka kamera bawaan perangkat untuk mengambil foto, lalu membuka layar pratinjau sebelum dikonfirmasi.
   Future<void> _pickAndSendFromCamera() async {
     setState(() => _showAttachmentPanel = false);
     final picker = ImagePicker();
@@ -1037,6 +1111,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //  PICK & SEND VIDEO
   // ─────────────────────────────────────────────
 
+  // FITUR: Pilih Video Galeri & Pratinjau
+  // FUNGSI: Membuka pemilih file khusus video, menetapkan batasan durasi (5 menit), dan membuka layar pratinjau sebelum dikirim.
   Future<void> _pickAndSendVideo() async {
     setState(() => _showAttachmentPanel = false);
     final picker = ImagePicker();
@@ -1086,8 +1162,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       chat.id,
       pickedFile.path,
       accountId: chat.accountId,
-      channelId: chat.chId,
+      channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
       contactId: chat.contactId,
+      link: chat.link,
     );
 
     if (mounted && messageIndex < _messages.length) {
@@ -1119,6 +1196,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //  SEND PICKED IMAGE HELPER
   // ─────────────────────────────────────────────
 
+  // FITUR: Mengirim Media Foto/Video (API Multipart)
+  // FUNGSI: Mengunggah file (foto/video) menggunakan FormData (multipart/form-data) ke server, dan memperbarui status UI.
   Future<void> _sendPickedImage(XFile pickedFile) async {
     final now = DateTime.now();
     final timeString = _formatFullTime(now);
@@ -1145,8 +1224,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       chat.id,
       pickedFile.path,
       accountId: chat.accountId,
-      channelId: chat.chId,
+      channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
       contactId: chat.contactId,
+      link: chat.link,
     );
 
     if (mounted && messageIndex < _messages.length) {
@@ -1178,6 +1258,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //  PICK & SEND DOCUMENT
   // ─────────────────────────────────────────────
 
+  // FITUR: Pilih Dokumen & Pratinjau
+  // FUNGSI: Menggunakan FilePicker platform-native untuk memilih file sembarang jenis, lalu meneruskannya ke layar pratinjau.
   Future<void> _pickAndSendDocument() async {
     setState(() => _showAttachmentPanel = false);
 
@@ -1230,8 +1312,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         chat.id,
         file.path!,
         accountId: chat.accountId,
-        channelId: chat.chId,
+        channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
         contactId: chat.contactId,
+        link: chat.link,
+        forceDocument: true,
       );
 
       if (mounted && messageIndex < _messages.length) {
@@ -1273,6 +1357,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //  SHARE LOCATION
   // ─────────────────────────────────────────────
 
+  // FITUR: Bagikan Lokasi (Maps)
+  // FUNGSI: Membuka halaman LocationPickerPage untuk memilih koordinat, lalu mengirimkannya sebagai tautan Google Maps ke ruang obrolan.
   Future<void> _shareLocation() async {
     setState(() => _showAttachmentPanel = false);
 
@@ -1348,6 +1434,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //  PICK & SEND IMAGE FROM GALLERY
   // ─────────────────────────────────────────────
 
+  // FITUR: Pilih Gambar Galeri & Pratinjau
+  // FUNGSI: Membuka pemilih gambar bawaan perangkat dari galeri, dan menampilkannya di halaman pratinjau sebelum dikirim.
   Future<void> _pickAndSendImage() async {
     setState(() => _showAttachmentPanel = false);
     final picker = ImagePicker();
@@ -1398,8 +1486,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       chat.id,
       pickedFile.path,
       accountId: chat.accountId,
-      channelId: chat.chId,
+      channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
       contactId: chat.contactId,
+      link: chat.link,
     );
 
     if (mounted && messageIndex < _messages.length) {
@@ -1435,6 +1524,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //  VOICE RECORDING
   // ─────────────────────────────────────────────
 
+  // FITUR: Mulai Perekaman Suara (Voice Note)
+  // FUNGSI: Mengecek izin mikrofon dan memulai proses perekaman audio langsung menggunakan library flutter_record.
   Future<void> _startRecording() async {
     try {
       if (await _audioRecorder.hasPermission()) {
@@ -1479,6 +1570,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
+  // FITUR: Kontrol Perekaman Suara
+  // FUNGSI: Memberhentikan sementara proses perekaman audio tanpa menyimpannya.
   Future<void> _pauseRecording() async {
     try {
       await _audioRecorder.pause();
@@ -1520,6 +1613,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
+  // FITUR: Kirim Voice Note (Audio API)
+  // FUNGSI: Mengunggah file audio yang telah direkam ke server dan menambahkannya ke daftar pesan sebagai lampiran suara.
   Future<void> _sendVoiceNote(String path, int duration) async {
     try {
       final now = DateTime.now();
@@ -1527,7 +1622,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       // Add voice message to chat immediately (with 'sent' status = uploading)
       final voiceMessage = Message(
-        content: '🎤 Voice message',
+        content: '',
         isMe: true,
         time: timeString,
         status: MessageStatus.sent,
@@ -1547,8 +1642,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         chat.id,
         path,
         accountId: chat.accountId,
-        channelId: chat.chId,
+        channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
         contactId: chat.contactId,
+        link: chat.link,
       );
 
       if (mounted && messageIndex < _messages.length) {
@@ -1611,6 +1707,8 @@ if (!response.isError) {
     }
   }
 
+  // FITUR: Menampilkan Modal Perekaman Suara
+  // FUNGSI: Membuka bottom sheet khusus yang berisi UI untuk merekam suara (durasi, gelombang suara visual, tombol pause/stop/delete).
   void _showVoiceBottomSheet() async {
     // Start recording first
     await _startRecording();
@@ -1637,6 +1735,8 @@ if (!response.isError) {
     );
   }
 
+  // FITUR: Memutar Audio (Voice Note Player)
+  // FUNGSI: Mengontrol pemutaran pesan suara (memutar, jeda, atau berpindah dari satu pesan suara ke pesan suara lainnya).
   Future<void> _togglePlayback(String path) async {
     try {
       final isUrl = path.startsWith('http');
@@ -1681,6 +1781,8 @@ if (!response.isError) {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  // FITUR: Emoji Keyboard Custom
+  // FUNGSI: Menampilkan atau menyembunyikan panel emoji bawaan flutter, mengambil alih fokus dari keyboard sistem.
   void _toggleEmojiPicker() {
     if (_showEmojiPicker) {
       setState(() => _showEmojiPicker = false);
@@ -1709,6 +1811,8 @@ if (!response.isError) {
   //  BUILD
   // ─────────────────────────────────────────────
 
+  // FITUR: Merender Antarmuka Halaman Obrolan Utama
+  // FUNGSI: Titik masuk utama untuk membangun UI Scaffold, AppBar (normal atau seleksi), Daftar Pesan, dan Area Input (termasuk banner jika diblokir/diarsipkan).
   @override
   Widget build(BuildContext context) {
     final chatProvider = Provider.of<ChatProvider>(context);
@@ -1829,6 +1933,8 @@ if (!response.isError) {
   //  RESTORE ARCHIVED DIALOG
   // ─────────────────────────────────────────────
 
+  // FITUR: Dialog Konfirmasi Buka Arsip
+  // FUNGSI: Menampilkan popup konfirmasi untuk mengeluarkan obrolan ini dari folder arsip (unarchive).
   void _showRestoreArchivedDialog() {
     showDialog(
       context: context,
@@ -1890,6 +1996,8 @@ if (!response.isError) {
   //  ARCHIVE CONVERSATION (from popup menu)
   // ─────────────────────────────────────────────
 
+  // FITUR: Memproses Arsipkan Obrolan
+  // FUNGSI: Menampilkan popup konfirmasi dan mengeksekusi API untuk memasukkan obrolan saat ini ke dalam daftar arsip.
   void _handleArchiveConversation() {
     showDialog(
       context: context,

@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../app_config.dart';
 
-/// Mengelola Background Service native Android untuk menjaga koneksi SignalR
-/// tetap hidup saat aplikasi di-minimize.
-///
-/// Berkomunikasi dengan SignalRBackgroundService.kt via MethodChannel.
+// =====================================================================
+// FITUR: Pengelola Layanan Latar Belakang (Background Service)
+// FILE: lib/core/services/background_service_manager.dart
+// BARIS AWAL: 5 (setelah komentar ini)
+// FUNGSI: Mengelola Background Service native Android untuk menjaga koneksi SignalR
+//         tetap hidup saat aplikasi di-minimize. Berkomunikasi dengan SignalRBackgroundService.kt via MethodChannel.
+// =====================================================================
 class BackgroundServiceManager {
   static const _channel = MethodChannel('ai.nobox.android/background_service');
   static bool _isRunning = false;

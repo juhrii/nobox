@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 
+// =====================================================================
+// FITUR: Tema Aplikasi (Warna)
+// FILE: lib/core/theme/app_theme.dart
+// BARIS AWAL: 6 (setelah komentar ini)
+// FUNGSI: Menyimpan daftar konstanta warna utama yang digunakan di seluruh aplikasi (Dark Mode / Light Mode).
+// =====================================================================
 class AppTheme {
   static const Color primaryColor = Color(0xFF3B82F6);
   static const Color darkBackground = Color(0xFF071222);

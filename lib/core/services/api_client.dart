@@ -4,6 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../app_config.dart';
 
+// =====================================================================
+// FITUR: Klien API (Network)
+// FILE: lib/core/services/api_client.dart
+// BARIS AWAL: 13 (setelah komentar ini)
+// FUNGSI: Mengelola koneksi jaringan (HTTP requests), pengaturan token otorisasi, dan logika re-login diam-diam (silent re-login) jika token kedaluwarsa.
+// =====================================================================
 class ApiClient {
   late Dio _dio;
   String? _token;
@@ -36,12 +42,12 @@ class ApiClient {
       ),
     );
 
-    // Add interceptors for logging, auth, and silent re-login
+    // Tambahkan interceptors untuk logging, autentikasi, dan silent re-login
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         debugPrint('ApiClient: ${options.method} ${options.path}');
         
-        // Failsafe: load token from secure storage if not in memory
+        // Pengamanan (Failsafe): muat token dari secure storage jika tidak ada di memori
         if (_token == null) {
           const secureStorage = FlutterSecureStorage();
           _token = await secureStorage.read(key: AppConfig.tokenKey);
@@ -98,8 +104,8 @@ class ApiClient {
       },
     ));
 
-    // Only log request/response bodies in debug mode to avoid
-    // memory waste on large payloads (e.g. base64 images) in production.
+    // Hanya catat log request/response di mode debug untuk menghindari
+    // pemborosan memori pada payload besar (misal gambar base64) di tahap produksi.
     if (!kReleaseMode) {
       _dio.interceptors.add(LogInterceptor(
         requestBody: true,

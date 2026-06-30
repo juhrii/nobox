@@ -7,6 +7,13 @@ import '../../../core/theme/app_theme.dart';
 import '../../widgets/channel_icon.dart';
 import 'chat_detail_page.dart';
 
+// =====================================================================
+// FITUR: Riwayat Percakapan (History)
+// FILE: lib/presentation/screens/chat/conversation_history_page.dart
+// FUNGSI: Menampilkan histori obrolan atau sesi-sesi sebelumnya dengan 
+//         kontak tertentu dari berbagai channel (jika digabungkan).
+// =====================================================================
+
 class ConversationHistoryPage extends StatefulWidget {
   final String contactId;
   final String contactName;
@@ -35,6 +42,8 @@ class _ConversationHistoryPageState extends State<ConversationHistoryPage> {
     _loadConversationHistory();
   }
 
+  // FITUR: Memuat Riwayat Percakapan (API Call)
+  // FUNGSI: Mengambil data daftar sesi obrolan (history) dari server berdasarkan ID kontak yang saat ini sedang dibuka.
   Future<void> _loadConversationHistory() async {
     setState(() {
       _isLoading = true;
@@ -60,6 +69,8 @@ class _ConversationHistoryPageState extends State<ConversationHistoryPage> {
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
+  // FITUR: Format Waktu Relatif
+  // FUNGSI: Mengonversi format waktu standar UTC dari server menjadi string ramah pengguna (contoh: "10:30", "Yesterday", "Mon").
   String _formatTime(String rawTime) {
     if (rawTime.isEmpty) return '';
     try {
@@ -123,6 +134,8 @@ class _ConversationHistoryPageState extends State<ConversationHistoryPage> {
     );
   }
 
+  // FITUR: Tampilan Kondisional (State Management UI)
+  // FUNGSI: Me-render tampilan yang berbeda berdasarkan status data (sedang loading, terjadi error, daftar kosong, atau berhasil memuat data).
   Widget _buildBody(bool isDarkMode) {
     // 1. Loading State
     if (_isLoading) {

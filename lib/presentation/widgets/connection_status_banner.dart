@@ -2,9 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/services/signalr_service.dart';
 
-/// Displays a banner when connection is lost, with auto-reconnect.
-/// Only shows AFTER at least one successful connection (avoids showing
-/// on first startup when SignalR hasn't connected yet).
+// =====================================================================
+// FITUR: Banner Status Koneksi
+// FILE: lib/presentation/widgets/connection_status_banner.dart
+// BARIS AWAL: 9 (setelah komentar ini)
+// FUNGSI: Menampilkan peringatan (banner) di atas layar jika koneksi WebSocket terputus, 
+//         dilengkapi fitur auto-reconnect (menghubungkan ulang otomatis).
+// =====================================================================
 class ConnectionStatusBanner extends StatefulWidget {
   const ConnectionStatusBanner({super.key});
 
