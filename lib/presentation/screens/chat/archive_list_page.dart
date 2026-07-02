@@ -94,6 +94,7 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
                     onPressed: () async {
                       Navigator.pop(ctx);
                       for (var id in _selectedChats) {
+                        //toggleArchive() digunakan untuk mengembalikan obrolan yang diarsipkan ke daftar obrolan utama
                         await chatProvider.toggleArchive(id);
                       }
                       if (mounted) {
@@ -297,8 +298,21 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
         ],
       );
     }
+    String displayMessage = chat.lastMessage;
+    if (displayMessage.startsWith('{') && displayMessage.contains('"Filename"')) {
+      if (displayMessage.contains('"Ptt":true') || displayMessage.contains('"Ptt": true')) {
+        displayMessage = '🎵 Voice Note';
+      } else if (displayMessage.toLowerCase().contains('.jpg') || displayMessage.toLowerCase().contains('.png') || displayMessage.toLowerCase().contains('.jpeg')) {
+        displayMessage = '📷 Photo';
+      } else if (displayMessage.toLowerCase().contains('.mp4')) {
+        displayMessage = '🎥 Video';
+      } else {
+        displayMessage = '📎 Attachment';
+      }
+    }
+
     return Text(
-      chat.lastMessage,
+      displayMessage,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(fontSize: 13, color: messageColor),
@@ -450,7 +464,7 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              ChannelIcon(chId: chat.chId, channelName: chat.channelName, size: 14),
+                              ChannelIcon(chId: chat.chId, channelName: '${chat.channelType} ${chat.channelName}', size: 14),
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(

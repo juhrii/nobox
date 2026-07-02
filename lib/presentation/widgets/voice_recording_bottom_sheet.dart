@@ -184,6 +184,7 @@ class _VoiceRecordingBottomSheetState extends State<VoiceRecordingBottomSheet>
     );
   }
 
+  // [ACTION: RECORD_VOICE] - Menampilkan animasi dan timer perekaman
   Widget _buildRecordingState() {
     return Column(
       children: [

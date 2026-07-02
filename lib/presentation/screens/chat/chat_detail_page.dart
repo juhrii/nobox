@@ -175,9 +175,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     super.initState();
     _initializeChat();
 
-    // Scroll listener for loading older messages
+    // Listener gulir (scroll) untuk memuat pesan-pesan terdahulu
     _scrollController.addListener(() {
-      // In reverse mode, maxScrollExtent = oldest messages (top of screen)
+      // Pada mode reverse (terbalik), maxScrollExtent = pesan paling lama (di bagian atas layar)
       if (_scrollController.hasClients &&
           _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
           !_isLoadingOlderMessages &&
@@ -188,7 +188,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
     _messageController.addListener(() {
       if (!mounted) return;
-      if (_isSettingQuickReply) return; // Skip if we are injecting a template
+      if (_isSettingQuickReply) return; // Lewati jika sistem sedang memasukkan template teks otomatis
       
       final text = _messageController.text;
       final composing = text.trim().isNotEmpty;
@@ -196,14 +196,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         setState(() => _isComposing = composing);
       }
 
-      // Quick Reply Detection
+      // Deteksi Panggilan Balasan Cepat (Quick Reply)
       if (text.startsWith('/')) {
         final searchText = text.substring(1);
         if (!_isShowingQuickReply) {
           setState(() => _isShowingQuickReply = true);
         }
         
-        // Debounce local filtering
+        // Penundaan (Debounce) untuk memfilter pencarian lokal agar tidak memberatkan memori
         if (_quickReplyDebounce?.isActive ?? false) _quickReplyDebounce!.cancel();
         _quickReplyDebounce = Timer(const Duration(milliseconds: 300), () {
           _fetchQuickReplies(searchText);
@@ -232,6 +232,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
   }
 
+  // [ACTION: QUICK_REPLY_SHOW] - Memuat daftar balas cepat jika user mengetik awalan '/'
   Future<void> _fetchQuickReplies(String searchText) async {
     if (!_hasFetchedQuickReplies) {
       setState(() => _isLoadingQuickReply = true);
@@ -538,7 +539,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   // FITUR: Sinkronisasi Pesan Latar Belakang (Ack Polling)
   // FUNGSI: Memulai proses polling interval untuk memperbarui status baca/terkirim (ack) pada pesan, jika koneksi real-time tidak memadai.
-    // FITUR 4: Timer polling untuk memperbarui status centang di layar secara berkala.
+  // FITUR 4: Timer polling untuk memperbarui status centang di layar secara berkala.
+  // [ACTION: ACK_POLLING] - Proses sinkronisasi status pesan di background
 void _startChatSyncPolling() {
     debugPrint('ChatSync: Started polling timer.');
     _ackPollTimer?.cancel();
@@ -562,42 +564,85 @@ void _startChatSyncPolling() {
           final currentIds = _messages.map((m) => m.id).where((id) => id.isNotEmpty).toSet();
           
           // 1. Match locally sent messages (without ID) to server messages FIRST
+          final matchedServerIds = <String>{}; // Lacak ID server yang sudah dicocokkan untuk mencegah duplikasi klaim
+          
           for (var i = 0; i < _messages.length; i++) {
              final oldMsg = _messages[i];
              if (oldMsg.isMe && oldMsg.id.isEmpty) {
                  final newMsgIdx = newMessages.indexWhere((m) {
                    if (!m.isMe) return false; // Harus sama-sama dari pengirim (isMe)
-                   // Coba cocokkan berdasarkan konten teks persis
-                   if (m.content.trim() == oldMsg.content.trim()) return true;
+                   if (m.id.isNotEmpty && matchedServerIds.contains(m.id)) return false; // Jangan cocokkan ke pesan server yang sudah diklaim!
                    
-                   // Coba cocokkan berdasarkan nama file lampiran (gambar/dokumen)
-                   if (oldMsg.messageType == MessageType.document && oldMsg.documentName != null) {
-                     if (m.imageUrl?.contains(oldMsg.documentName!) == true || 
-                         m.documentUrl?.contains(oldMsg.documentName!) == true ||
-                         m.content.contains(oldMsg.documentName!)) {
-                       return true;
+                   // 1. Coba cocokkan berdasarkan konten teks (HANYA UNTUK PESAN TEKS)
+                   if (oldMsg.messageType == MessageType.text && m.messageType == MessageType.text) {
+                     if (m.content.trim() == oldMsg.content.trim()) return true;
+                   }
+                   
+                   // 2. Coba cocokkan berdasarkan nama file lampiran (gambar/dokumen/voice/video)
+                   if (oldMsg.messageType == MessageType.document) {
+                     if (oldMsg.documentUrl != null && oldMsg.documentUrl == m.documentUrl) return true;
+                     if (oldMsg.documentName != null) {
+                       final docName = oldMsg.documentName!;
+                       // Server mungkin mengubah BodyType=5 menjadi Type=3 (Image) atau Type=4 (Video)
+                       // Jadi kita harus mengecek documentUrl, imageUrl, dan videoUrl dari server (m).
+                       if (m.documentUrl?.contains(docName) == true ||
+                           m.imageUrl?.contains(docName) == true ||
+                           m.videoUrl?.contains(docName) == true) {
+                         return true;
+                       }
                      }
-                   } else if (oldMsg.messageType == MessageType.image && oldMsg.imagePath != null) {
-                     final localFileName = oldMsg.imagePath!.split('/').last;
-                     if (m.imageUrl?.contains(localFileName) == true || m.content.contains(localFileName)) {
-                       return true;
+                   } else if (oldMsg.messageType == MessageType.image) {
+                     if (oldMsg.imageUrl != null && oldMsg.imageUrl == m.imageUrl) return true;
+                     if (oldMsg.imagePath != null) {
+                       final localFileName = oldMsg.imagePath!.split('/').last;
+                       if (m.imageUrl?.contains(localFileName) == true || m.documentUrl?.contains(localFileName) == true) {
+                         return true;
+                       }
                      }
-                   } else if (oldMsg.messageType == MessageType.voice && oldMsg.audioPath != null) {
-                     final localFileName = oldMsg.audioPath!.split('/').last;
-                     if (m.audioPath?.contains(localFileName) == true || m.content.contains(localFileName)) {
-                       return true;
+                   } else if (oldMsg.messageType == MessageType.voice) {
+                     if (oldMsg.audioPath != null && oldMsg.audioPath == m.audioPath) return true;
+                     if (oldMsg.audioPath != null) {
+                       final localFileName = oldMsg.audioPath!.split('/').last;
+                       if (m.audioPath?.contains(localFileName) == true || m.documentUrl?.contains(localFileName) == true) {
+                         return true;
+                       }
                      }
+                   } else if (oldMsg.messageType == MessageType.video) {
+                     if (oldMsg.videoUrl != null && oldMsg.videoUrl == m.videoUrl) return true;
+                     if (oldMsg.videoUrl != null) {
+                       final localFileName = oldMsg.videoUrl!.split('/').last;
+                       if (m.videoUrl?.contains(localFileName) == true || m.documentUrl?.contains(localFileName) == true) {
+                         return true;
+                       }
+                     }
+                   }
+                   
+                   // RACE CONDITION FALLBACK: Jika nama file direname server sebelum upload API selesai,
+                   // kita asumsikan pesan media baru dari server (yang belum ada di currentIds) 
+                   // adalah pesan media yang sedang kita upload saat ini.
+                   // Kita perlunakkan syarat tipenya agar mencakup perubahan Dokumen -> Gambar.
+                   if (!currentIds.contains(m.id) && oldMsg.messageType != MessageType.text && m.messageType != MessageType.text) {
+                     debugPrint('AckPolling MATCH: Fallback lintas-tipe berhasil untuk tipe ${m.messageType} dengan ID ${m.id}');
+                     return true;
                    }
                    return false;
                  });
                  
+                 debugPrint('AckPolling: Hasil pencocokan untuk oldMsg (Type: ${oldMsg.messageType}, Path: ${oldMsg.imagePath}) -> Index: $newMsgIdx');
+                 
                  if (newMsgIdx != -1) {
                     final updatedMsg = newMessages[newMsgIdx];
                     if (updatedMsg.id.isNotEmpty) {
+                      matchedServerIds.add(updatedMsg.id); // Tandai sebagai sudah diklaim
                       _messages[i] = _messages[i].copyWith(
                           id: updatedMsg.id,
                           ack: updatedMsg.ack,
                           status: updatedMsg.ack >= 3 ? MessageStatus.delivered : MessageStatus.sent,
+                          messageType: updatedMsg.messageType,
+                          imageUrl: updatedMsg.imageUrl,
+                          videoUrl: updatedMsg.videoUrl,
+                          documentUrl: updatedMsg.documentUrl,
+                          audioPath: updatedMsg.audioPath,
                       );
                     }
                  }
@@ -608,6 +653,7 @@ void _startChatSyncPolling() {
           final updatedCurrentIds = _messages.map((m) => m.id).where((id) => id.isNotEmpty).toSet();
           for (final msg in newMessages) {
             if (msg.id.isNotEmpty && !updatedCurrentIds.contains(msg.id)) {
+               debugPrint('AckPolling ADDING NEW MESSAGE: ID=${msg.id}, Content=${msg.content}, Type=${msg.messageType}, IsMe=${msg.isMe}');
                _messages.add(msg);
                hasNewMessages = true;
             } else if (msg.id.isNotEmpty) {
@@ -654,15 +700,15 @@ void _startChatSyncPolling() {
 
       debugPrint('ChatDetailPage: TerimaPesan | room=$incomingRoomId | current=${chat.id}');
 
-      // ❗ FILTER: Only process messages for THIS room
+      // ❗ FILTER: Hanya proses pesan yang ditujukan untuk ROOM INI
       if (incomingRoomId.isEmpty || incomingRoomId != chat.id) {
         debugPrint('SignalR: 🛑 Pesan DIABAIKAN. (Beda Room). Incoming: $incomingRoomId | Current: ${chat.id}');
         return;
       }
 
-      // Own outgoing message echo-back (AgentId present = sent by agent/us)
-      // Instead of skipping entirely, check if Ack was updated by server
-      // so we can update centang (✓ → ✓✓) in real-time.
+      // Pesan pantulan (echo-back) dari pesan yang kita kirim sendiri (AgentId ada = dikirim oleh agen/kita)
+      // Daripada mengabaikannya secara langsung, kita periksa apakah nilai Ack diperbarui oleh server
+      // sehingga kita bisa memperbarui status centang pesan (✓ → ✓✓) secara real-time.
       final agentId = messageData['AgentId'];
       if (agentId != null && agentId != 0 && agentId.toString() != '0') {
         final echoAck = messageData['Ack'] ?? messageData['ack'];
@@ -679,12 +725,12 @@ void _startChatSyncPolling() {
 
         if (mounted && newAck > 1) {
           setState(() {
-            // Try to match by message ID first
+            // Coba cocokkan pesan berdasarkan ID pesannya terlebih dahulu
             int matchIdx = -1;
             if (echoId.isNotEmpty) {
               matchIdx = _messages.indexWhere((m) => m.id == echoId && m.isMe);
             }
-            // Fallback: match by content for messages without ID (just sent)
+            // Cadangan (Fallback): cocokkan berdasarkan isi konten untuk pesan yang belum punya ID (baru saja dikirim)
             if (matchIdx == -1 && echoMsg.isNotEmpty) {
               // Find the last sent message with matching content that has ack < newAck
               for (int i = _messages.length - 1; i >= 0; i--) {
@@ -964,6 +1010,7 @@ void _startChatSyncPolling() {
 
   // FITUR: Kirim Pesan Teks (REST API / SignalR)
   // FUNGSI: Mengirimkan teks yang diinputkan pengguna ke server. Menggunakan SignalR khusus untuk Telegram (karena REST API backend memiliki bug ExtId untuk Telegram), dan REST API standar untuk channel lainnya.
+  // [ACTION: SEND_MESSAGE] - Eksekusi pengiriman pesan teks biasa
   void _sendMessage() async {
     if (_isSending) return; // Mencegah pengiriman ganda (double-tap)
     
@@ -1020,7 +1067,8 @@ void _startChatSyncPolling() {
           accountId: chat.accountId,
           channelId: chat.chId,
           contactId: chat.contactId,
-          extId: chat.ctRealId,
+          extId: chat.ctRealId.isNotEmpty ? chat.ctRealId : chat.link,
+          groupId: chat.groupId,
         ),
       );
       
@@ -1078,6 +1126,7 @@ void _startChatSyncPolling() {
 
   // FITUR: Ambil Foto/Kamera & Pratinjau
   // FUNGSI: Membuka antarmuka kamera bawaan perangkat untuk mengambil foto, lalu membuka layar pratinjau sebelum dikonfirmasi.
+  // [ACTION: PICK_MEDIA] - Mengambil foto langsung dari Kamera perangkat
   Future<void> _pickAndSendFromCamera() async {
     setState(() => _showAttachmentPanel = false);
     final picker = ImagePicker();
@@ -1165,6 +1214,7 @@ void _startChatSyncPolling() {
       channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
       contactId: chat.contactId,
       link: chat.link,
+      groupId: chat.groupId,
     );
 
     if (mounted && messageIndex < _messages.length) {
@@ -1227,6 +1277,7 @@ void _startChatSyncPolling() {
       channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
       contactId: chat.contactId,
       link: chat.link,
+      groupId: chat.groupId,
     );
 
     if (mounted && messageIndex < _messages.length) {
@@ -1315,6 +1366,7 @@ void _startChatSyncPolling() {
         channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
         contactId: chat.contactId,
         link: chat.link,
+        groupId: chat.groupId,
         forceDocument: true,
       );
 
@@ -1402,7 +1454,8 @@ void _startChatSyncPolling() {
         accountId: chat.accountId,
         channelId: chat.chId,
         contactId: chat.contactId,
-        extId: chat.ctRealId,
+        extId: chat.ctRealId.isNotEmpty ? chat.ctRealId : chat.link,
+        groupId: chat.groupId,
       ),
     );
 
@@ -1489,6 +1542,7 @@ void _startChatSyncPolling() {
       channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
       contactId: chat.contactId,
       link: chat.link,
+      groupId: chat.groupId,
     );
 
     if (mounted && messageIndex < _messages.length) {
@@ -1645,6 +1699,7 @@ void _startChatSyncPolling() {
         channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
         contactId: chat.contactId,
         link: chat.link,
+        groupId: chat.groupId,
       );
 
       if (mounted && messageIndex < _messages.length) {
@@ -1666,6 +1721,9 @@ if (!response.isError) {
             }
           });
         } else {
+          debugPrint('❌ Voice Note GAGAL: isError=${response.isError}, error=${response.error}, statusCode=${response.statusCode}');
+          debugPrint('❌ chat.chId=${chat.chId}, chat.channelType=${chat.channelType}, chat.channelName=${chat.channelName}');
+          debugPrint('❌ chat.link=${chat.link}, chat.contactId=${chat.contactId}, chat.accountId=${chat.accountId}');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Gagal kirim voice: ${response.error}'),
@@ -1856,10 +1914,13 @@ if (!response.isError) {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!chat.isArchived && !widget.isReadOnly) ...[
-                        if (chat.isBlocked)
-                          _buildBlockedBanner(isDark)
+                      if (chat.isArchived)
+                        _buildArchivedBanner(isDark)
+                      else if (!widget.isReadOnly) ...[
+                        if (chat.isBlocked || chat.status.toLowerCase() == 'resolved')
+                          const SizedBox.shrink()
                         else ...[
+                          // state `_isShowingQuickReply` akan aktif dan memunculkan *overlay list* berisi template yang sudah di-cache.
                           if (_isShowingQuickReply && _quickReplyTemplates.isNotEmpty) _buildQuickReplyList(isDark),
                           if (_repliedMessage != null) _buildReplyPreview(isDark),
                           _buildInputBar(isDark),
@@ -1921,6 +1982,35 @@ if (!response.isError) {
                 color: Colors.red.shade700,
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResolvedBanner(bool isDark) {
+    // Warna hijau kebiruan (turquoise) persis seperti di dashboard web NoBox
+    final Color resolvedColor = const Color(0xFF00C896); 
+    
+    return Container(
+      width: double.infinity,
+      color: resolvedColor.withOpacity(0.1),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle, size: 20, color: resolvedColor),
+            const SizedBox(width: 8),
+            Text(
+              'This conversation has been resolved.',
+              style: TextStyle(
+                color: resolvedColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
               ),
             ),
           ],
@@ -2108,6 +2198,112 @@ if (!response.isError) {
   // ─────────────────────────────────────────────
 
   PreferredSizeWidget _buildAppBar(bool isDark) {
+    // ── STATUS APP BAR (Resolved / Blocked - Web Dashboard Style) ──
+    final bool isResolved = chat.status.toLowerCase() == 'resolved';
+    final bool isBlocked = chat.isBlocked;
+
+    if (isResolved || isBlocked) {
+      final Color statusColor = isBlocked ? const Color(0xFFE53935) : const Color(0xFF00C896);
+      final String statusText = isBlocked ? 'This Contact has been blocked' : 'This conversation has been resolved.';
+      
+      final Color bgColor = isDark ? const Color(0xFF1F2C34) : Colors.white;
+      final Color iconColor = isDark ? Colors.white70 : Colors.black87;
+      
+      return AppBar(
+        backgroundColor: bgColor,
+        surfaceTintColor: bgColor,
+        iconTheme: IconThemeData(color: iconColor),
+        leadingWidth: 30,
+        titleSpacing: 12,
+        title: Text(
+          statusText,
+          style: TextStyle(
+            color: statusColor,
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          // Sidebar (Contact Info)
+          IconButton(
+            icon: CustomPaint(
+              size: const Size(26, 22),
+              painter: _SidebarIconPainter(color: iconColor),
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ContactInfoPage(chat: chat),
+                ),
+              );
+            },
+          ),
+          // FITUR: Menu Opsi Lanjutan (Titik Tiga Di Dalam Chat)
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: iconColor),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            onSelected: (value) {
+              if (value == 'add_agent') {
+                _showAddAgentDialog();
+              } else if (value == 'mark_resolved') {
+                _showResolveConfirmation();
+              } else if (value == 'archive_conversation') {
+                _handleArchiveConversation();
+              } else if (value == 'help') {
+                _openHelpUrl();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'add_agent',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_add_alt, size: 24, color: isDark ? Colors.white70 : Colors.black87),
+                    const SizedBox(width: 16),
+                    const Text('Add Human Agent', style: TextStyle(fontSize: 16)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'mark_resolved',
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 24, color: isDark ? Colors.white70 : Colors.black87),
+                    const SizedBox(width: 16),
+                    const Text('Mark as Resolved', style: TextStyle(fontSize: 16)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'archive_conversation',
+                child: Row(
+                  children: [
+                    Icon(Icons.archive_outlined, size: 24, color: isDark ? Colors.white70 : Colors.black87),
+                    const SizedBox(width: 16),
+                    const Text('Archived Conversation', style: TextStyle(fontSize: 16)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'help',
+                child: Row(
+                  children: [
+                    Icon(Icons.help_outline, size: 24, color: Colors.red),
+                    const SizedBox(width: 16),
+                    const Text('Help', style: TextStyle(color: Colors.red, fontSize: 16)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
     // ── ARCHIVED APP BAR ──
     if (chat.isArchived) {
       return AppBar(
@@ -2205,7 +2401,7 @@ if (!response.isError) {
                         children: [
                           ChannelIcon(
                             chId: chat.chId,
-                            channelName: chat.channelName,
+                            channelName: '${chat.channelType} ${chat.channelName}',
                             size: 13,
                             isWhite: true,
                           ),
@@ -2249,6 +2445,9 @@ if (!response.isError) {
             );
           },
         ),
+        // FITUR: Menu Opsi Lanjutan (Titik Tiga Di Dalam Chat)
+        // FUNGSI: Menampilkan dropdown menu di pojok kanan atas chat room untuk aksi tambahan pada tiket ini,
+        // seperti menambahkan agen manusia, menandai selesai (Resolved), mengarsipkan chat, atau bantuan.
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert, color: Colors.white),
           shape: RoundedRectangleBorder(
@@ -2894,8 +3093,10 @@ if (!response.isError) {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Column(
+      builder: (ctx) => Material(
+        color: Colors.transparent,
+        child: SafeArea(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
@@ -2962,6 +3163,7 @@ if (!response.isError) {
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -2981,11 +3183,13 @@ if (!response.isError) {
               ? const Center(child: Text('Tidak ada chat'))
               : ListView.builder(
                   itemCount: allChats.length,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (builderCtx, index) {
                     final target = allChats[index];
                     if (target.id == chat.id) return const SizedBox.shrink();
-                    return ListTile(
-                      leading: CircleAvatar(
+                    return Material(
+                      color: Colors.transparent,
+                      child: ListTile(
+                        leading: CircleAvatar(
                         backgroundColor: Colors.blue.shade100,
                         child: Text(
                           target.sender.isNotEmpty ? target.sender[0].toUpperCase() : '?',
@@ -2996,24 +3200,79 @@ if (!response.isError) {
                       subtitle: Text(target.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis),
                       onTap: () async {
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Meneruskan pesan ke ${target.sender}...')),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Meneruskan pesan ke ${target.sender}...')),
+                          );
+                        }
                         
-                        final request = MessageRequest(
-                          receiver: target.id,
-                          content: message.content,
-                        );
-                        final resp = await _chatService.sendMessage(request);
+                        int requestBodyType = 1;
+                        String? attachmentStr;
+                        if (message.messageType != MessageType.text) {
+                          if (message.messageType == MessageType.voice) requestBodyType = 2;
+                          else if (message.messageType == MessageType.image) requestBodyType = 3;
+                          else if (message.messageType == MessageType.video) requestBodyType = 4;
+                          else if (message.messageType == MessageType.document) requestBodyType = 5;
+
+                          String? url = message.imageUrl ?? message.documentUrl ?? message.videoUrl ?? message.audioPath;
+                          if (url != null) {
+                            String filename = url.split('/').last;
+                            String originalName = message.documentName ?? filename;
+                            final fileJsonObj = <String, dynamic>{
+                              "Filename": filename,
+                              "OriginalName": originalName,
+                            };
+                            if (message.messageType == MessageType.voice) {
+                               fileJsonObj["Ptt"] = true;
+                            }
+                            attachmentStr = jsonEncode([fileJsonObj]);
+                          }
+                        }
+                        
+                        final String fallbackExtId = target.ctRealId.isNotEmpty 
+                            ? target.ctRealId 
+                            : (target.link.isNotEmpty ? target.link : target.sender);
+
+                        final String finalContent = (message.messageType != MessageType.text && message.content == '📷 Photo') ? '' : message.content;
+                        final isTelegram = target.chId == '2' || target.channelType.toLowerCase().contains('telegram') || target.channelName.toLowerCase().contains('telegram');
+                        bool isError = false;
+                        String errorMessage = '';
+
+                        if (isTelegram) {
+                          final success = await chatProvider.sendMessageViaSignalR(
+                            chat: target,
+                            type: requestBodyType.toString(),
+                            msg: finalContent,
+                            fileJson: attachmentStr,
+                          );
+                          isError = !success;
+                          if (isError) errorMessage = 'SignalR delivery failed';
+                        } else {
+                          final request = MessageRequest(
+                            receiver: target.id,
+                            content: finalContent,
+                            accountId: target.accountId,
+                            channelId: target.chId,
+                            contactId: target.contactId,
+                            extId: fallbackExtId,
+                            groupId: target.groupId,
+                            attachment: attachmentStr,
+                            bodyType: requestBodyType,
+                          );
+                          final resp = await _chatService.sendMessage(request);
+                          isError = resp.isError;
+                          errorMessage = resp.error ?? '';
+                        }
                         
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(resp.isError ? 'Gagal meneruskan pesan' : 'Pesan berhasil diteruskan ke ${target.sender}'),
+                              content: Text(isError ? 'Gagal meneruskan pesan: $errorMessage' : 'Pesan berhasil diteruskan ke ${target.sender}'),
                             ),
                           );
                         }
                       },
+                    ),
                     );
                   },
                 ),
@@ -3048,11 +3307,13 @@ if (!response.isError) {
               ? const Center(child: Text('Tidak ada chat'))
               : ListView.builder(
                   itemCount: allChats.length,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (builderCtx, index) {
                     final target = allChats[index];
                     if (target.id == chat.id) return const SizedBox.shrink();
-                    return ListTile(
-                      leading: CircleAvatar(
+                    return Material(
+                      color: Colors.transparent,
+                      child: ListTile(
+                        leading: CircleAvatar(
                         backgroundColor: Colors.blue.shade100,
                         child: Text(
                           target.sender.isNotEmpty ? target.sender[0].toUpperCase() : '?',
@@ -3063,18 +3324,67 @@ if (!response.isError) {
                       subtitle: Text(target.lastMessage, maxLines: 1, overflow: TextOverflow.ellipsis),
                       onTap: () async {
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Meneruskan ${selectedMessages.length} pesan ke ${target.sender}...')),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Meneruskan ${selectedMessages.length} pesan ke ${target.sender}...')),
+                          );
+                        }
                         
                         bool hasError = false;
                         for (final msg in selectedMessages) {
-                          final request = MessageRequest(
-                            receiver: target.id,
-                            content: msg.content,
-                          );
-                          final resp = await _chatService.sendMessage(request);
-                          if (resp.isError) hasError = true;
+                          int requestBodyType = 1;
+                          String? attachmentStr;
+                          if (msg.messageType != MessageType.text) {
+                            if (msg.messageType == MessageType.voice) requestBodyType = 2;
+                            else if (msg.messageType == MessageType.image) requestBodyType = 3;
+                            else if (msg.messageType == MessageType.video) requestBodyType = 4;
+                            else if (msg.messageType == MessageType.document) requestBodyType = 5;
+
+                            String? url = msg.imageUrl ?? msg.documentUrl ?? msg.videoUrl ?? msg.audioPath;
+                            if (url != null) {
+                              String filename = url.split('/').last;
+                              String originalName = msg.documentName ?? filename;
+                              final fileJsonObj = <String, dynamic>{
+                                "Filename": filename,
+                                "OriginalName": originalName,
+                              };
+                              if (msg.messageType == MessageType.voice) {
+                                 fileJsonObj["Ptt"] = true;
+                              }
+                              attachmentStr = jsonEncode([fileJsonObj]);
+                            }
+                          }
+
+                          final String fallbackExtId = target.ctRealId.isNotEmpty 
+                              ? target.ctRealId 
+                              : (target.link.isNotEmpty ? target.link : target.sender);
+
+                          final String finalContent = (msg.messageType != MessageType.text && msg.content == '📷 Photo') ? '' : msg.content;
+                          final isTelegram = target.chId == '2' || target.channelType.toLowerCase().contains('telegram') || target.channelName.toLowerCase().contains('telegram');
+
+                          if (isTelegram) {
+                            final success = await chatProvider.sendMessageViaSignalR(
+                              chat: target,
+                              type: requestBodyType.toString(),
+                              msg: finalContent,
+                              fileJson: attachmentStr,
+                            );
+                            if (!success) hasError = true;
+                          } else {
+                            final request = MessageRequest(
+                              receiver: target.id,
+                              content: finalContent,
+                              accountId: target.accountId,
+                              channelId: target.chId,
+                              contactId: target.contactId,
+                              extId: fallbackExtId,
+                              groupId: target.groupId,
+                              attachment: attachmentStr,
+                              bodyType: requestBodyType,
+                            );
+                            final resp = await _chatService.sendMessage(request);
+                            if (resp.isError) hasError = true;
+                          }
                         }
 
                         if (mounted) {
@@ -3089,6 +3399,7 @@ if (!response.isError) {
                           );
                         }
                       },
+                    ),
                     );
                   },
                 ),

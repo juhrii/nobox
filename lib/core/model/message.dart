@@ -38,6 +38,7 @@ class ChatModel {
   final String campaign;
   final String deal;
   final String groupName;
+  final String groupId;
 
   ChatModel({
     required this.id,
@@ -70,6 +71,7 @@ class ChatModel {
     this.campaign = '',
     this.deal = '',
     this.groupName = '',
+    this.groupId = '',
   });
 
   // FITUR: Copy With (ChatModel)
@@ -105,6 +107,7 @@ class ChatModel {
     String? campaign,
     String? deal,
     String? groupName,
+    String? groupId,
   }) {
     return ChatModel(
       id: id ?? this.id,
@@ -137,6 +140,7 @@ class ChatModel {
       campaign: campaign ?? this.campaign,
       deal: deal ?? this.deal,
       groupName: groupName ?? this.groupName,
+      groupId: groupId ?? this.groupId,
     );
   }
 }
@@ -291,6 +295,19 @@ class Message {
       return ['mp3', 'wav', 'ogg', 'opus', 'm4a', 'aac', 'weba', 'amr'].contains(ext);
     }
 
+    // Helper untuk mengecek flag Ptt:true (Voice Note marker dari WhatsApp/Telegram)
+    bool _isPttFile(dynamic fileData) {
+      if (fileData == null) return false;
+      try {
+        final decoded = fileData is String ? jsonDecode(fileData) : fileData;
+        if (decoded is Map) return decoded['Ptt'] == true;
+        if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
+          return decoded.first['Ptt'] == true;
+        }
+      } catch (_) {}
+      return false;
+    }
+
     // Debug: catat raw JSON untuk pesan terkait media
     if (typeVal == '2' || typeVal == '16' || typeVal == '3' || typeVal == '4' ||
         json['Files'] != null || json['File'] != null) {
@@ -401,14 +418,15 @@ class Message {
         msgType = MessageType.sticker;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
         content = '🌟 Sticker';
+      } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File'])) {
+        // Voice note: cek typeVal=='2', ekstensi audio, ATAU flag Ptt:true — sebelum cek document (type 5)
+        msgType = MessageType.voice;
+        audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '5') {
         msgType = MessageType.document;
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
         docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
         content = '📄 $docName';
-      } else if (isAudioFile(filePath) || isAudioFile(originalName)) {
-        msgType = MessageType.voice;
-        audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
         msgType = MessageType.video;
         videoUrl = filePath.startsWith('http') 
@@ -418,10 +436,6 @@ class Message {
       } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-      } else if (typeVal == '2') {
-        // Fallback by API Type when extension is unrecognized
-        msgType = MessageType.voice;
-        audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '4') {
         msgType = MessageType.video;
         videoUrl = filePath.startsWith('http') 

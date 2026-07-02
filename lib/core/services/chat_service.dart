@@ -36,7 +36,8 @@ class ChatService {
 
   /// Fetch list of channels from API (WhatsApp, Telegram, etc.)
     // FITUR 6: Integrasi Saluran Multi-Platform (Mengambil daftar Channel).
-Future<ApiResponse<List<Map<String, dynamic>>>> getChannels() async {
+  // [ACTION: API_ENDPOINT_CHANNELS] - API REST untuk mendapatkan daftar saluran (WhatsApp, dll)
+  Future<ApiResponse<List<Map<String, dynamic>>>> getChannels() async {
     try {
       final response = await _apiClient.post(AppConfig.channelListEndpoint, data: {
         "Skip": 0,
@@ -79,7 +80,8 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getChannels() async {
 
   /// Fetch list of accounts from API
     // FITUR 6: Integrasi Saluran Multi-Platform (Mengambil daftar Akun).
-Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
+  // [ACTION: API_ENDPOINT_ACCOUNTS] - API REST untuk mendapatkan daftar akun
+  Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
     try {
       final response = await _apiClient.post(AppConfig.accountListEndpoint, data: {
         "Skip": 0,
@@ -562,8 +564,18 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
 
         final conversations = dataList.map((json) {
           if (json is Map<String, dynamic>) {
-            final conv = Conversation.fromJson(json);
-            return conv;
+            try {
+              final conv = Conversation.fromJson(json);
+              return conv;
+            } catch (e) {
+              debugPrint('Error parsing conversation: $e\nData: $json');
+              return Conversation(
+                id: json['Id']?.toString() ?? '', 
+                participantEmail: 'ERROR: Parsing Failed', 
+                lastMessage: e.toString(), 
+                lastMessageTime: ''
+              );
+            }
           }
           return Conversation(id: '', participantEmail: 'Unknown', lastMessage: '', lastMessageTime: '');
         }).toList();
@@ -1226,14 +1238,12 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
 
 
 
-      // Mentor's test_api_6.dart confirms that Inbox/Send for Telegram requires 
-      // ExtId as the plain string ID and LinkId as a long/int.
       // Do NOT send ExtId as a JSON string here, it causes backend errors when LinkId is present!
       String finalExtId = extId;
 
       final Map<String, dynamic> payload = {
         'Body': content,
-        'BodyType': 1,
+        'BodyType': request.bodyType,
         'ChannelId': channelId,
         'AccountIds': safeAccountId,
         'Attachment': request.attachment ?? '',
@@ -1248,11 +1258,17 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
             payload['ExtId'] = {"ExtId": finalExtId};
           }
         }
-        if (request.contactId != null && request.contactId!.isNotEmpty) {
+        if (request.contactId != null && request.contactId!.isNotEmpty && request.contactId != request.receiver) {
           payload['LinkId'] = int.tryParse(request.contactId!) ?? request.contactId;
         }
       } else {
         payload['ExtId'] = finalExtId;
+        // Fallback: jika ExtId kosong, LinkId akan menyelamatkan pengiriman
+        // PASTIKAN contactId BUKAN RoomId (jika grup, contactId biasanya jatuh ke RoomId)
+        if (request.contactId != null && request.contactId!.isNotEmpty && request.contactId != request.receiver) {
+          final linkIdInt = int.tryParse(request.contactId!);
+          if (linkIdInt != null) payload['LinkId'] = linkIdInt;
+        }
       }
 
       debugPrint('ChatService: ┌── sendMessage PAYLOAD FINAL ──');
@@ -1278,9 +1294,10 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
               idLink: request.contactId,
               idAccount: safeAccountId,
               idRoom: roomIdStr,
-              idGroup: null,
-              type: "1", 
+              idGroup: request.groupId,
+              type: request.bodyType.toString(), 
               msg: request.content,
+              fileJson: request.attachment,
             );
             
             if (signalRSuccess) {
@@ -1361,6 +1378,7 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
     String? channelId,
     String? contactId,
     String? link, // IdLink for SignalR (LinkTmp/LinkNm from conversation)
+    String? groupId,
     bool forceDocument = false,
   }) async {
     try {
@@ -1398,41 +1416,46 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
           },
         };
 
-        debugPrint('--- DEBUG UPLOAD START ---');
-        debugPrint('URL: ${AppConfig.uploadBase64Endpoint}');
-        debugPrint('Payload (filename): $fileName');
-        debugPrint('Payload (mimetype): $mimeType');
-        debugPrint('Payload (data length): ${base64String.length}');
-        
+        debugPrint('--- UPLOAD START: file=$fileName size=${bytes.length}B base64=${base64String.length}chars ---');
+
         final uploadResponse = await _apiClient.post(
           AppConfig.uploadBase64Endpoint,
           data: uploadPayload,
         );
 
-        debugPrint('Response Status: ${uploadResponse.statusCode}');
-        debugPrint('Response Data: ${uploadResponse.data}');
+        debugPrint('Upload Status: ${uploadResponse.statusCode}');
+        debugPrint('Upload Data: ${uploadResponse.data}');
 
         if (uploadResponse.statusCode == 200) {
           final responseData = uploadResponse.data;
-          // Extract the filename returned by the server
-          if (responseData is Map && responseData['Data'] != null) {
-            serverFileName = responseData['Data']['Filename'] ?? responseData['Data']['FileName'] ?? responseData['Data']['filename'];
-          } else if (responseData is Map && responseData['IsError'] == false) {
-             serverFileName = responseData['Data']?.toString();
+          if (responseData is Map) {
+            // Cek IsError dulu
+            if (responseData['IsError'] == true) {
+              debugPrint('Upload returned IsError=true: ${responseData["Error"]}');
+            } else if (responseData['Data'] != null) {
+              final raw = responseData['Data'];
+              if (raw is Map) {
+                serverFileName = raw['Filename']?.toString() ??
+                    raw['FileName']?.toString() ??
+                    raw['filename']?.toString();
+              } else if (raw is String &&
+                  !raw.toLowerCase().contains('error') &&
+                  !raw.toLowerCase().contains('status') &&
+                  !raw.toLowerCase().contains('connection')) {
+                serverFileName = raw;
+              }
+            }
           }
-          debugPrint('ChatService: File uploaded successfully -> $serverFileName');
         }
-        debugPrint('--- DEBUG UPLOAD END ---');
+        debugPrint('Upload result: serverFileName=$serverFileName');
       } on DioException catch (e) {
-        debugPrint('--- DEBUG UPLOAD ERROR ---');
-        debugPrint('Status Code: ${e.response?.statusCode}');
-        debugPrint('Error Data: ${e.response?.data}');
-        debugPrint('Message: ${e.message}');
-        debugPrint('--- DEBUG UPLOAD END ---');
+        debugPrint('Upload DioException: ${e.response?.statusCode} - ${e.response?.data} - ${e.message}');
+      } catch (e) {
+        debugPrint('Upload error: $e');
       }
 
       if (serverFileName == null || serverFileName.isEmpty) {
-        return ApiResponse.failure('Gagal mengupload file ke server', 500);
+        return ApiResponse.failure('Gagal upload file. Pastikan koneksi internet stabil dan coba lagi.', 500);
       }
 
 
@@ -1526,7 +1549,7 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
         idLink: idLinkValue,
         idAccount: safeAccountId,
         idRoom: conversationId,
-        idGroup: null,
+        idGroup: groupId,
         type: bodyType.toString(), // 3=Image, 4=Video, 5=Document, 2=Voice
         fileJson: jsonEncode(fileJsonObj),
       );
@@ -1541,7 +1564,22 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
     }
 
     // Only for non-Telegram channels
-    payload["ExtId"] = extId ?? "";
+    // Set ExtId dari _getExtId (phone number untuk WA, dll). Jika kosong (misalnya grup), gunakan 'link' (Group ID eksternal).
+    if ((extId == null || extId.isEmpty) && link != null && link.isNotEmpty) {
+      payload["ExtId"] = link;
+    } else {
+      payload["ExtId"] = extId ?? "";
+    }
+    
+    // Selalu set LinkId sebagai fallback, karena server membutuhkan
+    // setidaknya SATU dari: IdLink atau ExtId terisi.
+    // PASTIKAN contactId BUKAN conversationId (jika grup, contactId biasanya jatuh ke conversationId/RoomId).
+    if (contactId != null && contactId.isNotEmpty && contactId != conversationId) {
+      final linkIdInt = int.tryParse(contactId);
+      if (linkIdInt != null) {
+        payload["LinkId"] = linkIdInt;
+      }
+    }
 
       debugPrint('ChatService: ┌── sendImageMessage PAYLOAD FINAL ──');
       debugPrint(jsonEncode(payload));
@@ -1578,7 +1616,7 @@ Future<ApiResponse<List<Map<String, dynamic>>>> getAccounts() async {
               idLink: contactId,
               idAccount: safeAccountId,
               idRoom: conversationId,
-              idGroup: null,
+              idGroup: groupId,
               type: bodyType.toString(), 
               fileJson: jsonEncode(fileJsonObj),
             );

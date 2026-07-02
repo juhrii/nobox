@@ -12,6 +12,8 @@ class MessageRequest {
   final String? contactId;
   final String? attachment;
   final String? extId;
+  final String? groupId;
+  final int bodyType;
 
   MessageRequest({
     required this.receiver,
@@ -21,6 +23,8 @@ class MessageRequest {
     this.contactId,
     this.attachment,
     this.extId,
+    this.groupId,
+    this.bodyType = 1,
   });
 
   // FITUR: Convert ke JSON
@@ -34,6 +38,7 @@ class MessageRequest {
       if (contactId != null) 'ContactId': contactId,
       if (attachment != null) 'Attachment': attachment,
       if (extId != null) 'ExtId': extId,
+      if (groupId != null) 'GroupId': groupId,
     };
   }
 }

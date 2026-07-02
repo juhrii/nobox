@@ -24,6 +24,7 @@ class ChannelIcon extends StatelessWidget {
   });
 
   @override
+  // [ACTION: RENDER_CHANNEL_ICON] - Menggambar ikon berdasarkan nama saluran
   Widget build(BuildContext context) {
     final int channelId = int.tryParse(chId) ?? 0;
     final String cName = channelName?.toLowerCase() ?? '';

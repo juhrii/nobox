@@ -13,6 +13,8 @@ import 'push_notification_service.dart';
 // FUNGSI: Mengelola koneksi real-time via SignalR untuk pesan instan. 
 //         Mendengarkan event: TerimaPesan, TerimaSubSpv, UcChanged, TerimaExpired.
 // =====================================================================
+
+// SignalRService terhubung ke server hub SignalR menggunakan Token JWT setelah login berhasil.
 class SignalRService {
   static final SignalRService _instance = SignalRService._internal();
   factory SignalRService() => _instance;
@@ -57,7 +59,8 @@ class SignalRService {
 
   /// Hubungkan ke SignalR hub menggunakan token autentikasi pengguna.
     // FITUR 3: Terhubung ke server hub SignalR menggunakan Token JWT.
-Future<void> connect() async {
+  // [ACTION: SIGNALR_CONNECT] - Membangun dan menjaga koneksi Web-Socket real-time
+  Future<void> connect() async {
     if (_hubConnection != null) {
       if (_hubConnection!.state == HubConnectionState.Connected) {
         debugPrint('SignalR: Already connected');
@@ -107,6 +110,7 @@ Future<void> connect() async {
       // ── Register handlers for NoBox events ──
       debugPrint('SignalR: Registering event handlers...');
       
+      // [ACTION: SIGNALR_RECEIVE_MSG] - Menerima balasan pesan/chat masuk secara real-time
       _hubConnection!.on(eventTerimaPesan, (args) {
         debugPrint('SignalR: 🔥🔥🔥 RAW TerimaPesan RECEIVED! args.length=${args?.length}');
         debugPrint('SignalR: 🔥 arg[0]=${args?[0]?.toString().substring(0, (args?[0]?.toString().length ?? 0) > 100 ? 100 : (args?[0]?.toString().length ?? 0))}');
@@ -559,8 +563,12 @@ Future<void> connect() async {
   /// Invoke a method on the hub (fire-and-forget).
   Future<void> invoke(String methodName, {List<Object>? args}) async {
     if (!_isConnected || _hubConnection == null) {
-      debugPrint('SignalR: Cannot invoke "$methodName" — not connected');
-      throw Exception('SignalR not connected');
+      debugPrint('SignalR: Not connected. Attempting to reconnect before invoking "$methodName"...');
+      await connect();
+      if (!_isConnected || _hubConnection == null) {
+        debugPrint('SignalR: Cannot invoke "$methodName" — reconnection failed.');
+        throw Exception('SignalR not connected');
+      }
     }
     try {
       debugPrint('SignalR: Invoking "$methodName" with args: $args');

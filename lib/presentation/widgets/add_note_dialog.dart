@@ -74,6 +74,7 @@ class _AddNoteDialogState extends State<AddNoteDialog> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
+                  // [ACTION: ADD_NOTE] - Menyimpan catatan baru ke kontak
                   onPressed: () {
                     final text = _noteController.text.trim();
                     if (text.isNotEmpty) {

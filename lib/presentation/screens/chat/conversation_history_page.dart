@@ -330,7 +330,7 @@ class _ConversationHistoryPageState extends State<ConversationHistoryPage> {
                     // Row 4: Channel + Channel Account Name + Status Status
                     Row(
                       children: [
-                        ChannelIcon(chId: channelId, channelName: channelName, size: 14),
+                        ChannelIcon(chId: channelId, channelName: '${conv.channelType} $channelName', size: 14),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(

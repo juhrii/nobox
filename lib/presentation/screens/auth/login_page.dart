@@ -52,6 +52,7 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // [ACTION: LOGIN_EXECUTE] - Fungsi ini diikat ke tombol login untuk memvalidasi form dan memanggil API
   void _login() async {
     if (_formKey.currentState!.validate()) {
       final auth = context.read<AuthProvider>();

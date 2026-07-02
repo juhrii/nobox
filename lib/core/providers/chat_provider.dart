@@ -336,6 +336,7 @@ Future<void> fetchChats() async {
 
         // Ambil juga percakapan yang diarsipkan dari server dan gabungkan
         try {
+          //getArchivedConversations() digunakan untuk memanggil API untuk menyelaraskan dengan databae sever
           final archivedResponse = await _chatService.getArchivedConversations();
           if (!archivedResponse.isError && archivedResponse.data != null) {
             final existingIds = _chats.map((c) => c.id).toSet();
@@ -368,7 +369,8 @@ Future<void> fetchChats() async {
   /// [roomData] is the parsed JSON from TerimaSubSpv with keys like:
   /// Id, Ct, LastMsg, Uc, TimeMsg, IsPin, St, IsNeedReply, SdrMsg, etc.
     // FITUR 3: Menyinkronkan status obrolan secara instan dari event SignalR.
-void updateRoomFromSignalR(Map<String, dynamic> roomData) {
+  // [ACTION: UPDATE_ROOM_SIGNALR] - Memperbarui state chat saat ada pesan real-time masuk
+  void updateRoomFromSignalR(Map<String, dynamic> roomData) {
     final roomId = roomData['Id']?.toString() ?? '';
     if (roomId.isEmpty) return;
 
@@ -407,6 +409,19 @@ void updateRoomFromSignalR(Map<String, dynamic> roomData) {
       debugPrint('ChatProvider: Room $roomId not in list, triggering refreshFirstPage');
       refreshFirstPage();
     }
+  }
+
+  /// Menyisipkan obrolan baru secara lokal ke urutan teratas tanpa harus menunggu server.
+  /// Ini memperbaiki bug di mana obrolan baru menghilang atau melempar ke chat acak.
+  void insertLocalChat(ChatModel chat) {
+    // Hindari duplikasi
+    final idx = _chats.indexWhere((c) => c.id == chat.id);
+    if (idx != -1) {
+      _chats[idx] = chat;
+    } else {
+      _chats.insert(0, chat);
+    }
+    notifyListeners();
   }
 
   /// Hanya merefresh halaman pertama percakapan tanpa mereset pagination.
@@ -459,11 +474,20 @@ void updateRoomFromSignalR(Map<String, dynamic> roomData) {
           final idx = _chats.indexWhere((c) => c.id == chat.id);
           if (idx != -1) {
             _chats[idx] = chat;
+          } else {
+            // FIX: Bersihkan/Timpa dummy chat (yang dibuat lokal) jika contactId cocok
+            // Ini mencegah duplikasi chat room (satu asli, satu dummy)
+            final dummyIdx = _chats.indexWhere((c) => (c.id.isEmpty || c.id == '0') && c.contactId == chat.contactId);
+            if (dummyIdx != -1) {
+              _chats[dummyIdx] = chat;
+              existingIds.add(chat.id); // Cegah agar tidak ditambah ganda di step newChats
+            }
           }
         }
 
         // Tambahkan kontak baru yang belum ada
         final newChats = freshData
+
             .where((c) => !existingIds.contains(c.toChatModel().id))
             .map((c) {
               var chat = c.toChatModel();
@@ -644,7 +668,8 @@ Future<void> fetchMoreChats() async {
   bool isStarred(String messageId) => _starredMessageIds.contains(messageId);
 
     // FITUR 12: Menyimpan pesan-pesan tertentu yang dianggap penting oleh user.
-void toggleStar(String messageId, {String? content, String? sender, String? time}) {
+  // [ACTION: STAR_MESSAGE_TOGGLE] - Menyimpan/hapus pesan penting ke SharedPreferences
+  void toggleStar(String messageId, {String? content, String? sender, String? time}) {
     if (_starredMessageIds.contains(messageId)) {
       _starredMessageIds.remove(messageId);
       _starredMessages.removeWhere((m) => m['id'] == messageId);
@@ -662,6 +687,7 @@ void toggleStar(String messageId, {String? content, String? sender, String? time
     notifyListeners();
   }
 
+  // [ACTION: FILTER_APPLY] - Getter ini mengeksekusi filter (lokal) pada daftar chat
   List<ChatModel> get chats {
     var filtered = _chats.where((chat) => !chat.isArchived).toList();
 
@@ -779,12 +805,28 @@ void toggleStar(String messageId, {String? content, String? sender, String? time
     }
 
 
-    // Urutkan: Sematan (Pinned) pertama, lalu berdasarkan waktu pesan terakhir menurun
-    filtered.sort((a, b) {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      return b.time.compareTo(a.time);
-    });
+    // PENTING: sesama pinned chat kini diurutkan berdasarkan riwayat pin (statis) 
+    // agar tidak bergerak posisi ketika ada pesan baru masuk atau di-refresh.
+    final pinnedList = _pinnedIds.toList();
+    final pinnedInOrder = filtered.where((c) => c.isPinned).toList()
+      ..sort((a, b) {
+        final indexA = pinnedList.indexOf(a.id);
+        final indexB = pinnedList.indexOf(b.id);
+        if (indexA != -1 && indexB != -1) {
+          return indexB.compareTo(indexA); // Pin terbaru berada di urutan paling atas
+        } else if (indexA != -1) {
+          return -1;
+        } else if (indexB != -1) {
+          return 1;
+        } else {
+          return b.time.compareTo(a.time); // Fallback jika disematkan langsung dari server
+        }
+      });
+      
+    final unpinned = filtered.where((c) => !c.isPinned).toList()
+      ..sort((a, b) => b.time.compareTo(a.time));
+      
+    filtered = [...pinnedInOrder, ...unpinned];
     
     return filtered;
   }
@@ -898,15 +940,16 @@ void toggleStar(String messageId, {String? content, String? sender, String? time
   }
 
     // FITUR 11: Menyembunyikan chat aktif ke ruang arsip dan mengembalikannya.
+    // [ACTION: ARCHIVE_TOGGLE] - Otak pemrosesan saat arsip diubah dari UI
 Future<void> toggleArchive(String chatId) async {
     final index = _chats.indexWhere((chat) => chat.id == chatId);
     if (index != -1) {
       final newArchived = !_chats[index].isArchived;
       
-      // Optimistic update
+      // Pembaruan UI seketika (Optimistic Update) agar aplikasi terasa cepat
       _chats[index] = _chats[index].copyWith(
         isArchived: newArchived,
-        isPinned: false, // Archiving usually unpins
+        isPinned: false, // Biasanya jika diarsipkan, pin akan dilepas
       );
       
       if (newArchived) {
@@ -919,13 +962,13 @@ Future<void> toggleArchive(String chatId) async {
       _saveArchivedState();
       notifyListeners();
 
-      // Send to server
+      // Kirim perintah arsip ke server
       final response = newArchived
           ? await _chatService.moveToArchive(chatId)
           : await _chatService.restoreArchived(chatId);
 
       if (response.isError) {
-        // Rollback
+        // Kembalikan ke kondisi semula (Rollback) jika server gagal memproses
         _chats[index] = _chats[index].copyWith(isArchived: !newArchived);
         if (!newArchived) {
           _archivedIds.add(chatId);
@@ -1209,6 +1252,79 @@ Future<void> toggleArchive(String chatId) async {
   // Map dari ChId (string) ke Channel Code (misal: '1' → 'WhatsApp')
   // Dibangun dari _cachedAccounts saat accounts di-fetch
   Map<String, String> _chIdToChannelCode = {};
+
+  // Cache untuk dialog filter agar tidak load berulang kali
+  ApiResponse<List<Map<String, dynamic>>>? _cachedChannelsResponse;
+  ApiResponse<List<Map<String, dynamic>>>? _cachedContactsResponse;
+  ApiResponse<List<Map<String, dynamic>>>? _cachedGroupsResponse;
+  ApiResponse<List<Map<String, dynamic>>>? _cachedCampaignsResponse;
+  ApiResponse<List<Map<String, dynamic>>>? _cachedDealsResponse;
+  ApiResponse<List<Map<String, dynamic>>>? _cachedAccountsResponse;
+  ApiResponse<List<Map<String, dynamic>>>? _cachedLinksResponse;
+
+  Future<ApiResponse<List<Map<String, dynamic>>>> getChannelsResponse() async {
+    if (_cachedChannelsResponse != null) return _cachedChannelsResponse!;
+    _cachedChannelsResponse = await _chatService.getChannels();
+    return _cachedChannelsResponse!;
+  }
+  
+  Future<ApiResponse<List<Map<String, dynamic>>>> getContactsResponse() async {
+    if (_cachedContactsResponse != null) return _cachedContactsResponse!;
+    _cachedContactsResponse = await _chatService.getContacts();
+    return _cachedContactsResponse!;
+  }
+  
+  Future<ApiResponse<List<Map<String, dynamic>>>> getGroupsResponse() async {
+    if (_cachedGroupsResponse != null) return _cachedGroupsResponse!;
+    _cachedGroupsResponse = await _chatService.getGroups();
+    return _cachedGroupsResponse!;
+  }
+
+  Future<ApiResponse<List<Map<String, dynamic>>>> getCampaignsResponse() async {
+    if (_cachedCampaignsResponse != null) return _cachedCampaignsResponse!;
+    _cachedCampaignsResponse = await _chatService.getCampaigns();
+    return _cachedCampaignsResponse!;
+  }
+
+  Future<ApiResponse<List<Map<String, dynamic>>>> getDealsResponse() async {
+    if (_cachedDealsResponse != null) return _cachedDealsResponse!;
+    _cachedDealsResponse = await _chatService.getDeals();
+    return _cachedDealsResponse!;
+  }
+
+  Future<ApiResponse<List<Map<String, dynamic>>>> getAccountsResponse() async {
+    if (_cachedAccountsResponse != null) return _cachedAccountsResponse!;
+    _cachedAccountsResponse = await _chatService.getAccounts();
+    
+    // Build _chIdToChannelCode sekalian
+    if (!_cachedAccountsResponse!.isError && _cachedAccountsResponse!.data != null) {
+      _cachedAccounts = _cachedAccountsResponse!.data;
+      _chIdToChannelCode = {};
+      for (final account in _cachedAccounts!) {
+        final channelNum = account['Channel']?.toString();
+        final code = account['Code']?.toString();
+        final accId = account['Id']?.toString();
+        if (code != null && code.isNotEmpty) {
+          if (channelNum != null && channelNum.isNotEmpty) _chIdToChannelCode[channelNum] = code;
+          if (accId != null && accId.isNotEmpty) _chIdToChannelCode.putIfAbsent(accId, () => code);
+        }
+      }
+    }
+    
+    return _cachedAccountsResponse!;
+  }
+  
+  Future<ApiResponse<List<Map<String, dynamic>>>> getLinksResponse() async {
+    if (_cachedLinksResponse != null) return _cachedLinksResponse!;
+    _cachedLinksResponse = await _chatService.getLinks();
+    
+    // Build cache biasa juga
+    if (!_cachedLinksResponse!.isError && _cachedLinksResponse!.data != null) {
+      _cachedLinks = _cachedLinksResponse!.data;
+    }
+    
+    return _cachedLinksResponse!;
+  }
 
   Future<List<Map<String, dynamic>>?> getFunnels({bool forceRefresh = false}) async {
     if (_cachedFunnels != null && !forceRefresh) return _cachedFunnels;

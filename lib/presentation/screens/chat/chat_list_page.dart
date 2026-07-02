@@ -66,8 +66,9 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     
     final chatProvider = context.read<ChatProvider>();
     final isLoadingMore = chatProvider.isLoadingMore;
-    final hasMore = chatProvider.hasMore;
+    final hasMore = chatProvider.hasMore; 
 
+      // fetchMoreChats() dipanggil untuk meminta data chat berikutnya dari server dengan parameter (kelipatan 20)
     if (isNearBottom && !isLoadingMore && hasMore) {
       chatProvider.fetchMoreChats();
     }
@@ -119,6 +120,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             setState(() => _selectedChats.clear());
           },
         ),
+        // [ACTION: ARCHIVE_MASSAL] - Ikon untuk arsip masal / multi select
         IconButton(
           icon: const Icon(Icons.archive_outlined, color: Colors.white),
           onPressed: () {
@@ -159,6 +161,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                     ),
                     onPressed: () async {
                       Navigator.pop(ctx);
+                      // [ACTION: ARCHIVE_EXECUTE_MASSAL] - Perulangan untuk mengarsip pesan yang dipilih
                       for (var id in _selectedChats) {
                         await chatProvider.toggleArchive(id);
                       }
@@ -399,7 +402,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                     ),
                   ],
                   const SizedBox(height: 12),
-                  TextButton.icon(
+                  // FITUR 2: Paging & Pengambilan Chat
+                  // FUNGSI: fetchChats() digunakan untuk memanggil 20 percakapan pertama dari server.
+                  //         Jika terjadi error (misal 503), tombol ini memanggil fetchChats() lagi (retry).
+                  TextButton.icon( 
                     onPressed: () => chatProvider.fetchChats(),
                     icon: const Icon(Icons.refresh),
                     label: const Text('Retry'),
@@ -532,7 +538,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
-            // Fetch data on first build
+            // Tarik data saat widget pertama kali dirender
             if (isLoadingData && channels.isEmpty && loadError == null) {
               Future.microtask(() async {
                 try {
@@ -567,7 +573,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
               });
             }
 
-            // Helper to make list of unique display strings from API data
+            // Helper untuk membuat daftar nama tampilan yang unik dari data API
             List<String> toUniqueNames(List<Map<String, dynamic>> items, List<String> keys) {
               final names = <String>[];
               final seen = <String, int>{};
@@ -577,7 +583,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                   final val = item[key]?.toString();
                   if (val != null && val.isNotEmpty) { name = val; break; }
                 }
-                // Deduplicate: append (2), (3), etc. for duplicates
+                // Hilangkan duplikasi: tambahkan (2), (3), dst. untuk nama yang sama
                 if (seen.containsKey(name)) {
                   seen[name] = seen[name]! + 1;
                   names.add('$name (${seen[name]})');
@@ -590,7 +596,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             }
 
             Widget buildDropdownRow(String label, String? value, List<String> options, ValueChanged<String?> onChanged) {
-              // Ensure value exists in options, otherwise reset to null
+              // Pastikan nilai yang dipilih ada di dalam daftar opsi, jika tidak kembalikan ke null
               final safeValue = (value != null && options.contains(value)) ? value : null;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -616,7 +622,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
               );
             }
 
-            // Extract unique names from API data for dropdowns
+            // Ekstrak nama unik dari data API untuk menu dropdown
             final channelNames = toUniqueNames(channels, ['Nm', 'Name', 'ChannelName']);
             final accountNames = toUniqueNames(accounts, ['Name', 'AccountName']);
             final contactNames = toUniqueNames(contacts, ['Name']);
@@ -680,22 +686,22 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                         ),
                       )
                     else ...[
-                      // Chat dropdown
+                      // Dropdown pilihan jenis obrolan (Private/Group)
                       buildDropdownRow('Chat', selectedChat, ['Private', 'Group'], (val) {
                         if (val != null) setDialogState(() => selectedChat = val);
                       }),
 
-                      // Channel dropdown (from API)
+                      // Dropdown pilihan Channel (dari API)
                       buildDropdownRow('Channel', selectedChannel, channelNames, (val) {
                         setDialogState(() => selectedChannel = val);
                       }),
 
-                      // Account dropdown (from API)
+                      // Dropdown pilihan Akun (dari API)
                       buildDropdownRow('Account', selectedAccount, accountNames, (val) {
                         setDialogState(() => selectedAccount = val);
                       }),
 
-                      // To - Radio buttons
+                      // Tombol Radio untuk Pilihan Tujuan (To)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         child: Row(
@@ -719,65 +725,53 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                   border: Border.all(color: Colors.grey.shade300),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Column(
+                                child: Wrap(
+                                  spacing: 4,
+                                  runSpacing: 0,
                                   children: [
                                     Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Expanded(
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Radio<String>(
-                                                value: 'Contact',
-                                                groupValue: selectedTo,
-                                                onChanged: (val) {
-                                                  if (val != null) setDialogState(() => selectedTo = val);
-                                                },
-                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                visualDensity: VisualDensity.compact,
-                                              ),
-                                              const Text('Contact', style: TextStyle(fontSize: 14)),
-                                            ],
-                                          ),
+                                        Radio<String>(
+                                          value: 'Contact',
+                                          groupValue: selectedTo,
+                                          onChanged: (val) {
+                                            if (val != null) setDialogState(() => selectedTo = val);
+                                          },
+                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          visualDensity: VisualDensity.compact,
                                         ),
-                                        Expanded(
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Radio<String>(
-                                                value: 'Link',
-                                                groupValue: selectedTo,
-                                                onChanged: (val) {
-                                                  if (val != null) setDialogState(() => selectedTo = val);
-                                                },
-                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                visualDensity: VisualDensity.compact,
-                                              ),
-                                              const Text('Link', style: TextStyle(fontSize: 14)),
-                                            ],
-                                          ),
-                                        ),
+                                        const Text('Contact', style: TextStyle(fontSize: 14)),
                                       ],
                                     ),
                                     Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Expanded(
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Radio<String>(
-                                                value: 'Manual',
-                                                groupValue: selectedTo,
-                                                onChanged: (val) {
-                                                  if (val != null) setDialogState(() => selectedTo = val);
-                                                },
-                                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                                visualDensity: VisualDensity.compact,
-                                              ),
-                                              const Text('Manual', style: TextStyle(fontSize: 14)),
-                                            ],
-                                          ),
+                                        Radio<String>(
+                                          value: 'Link',
+                                          groupValue: selectedTo,
+                                          onChanged: (val) {
+                                            if (val != null) setDialogState(() => selectedTo = val);
+                                          },
+                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          visualDensity: VisualDensity.compact,
                                         ),
+                                        const Text('Link', style: TextStyle(fontSize: 14)),
+                                      ],
+                                    ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Radio<String>(
+                                          value: 'Manual',
+                                          groupValue: selectedTo,
+                                          onChanged: (val) {
+                                            if (val != null) setDialogState(() => selectedTo = val);
+                                          },
+                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        const Text('Manual', style: TextStyle(fontSize: 14)),
                                       ],
                                     ),
                                   ],
@@ -788,7 +782,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                         ),
                       ),
 
-                    // Contact dropdown (from API) or Manual input
+                    // Dropdown pilihan Kontak (dari API) atau input angka secara Manual
                       if (selectedTo == 'Contact')
                         buildDropdownRow('Contact', selectedContact, contactNames, (val) {
                           setDialogState(() => selectedContact = val);
@@ -842,7 +836,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
 
                       const SizedBox(height: 24),
 
-                      // Cancel & Create buttons
+                      // Tombol Batal & Buat Pesan
                       Row(
                         children: [
                           Expanded(
@@ -861,7 +855,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () async {
-                                // Find the receiver based on selection
+                                // Temukan ID penerima berdasarkan opsi yang dipilih
                                 String? receiver;
                                 int? contactId;
                                 int? linkId;
@@ -872,7 +866,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                     (c) => (c['Name']?.toString() ?? '') == selectedContact,
                                     orElse: () => <String, dynamic>{},
                                   );
-                                  // Use LeadLinks Id (the link between contact and channel) for fallback searching
+                                  // Gunakan Id dari LeadLinks (penghubung antara kontak dan channel) sebagai cadangan pencarian
                                   final leadLinks = contact['LeadLinks'];
                                   if (leadLinks is List && leadLinks.isNotEmpty) {
                                     receiver = leadLinks[0]['Id']?.toString();
@@ -893,7 +887,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                   return;
                                 }
 
-                                // Get selected account Id as integer
+                                // Dapatkan Id akun yang dipilih dalam format integer
                                 int accountIdInt = 0;
                                 if (selectedAccount != null) {
                                   final idx = accountNames.indexOf(selectedAccount!);
@@ -902,7 +896,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                   }
                                 }
 
-                                // Get selected channel Id as integer
+                                // Dapatkan Id channel yang dipilih dalam format integer
                                 int channelIdInt = 1;
                                 if (selectedChannel != null) {
                                   final idx = channelNames.indexOf(selectedChannel!);
@@ -917,7 +911,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                   const SnackBar(content: Text('Membuat ruangan obrolan...')),
                                 );
 
-                                // Create room via new endpoint instead of sending a message
+                                // Buat ruang obrolan (room) melalui API baru alih-alih sekadar mengirim pesan
                                 final result = await chatService.createNewRoom(
                                   accountId: accountIdInt,
                                   channelId: channelIdInt,
@@ -928,7 +922,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 );
 
                                 if (result['success'] == true) {
-                                  // Refresh chat list and navigate
+                                  // Muat ulang daftar chat dan navigasikan layar ke ruang chat yang baru dibuat
                                   if (mounted) {
                                     // Sesuai kode mentor: Jeda statis lalu fetch ulang paksa
                                     final isManual = manualInput.isNotEmpty;
@@ -951,17 +945,51 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                     if (chats.isNotEmpty) {
                                       // Cari chat yang sesuai dengan tujuan yang dipilih pengguna.
                                       String? newRoomIdStr = result['roomId']?.toString();
-                                      
-                                      final newChat = chats.firstWhere(
-                                        (c) {
-                                          if (newRoomIdStr != null && c.id == newRoomIdStr) return true;
-                                          if (receiver != null && c.contactId == receiver) return true;
-                                          if (selectedContact != null && selectedContact!.isNotEmpty && c.sender.toLowerCase().contains(selectedContact!.toLowerCase())) return true;
-                                          if (manualInput.isNotEmpty && c.sender.contains(manualInput)) return true;
-                                          return false;
-                                        },
-                                        orElse: () => chats.first,
-                                      );
+                                      ChatModel? newChat;
+                                      try {
+                                        newChat = chats.firstWhere(
+                                          (c) {
+                                            if (newRoomIdStr != null && c.id == newRoomIdStr) return true;
+                                            if (receiver != null && c.contactId == receiver) return true;
+                                            if (selectedContact != null && selectedContact!.isNotEmpty && c.sender.toLowerCase().contains(selectedContact!.toLowerCase())) return true;
+                                            if (manualInput.isNotEmpty && c.sender.contains(manualInput)) return true;
+                                            return false;
+                                          },
+                                        );
+                                      } catch (e) {
+                                        // Jika tidak ditemukan di 20 list pertama karena belum ada pesan (waktu masih null di server)
+                                        newChat = ChatModel(
+                                          id: newRoomIdStr ?? '',
+                                          contactId: receiver ?? '',
+                                          sender: selectedContact?.isNotEmpty == true ? selectedContact! : (manualInput.isNotEmpty ? manualInput : 'New Chat'),
+                                          lastMessage: '',
+                                          time: DateTime.now().toIso8601String(),
+                                          unreadCount: 0,
+                                          status: 'Unassigned',
+                                          agentName: '',
+                                          tags: [],
+                                          avatarUrl: null,
+                                          lastMessageType: null,
+                                          channelName: selectedChannel ?? '',
+                                          channelType: selectedChannel ?? '',
+                                          isPinned: false,
+                                          chId: channelIdInt.toString(),
+                                          funnel: '',
+                                          isGroup: isGroup,
+                                          isBlocked: false,
+                                          isLastMessageFromMe: true,
+                                          needReply: false,
+                                          accountId: accountIdInt.toString(),
+                                          ctRealId: receiver ?? '',
+                                          link: '',
+                                          campaign: '',
+                                          deal: '',
+                                          groupName: isGroup ? (manualInput.isNotEmpty ? manualInput : 'Group') : '',
+                                          groupId: isGroup ? (receiver ?? '') : '',
+                                        );
+                                        // Masukkan ke daftar lokal agar langsung terlihat
+                                        context.read<ChatProvider>().insertLocalChat(newChat);
+                                      }
                                       
                                       Navigator.push(
                                         context,
@@ -1002,6 +1030,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     );
   }
 
+  // FITUR: Tile Akses Arsip
+  // FUNGSI: Menampilkan baris di atas daftar chat untuk mengakses halaman Arsip, lengkap dengan jumlah (badge) chat yang saat ini diarsipkan.
   Widget _buildArchivedTile(BuildContext context, int count) {
     return ListTile(
       leading: const Padding(
@@ -1060,6 +1090,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
   }
 
   /// Shimmer skeleton loading indicator for infinite scroll (3 items)
+  // FITUR: Skeleton Loading (Pagination)
+  // FUNGSI: Menampilkan animasi kerangka memuat (shimmer effect) di bagian bawah daftar chat saat aplikasi sedang menarik data halaman berikutnya.
   Widget _buildLoadingMoreSkeleton(bool isDark) {
     return _ShimmerLoadingWidget(isDark: isDark);
   }
@@ -1245,7 +1277,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          ChannelIcon(chId: chat.chId, channelName: chat.channelName, size: 14),
+                          ChannelIcon(chId: chat.chId, channelName: '${chat.channelType} ${chat.channelName}', size: 14),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
@@ -1393,8 +1425,23 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     }
 
     // Normal text message
+    String displayMessage = chat.lastMessage;
+    
+    // Cegah JSON mentah tampil di UI jika pesan berisi attachment/media (dari forward atau API)
+    if (displayMessage.startsWith('{') && displayMessage.contains('"Filename"')) {
+      if (displayMessage.contains('"Ptt":true') || displayMessage.contains('"Ptt": true')) {
+        displayMessage = '🎵 Voice Note';
+      } else if (displayMessage.toLowerCase().contains('.jpg') || displayMessage.toLowerCase().contains('.png') || displayMessage.toLowerCase().contains('.jpeg')) {
+        displayMessage = '📷 Photo';
+      } else if (displayMessage.toLowerCase().contains('.mp4')) {
+        displayMessage = '🎥 Video';
+      } else {
+        displayMessage = '📎 Attachment';
+      }
+    }
+
     return Text(
-      chat.lastMessage,
+      displayMessage,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
@@ -1452,16 +1499,16 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
       builder: (context) {
         return FutureBuilder(
           future: Future.wait([
-            chatService.getChannels(),
-            chatService.getAccounts(),
-            chatService.getContacts(),
-            chatService.getGroups(),
-            chatService.getCampaigns(),
+            provider.getChannelsResponse(),
+            provider.getAccountsResponse(),
+            provider.getContactsResponse(),
+            provider.getGroupsResponse(),
+            provider.getCampaignsResponse(),
             provider.getFunnels(),
-            chatService.getDeals(),
+            provider.getDealsResponse(),
             provider.getTags(),
             provider.getAgents(),
-            chatService.getLinks(),
+            provider.getLinksResponse(),
           ]),
           builder: (context, AsyncSnapshot<List<dynamic>> snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1921,6 +1968,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
               );
             },
           ),
+          // [ACTION: ARCHIVE_SINGLE] - Di gunakan agar user ketika memencet log press akan muncul opo up dari
+          // bawah layar lalu memilih opsi archive (arsipkan chat)
           ListTile(
             leading: const Icon(Icons.archive_outlined, color: Colors.blue),
             title: const Text('Arsipkan Chat'),
@@ -1963,6 +2012,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                       ),
                       onPressed: () async {
                         Navigator.pop(ctx);
+                        // [ACTION: ARCHIVE_EXECUTE_SINGLE] - Ketika pengguna memencet konformasi maka sistem akan mengeksekusi kode chatProvider.toggleArchive
                         await chatProvider.toggleArchive(chat.id);
                         if (mounted) {
                           ScaffoldMessenger.of(this.context).showSnackBar(

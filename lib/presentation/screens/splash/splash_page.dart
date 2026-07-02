@@ -30,6 +30,7 @@ class _SplashPageState extends State<SplashPage> {
     _checkLogin();
   }
 
+  // [ACTION: SPLASH_INIT] - Mengeksekusi pengecekan login, tema, dan koneksi server
   void _checkLogin() async {
     try {
       debugPrint('SplashPage: Starting _checkLogin');

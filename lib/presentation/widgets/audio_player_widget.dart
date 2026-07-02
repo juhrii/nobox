@@ -120,6 +120,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     }
   }
 
+  // [ACTION: PLAY_VOICE] - Mengontrol pemutaran dan penjedaan audio
   Future<void> _togglePlayPause() async {
     try {
       if (_isPlaying) {

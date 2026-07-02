@@ -36,6 +36,7 @@ class Conversation {
   final String campaign;
   final String deal;
   final String groupName;
+  final String groupId;
 
   Conversation({
     required this.id,
@@ -66,6 +67,7 @@ class Conversation {
     this.campaign = '',
     this.deal = '',
     this.groupName = '',
+    this.groupId = '',
   });
 
   // FITUR: Parse dari JSON
@@ -119,8 +121,8 @@ class Conversation {
 
     final conv = Conversation(
       id: getValue(['Id', 'id'])?.toString() ?? '',
-      contactId: getValue(['CtId', 'ContactId', 'Id', 'id'])?.toString() ?? '',
-      participantEmail: getValue(['CtRealNm', 'Ct', 'Grp', 'Name', 'participant_email']) ?? 'Unknown',
+      contactId: getValue(['CtId', 'ContactId', 'GrpId', 'Id', 'id'])?.toString() ?? '',
+      participantEmail: getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Grp', 'Name', 'participant_email', 'GroupNm', 'GroupName', 'group_name', 'Title', 'pushName'])?.toString() ?? 'Unknown',
       lastMessage: getValue(['LastMsg', 'Category', 'last_message']) ?? '',
       lastMessageTime: getValue(['TimeMsg', 'In', 'last_message_time']) ?? '',
       unreadCount: getValue(['Uc', 'unread_count', 'UnreadCount']) ?? 0,
@@ -141,9 +143,16 @@ class Conversation {
       funnelId: rawFnId,
       isGroup: (json['IsGrp']?.toString() == '1') || 
                (json['IsGrp'] == 1) || 
+               (json['IsGrp'] == true) || 
                (json['IsGroup'] == true) || 
-               (json['GrpId'] != null) || 
-               (json['Grp'] != null),
+               (json['is_group'] == true) || 
+               (json['isGroup'] == true) || 
+               (json['GrpId'] != null && json['GrpId'].toString().isNotEmpty && json['GrpId'].toString() != '0') || 
+               ((getValue(['CtRealId', 'ct_real_id', 'CtId', 'ContactId', 'Id', 'id'])?.toString() ?? '').endsWith('@g.us')) ||
+               ((getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Grp', 'Name', 'participant_email'])?.toString() ?? '').toUpperCase().contains('GROUP')) ||
+               ((getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Grp', 'Name', 'participant_email'])?.toString() ?? '').toUpperCase().contains('GRUP')) ||
+               ((getValue(['GroupNm', 'GroupName', 'group_name'])?.toString() ?? '').isNotEmpty) ||
+               ((getValue(['ChatType', 'chat_type', 'Type', 'type'])?.toString() ?? '').toLowerCase() == 'group'),
       isBlocked: json['CtIsBlock'] == 1 || json['CtIsBlock'] == true,
       isLastMessageFromMe: json['IsMe'] == true ||
           json['LastIsMe'] == true ||
@@ -160,6 +169,7 @@ class Conversation {
       campaign: getValue(['CmpNm', 'CampaignNm', 'CampaignName', 'campaign_name', 'Campaign'])?.toString() ?? '',
       deal: getValue(['DealNm', 'DealName', 'deal_name', 'Deal'])?.toString() ?? '',
       groupName: getValue(['Grp', 'GroupNm', 'GroupName', 'group_name'])?.toString() ?? '',
+      groupId: getValue(['GrpId', 'group_id'])?.toString() ?? '',
     );
 
     return conv;
@@ -193,6 +203,7 @@ class Conversation {
     bool? needReply,
     String? accountId,
     String? ctRealId,
+    String? groupId,
   }) {
     return Conversation(
       id: id ?? this.id,
@@ -220,6 +231,7 @@ class Conversation {
       needReply: needReply ?? this.needReply,
       accountId: accountId ?? this.accountId,
       ctRealId: ctRealId ?? this.ctRealId,
+      groupId: groupId ?? this.groupId,
     );
   }
 
@@ -242,6 +254,8 @@ class Conversation {
       if (val == null) continue;
       final str = val.toString().trim();
       if (str.isNotEmpty && str != 'null') {
+        final lowerStr = str.toLowerCase();
+        if (lowerStr.contains('default') || lowerStr.contains('error:') || str.contains('{')) continue;
         raw = str;
         break;
       }
@@ -299,6 +313,7 @@ class Conversation {
       campaign: campaign,
       deal: deal,
       groupName: groupName,
+      groupId: groupId,
     );
   }
 }
