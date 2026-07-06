@@ -173,8 +173,11 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
         }
         
         // Update toggles dari Room
-        if (room['IsMuteBot'] != null) _muteAIAgent = room['IsMuteBot'] == true || room['IsMuteBot'] == 1;
-        if (room['IsNeedReply'] != null) _needReply = room['IsNeedReply'] == true || room['IsNeedReply'] == 1;
+        if (room['IsMuteBot'] != null) _muteAIAgent = room['IsMuteBot'].toString() == 'true' || room['IsMuteBot'].toString() == '1';
+        if (room['IsNeedReply'] != null) _needReply = room['IsNeedReply'].toString() == 'true' || room['IsNeedReply'].toString() == '1';
+        
+        final blockVal = room['IsBlock'] ?? room['CtIsBlock'];
+        if (blockVal != null) _isBlocked = blockVal.toString() == 'true' || blockVal.toString() == '1';
 
         // Extract Agent info from RoomAgents if available
         try {
@@ -214,6 +217,21 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
               }
             }
           }
+          
+          // Fallback: gunakan data lokasi lokal (optimistic save) jika server tidak punya/gagal update data
+          final localLocation = chatProvider.getSavedContactLocation(widget.chat.id);
+          if (localLocation != null) {
+            if (_contactCountry.isEmpty && localLocation['Country'] != null) {
+              _contactCountry = localLocation['Country']!;
+            }
+            if (_contactState.isEmpty && localLocation['State'] != null) {
+              _contactState = localLocation['State']!;
+            }
+            if (_contactCity.isEmpty && localLocation['City'] != null) {
+              _contactCity = localLocation['City']!;
+            }
+          }
+          
         } catch (e) {
           debugPrint('ContactInfo: Error extracting data: $e');
         }
@@ -236,7 +254,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             children: [
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Select Account', style: TextStyle(
+                child: Text('Pilih Akun', style: TextStyle(
                   fontSize: 18, fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : Colors.black87,
                 )),
@@ -493,7 +511,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                   child: const Icon(Icons.filter_alt_off, color: Colors.blue, size: 24),
                 ),
                 const SizedBox(width: 16),
-                Text('Remove Funnel', style: TextStyle(
+                Text('Hapus Funnel', style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : Colors.black87,
@@ -566,7 +584,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                   child: const Icon(Icons.label_off, color: Colors.blue, size: 24),
                 ),
                 const SizedBox(width: 16),
-                Text('Remove Tag', style: TextStyle(
+                Text('Hapus Tag', style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : Colors.black87,
@@ -632,7 +650,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Add Tag',
+                'Tambah Tag',
                 style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600, fontSize: 18),
               ),
               InkWell(
@@ -741,7 +759,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Add Note',
+                'Tambah Catatan',
                 style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600, fontSize: 18),
               ),
               InkWell(
@@ -1867,7 +1885,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                 else
                   InkWell(
                     onTap: _showAgentDialog,
-                    child: _buildPlaceholderValue(isDark: isDark, text: 'No agent assigned'),
+                    child: _buildPlaceholderValue(isDark: isDark, text: 'Not Set'),
                   ),
               ],
             ),

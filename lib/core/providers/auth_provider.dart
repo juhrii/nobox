@@ -46,6 +46,7 @@ class AuthProvider with ChangeNotifier {
 
   // FITUR: Cek Status Autentikasi
   // FUNGSI: Memeriksa apakah user sudah login atau belum saat aplikasi pertama dibuka
+  // [ACTION: AUTH_CHECK] - Memeriksa token saat aplikasi pertama kali dibuka
   Future<void> checkAuth() async {
     final prefs = await SharedPreferences.getInstance();
     _currentUser = prefs.getString(_userEmailKey);
@@ -193,6 +194,7 @@ class AuthProvider with ChangeNotifier {
 
   // FITUR: Logout
   // FUNGSI: Menghapus sesi, menghapus token, dan mengarahkan kembali ke halaman login
+  // [ACTION: LOGOUT_EXECUTE] - Menghapus sesi, menghapus token, dan mengarahkan kembali ke halaman login
   void logout() async {
     // Guard: jika sudah logout, jangan jalankan ulang logika logout.
     // Ini mencegah respons 401/AccessDenied dari background process agar

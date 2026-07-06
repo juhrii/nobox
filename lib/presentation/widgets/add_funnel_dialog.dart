@@ -143,21 +143,32 @@ class _AddFunnelDialogState extends State<AddFunnelDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Set Funnel Stage',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Set Funnel Stage',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
+                ),
+                InkWell(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close, color: Colors.blue),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
-            _buildContent(),
+            _buildContent(isDark),
             const SizedBox(height: 24),
             _buildActions(),
           ],
@@ -166,7 +177,7 @@ class _AddFunnelDialogState extends State<AddFunnelDialog> {
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(bool isDark) {
     if (_isLoading) {
       return const SizedBox(
         height: 56,
@@ -206,12 +217,24 @@ class _AddFunnelDialogState extends State<AddFunnelDialog> {
 
     return DropdownButtonFormField<String>(
       value: _selectedFunnelId,
+      dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15),
       decoration: InputDecoration(
         labelText: 'Funnel Stage',
+        labelStyle: TextStyle(color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.blue, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       items: _funnelOptions.map((funnel) {
         return DropdownMenuItem(
@@ -231,34 +254,44 @@ class _AddFunnelDialogState extends State<AddFunnelDialog> {
 
   Widget _buildActions() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        TextButton(
-          onPressed: _isSaving ? null : () => Navigator.pop(context),
-          child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: (_selectedFunnelId == null || _isLoading || _isSaving)
-              ? null
-              : _handleSave,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _isSaving ? null : () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Colors.blue),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
+            child: const Text('Cancel', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w600)),
           ),
-          child: _isSaving
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Text('Save'),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: (_selectedFunnelId == null || _isLoading || _isSaving)
+                ? null
+                : _handleSave,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: _isSaving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Save', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
         ),
       ],
     );

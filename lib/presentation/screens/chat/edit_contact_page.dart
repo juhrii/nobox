@@ -84,12 +84,12 @@ class _EditContactPageState extends State<EditContactPage> {
 
         setState(() {
           // Pre-fill nama dari room
-          final serverName = room['CtRealNm']?.toString();
+          final serverName = room['CtRealNm']?.toString() ?? room['CtTmp']?.toString() ?? contact['Name']?.toString() ?? contact['Nm']?.toString();
           if (serverName != null && serverName.isNotEmpty) {
             _nameController.text = serverName;
           }
 
-          // Pre-fill data lokasi dari contact
+          // Pre-fill data lokasi dari contact (server)
           final address = contact['Address']?.toString() ?? '';
           if (address.isNotEmpty) _addressController.text = address;
 
@@ -105,13 +105,59 @@ class _EditContactPageState extends State<EditContactPage> {
           final city = contact['City']?.toString() ?? contact['Cty']?.toString() ?? '';
           if (city.isNotEmpty) _selectedCityName = city;
 
+          // Fallback: gunakan data lokasi lokal jika server tidak punya data
+          final localLocation = chatProvider.getSavedContactLocation(widget.chat.id);
+          if (localLocation != null) {
+            if (_addressController.text.isEmpty && localLocation['Address'] != null) {
+              _addressController.text = localLocation['Address']!;
+            }
+            if (_postalCodeController.text.isEmpty && localLocation['Postal'] != null) {
+              _postalCodeController.text = localLocation['Postal']!;
+            }
+            if (_selectedCountryName == null && localLocation['Country'] != null) {
+              _selectedCountryName = localLocation['Country'];
+            }
+            if (_selectedStateName == null && localLocation['State'] != null) {
+              _selectedStateName = localLocation['State'];
+            }
+            if (_selectedCityName == null && localLocation['City'] != null) {
+              _selectedCityName = localLocation['City'];
+            }
+          }
+
           _isLoadingContact = false;
         });
       } else {
+        // Server data kosong, coba dari lokal
+        final chatProvider2 = Provider.of<ChatProvider>(context, listen: false);
+        final localLocation = chatProvider2.getSavedContactLocation(widget.chat.id);
+        if (localLocation != null && mounted) {
+          setState(() {
+            if (localLocation['Address'] != null) _addressController.text = localLocation['Address']!;
+            if (localLocation['Postal'] != null) _postalCodeController.text = localLocation['Postal']!;
+            if (localLocation['Country'] != null) _selectedCountryName = localLocation['Country'];
+            if (localLocation['State'] != null) _selectedStateName = localLocation['State'];
+            if (localLocation['City'] != null) _selectedCityName = localLocation['City'];
+          });
+        }
         if (mounted) setState(() => _isLoadingContact = false);
       }
     } catch (e) {
       debugPrint('EditContactPage: Error loading contact data: $e');
+      // Fallback ke lokal jika terjadi error
+      try {
+        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+        final localLocation = chatProvider.getSavedContactLocation(widget.chat.id);
+        if (localLocation != null && mounted) {
+          setState(() {
+            if (localLocation['Address'] != null) _addressController.text = localLocation['Address']!;
+            if (localLocation['Postal'] != null) _postalCodeController.text = localLocation['Postal']!;
+            if (localLocation['Country'] != null) _selectedCountryName = localLocation['Country'];
+            if (localLocation['State'] != null) _selectedStateName = localLocation['State'];
+            if (localLocation['City'] != null) _selectedCityName = localLocation['City'];
+          });
+        }
+      } catch (_) {}
       if (mounted) setState(() => _isLoadingContact = false);
     }
   }

@@ -268,54 +268,58 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                             builder: (context) {
                               final isNoBubble = widget.message.messageType == MessageType.sticker ||
                                   widget.message.messageType == MessageType.image;
-                              return Column(
-                                crossAxisAlignment: isMe
-                                    ? CrossAxisAlignment.end
-                                    : CrossAxisAlignment.start,
-                                children: [
-                                  if (widget.message.repliedMessage != null)
-                                    _buildReplyPreview(context, isMe, isDarkMode),
-                                  Container(
-                                    padding: isNoBubble
-                                        ? EdgeInsets.zero
+                              return Container(
+                                padding: isNoBubble
+                                    ? EdgeInsets.zero
+                                    : (widget.message.repliedMessage != null
+                                        ? const EdgeInsets.only(top: 4, bottom: 6) // Padding horizontal hilang saat ada reply
                                         : const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 8),
-                                    decoration: isNoBubble
-                                        ? null
-                                        : BoxDecoration(
-                                            color: widget.isSelected
-                                                ? (isMe
-                                                    ? AppTheme.primaryColor
+                                            horizontal: 10, vertical: 6)),
+                                decoration: isNoBubble
+                                    ? null
+                                    : BoxDecoration(
+                                        color: widget.isSelected
+                                            ? (isMe
+                                                ? AppTheme.primaryColor
+                                                    .withOpacity(0.8)
+                                                : (isDarkMode
+                                                    ? AppTheme.darkSurface
                                                         .withOpacity(0.8)
-                                                    : (isDarkMode
-                                                        ? AppTheme.darkSurface
-                                                            .withOpacity(0.8)
-                                                        : AppTheme.otherMessageColor
-                                                            .withOpacity(0.8)))
-                                                : (isMe
-                                                    ? AppTheme.primaryColor
-                                                    : (isDarkMode
-                                                        ? AppTheme.darkSurface
-                                                        : Colors.white)),
-                                            borderRadius: BorderRadius.only(
-                                              topLeft: const Radius.circular(12),
-                                              topRight: const Radius.circular(12),
-                                              bottomLeft: Radius.circular(isMe ? 12 : 2),
-                                              bottomRight: Radius.circular(isMe ? 2 : 12),
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(
-                                                    isDarkMode ? 0.3 : 0.08),
-                                                blurRadius: 1,
-                                                offset: const Offset(0, 0.5),
-                                              ),
-                                            ],
+                                                    : AppTheme.otherMessageColor
+                                                        .withOpacity(0.8)))
+                                            : (isMe
+                                                ? AppTheme.primaryColor
+                                                : (isDarkMode
+                                                    ? AppTheme.darkSurface
+                                                    : Colors.white)),
+                                        borderRadius: BorderRadius.only(
+                                          topLeft: const Radius.circular(12),
+                                          topRight: const Radius.circular(12),
+                                          bottomLeft: Radius.circular(isMe ? 12 : 2),
+                                          bottomRight: Radius.circular(isMe ? 2 : 12),
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                                isDarkMode ? 0.3 : 0.08),
+                                            blurRadius: 1,
+                                            offset: const Offset(0, 0.5),
                                           ),
-                                    child: _buildMessageContent(
-                                        context, isMe, isDarkMode),
-                                  ),
-                                ],
+                                        ],
+                                      ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (widget.message.repliedMessage != null)
+                                      _buildReplyPreview(context, isMe, isDarkMode),
+                                    Padding(
+                                      padding: widget.message.repliedMessage != null
+                                          ? const EdgeInsets.symmetric(horizontal: 10)
+                                          : EdgeInsets.zero,
+                                      child: _buildMessageContent(context, isMe, isDarkMode),
+                                    ),
+                                  ],
+                                ),
                               );
                             },
                           ),
@@ -423,24 +427,34 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     if (repliedMsg == null) return const SizedBox.shrink();
 
     final replyContent = _cleanContent(repliedMsg.content);
-    final replySender = repliedMsg.isMe ? 'You' : 'Customer'; // Simplification
+    
+    // Cari pesan asli di daftar pesan untuk memastikan status isMe akurat
+    Message? originalMsg;
+    if (widget.allMessages != null) {
+      try {
+        originalMsg = widget.allMessages!.firstWhere((m) => m.id == repliedMsg.id);
+      } catch (_) {}
+    }
+    
+    final isRepliedMe = originalMsg?.isMe ?? repliedMsg.isMe;
+    final replySender = isRepliedMe ? 'You' : 'Customer';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
+      margin: const EdgeInsets.only(left: 6, right: 6, bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: isMe
-            ? Colors.blue.withOpacity(0.1)
+            ? Colors.black.withOpacity(0.15) // Darker overlay for blue bubble
             : (isDarkMode
-                ? Colors.green[900]!.withOpacity(0.3)
-                : const Color(0xFFE8F5E8)),
-        borderRadius: BorderRadius.circular(6),
+                ? Colors.black.withOpacity(0.2)
+                : Colors.grey.shade100),
+        borderRadius: BorderRadius.circular(8),
         border: Border(
           left: BorderSide(
               color: isMe
-                  ? Colors.blue.withOpacity(0.8)
-                  : const Color(0xFF25D366),
-              width: 3),
+                  ? Colors.white.withOpacity(0.8)
+                  : AppTheme.primaryColor,
+              width: 4),
         ),
       ),
       child: Column(
@@ -451,20 +465,20 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
             children: [
               Icon(
                 Icons.reply,
-                size: 12,
+                size: 14,
                 color: isMe
-                    ? Colors.blue.withOpacity(0.9)
-                    : const Color(0xFF25D366),
+                    ? Colors.white.withOpacity(0.9)
+                    : AppTheme.primaryColor,
               ),
               const SizedBox(width: 4),
               Text(
                 'Reply to:',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 11,
                   color: isMe
-                      ? Colors.blue.withOpacity(0.7)
-                      : const Color(0xFF25D366).withOpacity(0.7),
-                  fontWeight: FontWeight.w500,
+                      ? Colors.white.withOpacity(0.7)
+                      : AppTheme.primaryColor.withOpacity(0.7),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -473,24 +487,24 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
           Text(
             replySender,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               color: isMe
-                  ? Colors.blue.withOpacity(0.9)
-                  : const Color(0xFF25D366),
-              fontWeight: FontWeight.w600,
+                  ? Colors.white
+                  : AppTheme.primaryColor,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           Text(
             replyContent,
             style: TextStyle(
               fontSize: 13,
               color: isMe
-                  ? Colors.white.withOpacity(0.85)
+                  ? Colors.white.withOpacity(0.9)
                   : (isDarkMode
                       ? AppTheme.darkTextPrimary
-                      : const Color(0xFF4A4A4A)),
-              height: 1.2,
+                      : Colors.black87),
+              height: 1.3,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -542,16 +556,29 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
 
   Widget _buildTextMessage(bool isMe, bool isDarkMode) {
     final cleanMessage = _cleanContent(widget.message.content);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Flexible(
-          child: _buildTextWithLinks(cleanMessage, isMe, isDarkMode),
-        ),
-        const SizedBox(width: 8),
-        _buildTimestampRow(isMe),
-      ],
+    final hasReply = widget.message.repliedMessage != null;
+
+    if (hasReply) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildTextWithLinks(cleanMessage, isMe, isDarkMode),
+          const SizedBox(height: 2),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _buildTimestampRow(isMe),
+          ),
+        ],
+      );
+    }
+
+    // Untuk pesan normal, gabungkan teks dan jam menggunakan WidgetSpan
+    // agar bubble bisa menyesuaikan lebar secara presisi (shrink-wrap)
+    return _buildTextWithLinks(
+      cleanMessage, 
+      isMe, 
+      isDarkMode, 
+      trailing: _buildTimestampRow(isMe),
     );
   }
 
@@ -620,7 +647,8 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
       children: [
         Container(
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.65,
+            minWidth: MediaQuery.of(context).size.width * 0.65,
+            maxWidth: MediaQuery.of(context).size.width * 0.75,
           ),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -700,26 +728,25 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     );
   }
 
-  Widget _buildTextWithLinks(String text, bool isMe, bool isDarkMode) {
+  Widget _buildTextWithLinks(String text, bool isMe, bool isDarkMode, {Widget? trailing}) {
     final urlRegex =
         RegExp(r'https?://[^\s]+|www\.[^\s]+', caseSensitive: false);
     final matches = urlRegex.allMatches(text);
 
-    if (matches.isEmpty) {
-      return Text(
-        text,
-        style: TextStyle(
-          color: isMe
-              ? Colors.white
-              : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
-          fontSize: 16,
-          height: 1.3,
-        ),
-      );
-    }
-
-    final List<TextSpan> spans = [];
+    final List<InlineSpan> spans = [];
     int currentIndex = 0;
+
+    final defaultStyle = TextStyle(
+      color: isMe
+          ? Colors.white
+          : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+      fontSize: 16,
+      height: 1.3,
+    );
+
+    if (matches.isEmpty) {
+      spans.add(TextSpan(text: text, style: defaultStyle));
+    } else {
 
     for (final match in matches) {
       if (match.start > currentIndex) {
@@ -755,12 +782,18 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     if (currentIndex < text.length) {
       spans.add(TextSpan(
         text: text.substring(currentIndex),
-        style: TextStyle(
-          color: isMe
-              ? Colors.white
-              : (isDarkMode ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
-          fontSize: 16,
-          height: 1.3,
+        style: defaultStyle,
+      ));
+    }
+    }
+
+    if (trailing != null) {
+      // Tambahkan spasi kecil dan widget timestamp di akhir baris teks
+      spans.add(WidgetSpan(
+        alignment: PlaceholderAlignment.bottom,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 6.0, bottom: 2.0),
+          child: trailing,
         ),
       ));
     }

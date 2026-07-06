@@ -308,8 +308,21 @@ class Message {
       return false;
     }
 
+    // Helper to check for IsDocument: true flag
+    bool _isDocumentFlag(dynamic fileData) {
+      if (fileData == null) return false;
+      try {
+        final decoded = fileData is String ? jsonDecode(fileData) : fileData;
+        if (decoded is Map) return decoded['IsDocument'] == true;
+        if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
+          return decoded.first['IsDocument'] == true;
+        }
+      } catch (_) {}
+      return false;
+    }
+
     // Debug: catat raw JSON untuk pesan terkait media
-    if (typeVal == '2' || typeVal == '16' || typeVal == '3' || typeVal == '4' ||
+    if (typeVal == '2' || typeVal == '16' || typeVal == '3' || typeVal == '4' || typeVal == '5' ||
         json['Files'] != null || json['File'] != null) {
       assert(() {
         debugPrint('Message.fromJson MEDIA: Type=$typeVal, Files=${json['Files']}, File=${json['File']}, Id=${json['Id']}, IdAlias=${json['IdAlias']}, tenantId=$tenantId, Msg=${json['Msg']}');
@@ -329,11 +342,14 @@ class Message {
       if (fileData is Map) {
         if (fileData['Filename'] != null) filePath = fileData['Filename'].toString();
         else if (fileData['url'] != null) filePath = fileData['url'].toString();
-      } else if (filePath.startsWith('{')) {
+      } else if (filePath.startsWith('{') || filePath.startsWith('[')) {
         try {
-          final fileMap = jsonDecode(filePath);
-          if (fileMap['Filename'] != null) filePath = fileMap['Filename'].toString();
-          else if (fileMap['url'] != null) filePath = fileMap['url'].toString();
+          final decoded = jsonDecode(filePath);
+          final fileMap = decoded is List ? (decoded.isNotEmpty ? decoded.first : {}) : decoded;
+          if (fileMap is Map) {
+            if (fileMap['Filename'] != null) filePath = fileMap['Filename'].toString();
+            else if (fileMap['url'] != null) filePath = fileMap['url'].toString();
+          }
         } catch (_) {}
       }
       
@@ -347,14 +363,16 @@ class Message {
       return filePath.trim();
     }
 
-    // Helper untuk mengekstrak OriginalName dari data file (untuk fallback deteksi tipe)
     String extractOriginalName(dynamic fileData) {
       if (fileData is Map) {
         return fileData['OriginalName']?.toString() ?? '';
-      } else if (fileData is String && fileData.startsWith('{')) {
+      } else if (fileData is String && (fileData.startsWith('{') || fileData.startsWith('['))) {
         try {
-          final fileMap = jsonDecode(fileData);
-          return fileMap['OriginalName']?.toString() ?? '';
+          final decoded = jsonDecode(fileData);
+          final fileMap = decoded is List ? (decoded.isNotEmpty ? decoded.first : {}) : decoded;
+          if (fileMap is Map) {
+            return fileMap['OriginalName']?.toString() ?? '';
+          }
         } catch (_) {}
       }
       return '';
@@ -372,15 +390,17 @@ class Message {
         msgType = MessageType.sticker;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
         content = '🌟 Sticker';
-      } else if (typeVal == '5') {
-        // Jika dari API diset sebagai Dokumen (5), paksa sebagai dokumen meskipun ekstensinya .jpg!
+      } else if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(firstFile)) {
+        // Voice note: cek ekstensi audio ATAU flag Ptt:true — SEBELUM cek document (type 5)
+        // Server NoBox kadang mengembalikan Type=5 untuk voice notes
+        msgType = MessageType.voice;
+        audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+      } else if (typeVal == '5' || _isDocumentFlag(firstFile)) {
+        // Jika dari API diset sebagai Dokumen (5) atau ada flag IsDocument: true
         msgType = MessageType.document;
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
         docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
         content = '📄 $docName';
-      } else if (isAudioFile(filePath) || isAudioFile(originalName)) {
-        msgType = MessageType.voice;
-        audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
         msgType = MessageType.video;
         videoUrl = filePath.startsWith('http') 
@@ -422,7 +442,7 @@ class Message {
         // Voice note: cek typeVal=='2', ekstensi audio, ATAU flag Ptt:true — sebelum cek document (type 5)
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-      } else if (typeVal == '5') {
+      } else if (typeVal == '5' || _isDocumentFlag(json['File'])) {
         msgType = MessageType.document;
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
         docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -481,6 +501,17 @@ class Message {
       parsedAck = isSystem ? 0 : 2;
     }
 
+    // FIX: Parse pesan balasan (Reply Context) agar tidak hilang saat keluar masuk halaman
+    Message? parsedRepliedMsg;
+    if (json['ReplyMsg'] != null && json['ReplyMsg'].toString().isNotEmpty) {
+      parsedRepliedMsg = Message(
+        id: json['ReplyId']?.toString() ?? '',
+        content: json['ReplyMsg']?.toString() ?? '',
+        isMe: json['ReplyFrom']?.toString() == currentUserEmail,
+        time: '', // Waktu tidak dikirimkan oleh API untuk pesan balasan
+      );
+    }
+
     return Message(
       id: id,
       content: content,
@@ -495,6 +526,7 @@ class Message {
       documentName: docName,
       documentUrl: docUrl,
       ack: parsedAck,
+      repliedMessage: parsedRepliedMsg,
     );
   }
 

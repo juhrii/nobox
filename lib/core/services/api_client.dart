@@ -33,8 +33,8 @@ class ApiClient {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 60),
+        connectTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 120),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -106,7 +106,7 @@ class ApiClient {
 
     // Hanya catat log request/response di mode debug untuk menghindari
     // pemborosan memori pada payload besar (misal gambar base64) di tahap produksi.
-    if (!kReleaseMode) {
+    if (kDebugMode) {
       _dio.interceptors.add(LogInterceptor(
         requestBody: true,
         responseBody: true,
@@ -143,8 +143,8 @@ class ApiClient {
       // Login langsung pakai Dio baru (bypass interceptor agar tidak infinite loop)
       final loginDio = Dio(BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 60),
+        connectTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 120),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',

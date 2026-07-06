@@ -13,7 +13,9 @@ class MessageRequest {
   final String? attachment;
   final String? extId;
   final String? groupId;
+  final String? replyId;
   final int bodyType;
+  final bool isTelegram;
 
   MessageRequest({
     required this.receiver,
@@ -24,7 +26,9 @@ class MessageRequest {
     this.attachment,
     this.extId,
     this.groupId,
+    this.replyId,
     this.bodyType = 1,
+    this.isTelegram = false,
   });
 
   // FITUR: Convert ke JSON
@@ -39,6 +43,7 @@ class MessageRequest {
       if (attachment != null) 'Attachment': attachment,
       if (extId != null) 'ExtId': extId,
       if (groupId != null) 'GroupId': groupId,
+      if (replyId != null) 'ReplyTo': replyId, // Parameter backend untuk merespon pesan spesifik
     };
   }
 }

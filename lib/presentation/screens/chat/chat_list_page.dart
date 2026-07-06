@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../widgets/searchable_dropdown.dart';
@@ -1424,20 +1425,34 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
       );
     }
 
-    // Normal text message
     String displayMessage = chat.lastMessage;
     
     // Cegah JSON mentah tampil di UI jika pesan berisi attachment/media (dari forward atau API)
-    if (displayMessage.startsWith('{') && displayMessage.contains('"Filename"')) {
-      if (displayMessage.contains('"Ptt":true') || displayMessage.contains('"Ptt": true')) {
+    final trimmedMsg = displayMessage.trim();
+    if ((trimmedMsg.startsWith('{') || trimmedMsg.startsWith('[')) && trimmedMsg.contains('"Filename"')) {
+      if (trimmedMsg.contains('"Ptt":true') || trimmedMsg.contains('"Ptt": true')) {
         displayMessage = '🎵 Voice Note';
-      } else if (displayMessage.toLowerCase().contains('.jpg') || displayMessage.toLowerCase().contains('.png') || displayMessage.toLowerCase().contains('.jpeg')) {
+      } else if (trimmedMsg.toLowerCase().contains('.jpg') || trimmedMsg.toLowerCase().contains('.png') || trimmedMsg.toLowerCase().contains('.jpeg')) {
         displayMessage = '📷 Photo';
-      } else if (displayMessage.toLowerCase().contains('.mp4')) {
+      } else if (trimmedMsg.toLowerCase().contains('.mp4')) {
         displayMessage = '🎥 Video';
       } else {
-        displayMessage = '📎 Attachment';
+        String docName = 'Document';
+        try {
+          final decoded = jsonDecode(trimmedMsg);
+          final fileMap = decoded is List ? (decoded.isNotEmpty ? decoded.first : {}) : decoded;
+          if (fileMap is Map) {
+            if (fileMap['OriginalName'] != null && fileMap['OriginalName'].toString().isNotEmpty) {
+              docName = fileMap['OriginalName'].toString();
+            } else if (fileMap['Filename'] != null && fileMap['Filename'].toString().isNotEmpty) {
+              docName = fileMap['Filename'].toString().split('/').last;
+            }
+          }
+        } catch (_) {}
+        displayMessage = '📄 $docName';
       }
+    } else if (displayMessage.isEmpty) {
+      displayMessage = '📄 Document';
     }
 
     return Text(

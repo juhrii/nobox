@@ -623,6 +623,7 @@ class SignalRService {
     required String type, // "1" for text, "3" for media
     String? msg,
     String? fileJson,
+    String? replyId,
   }) async {
     try {
       final payload = {
@@ -635,9 +636,19 @@ class SignalRService {
         "Msg": {
           "Type": type,
           "Msg": msg,
-          "File": fileJson, // Expecting stringified JSON like "{\"Filename\":\"...\"}"
+          "File": fileJson,
           "Files": null,
-          "ReplyId": null
+          "ReplyId": replyId != null ? (int.tryParse(replyId) ?? replyId) : null,
+          "Id": DateTime.now().millisecondsSinceEpoch.toString(),
+          "RoomId": idRoom is int ? idRoom : int.tryParse(idRoom?.toString() ?? ''),
+          "From": idAccount is int ? idAccount : int.tryParse(idAccount?.toString() ?? ''),
+          "To": idLink is int ? idLink : int.tryParse(idLink?.toString() ?? ''),
+          "AgentId": 1905, // Default/Placeholder, or extract from user profile if available
+          "In": DateTime.now().toUtc().toIso8601String(),
+          "Up": DateTime.now().toUtc().toIso8601String(),
+          "InBy": 1905,
+          "UpBy": 1905,
+          "Ack": 1
         }
       };
 

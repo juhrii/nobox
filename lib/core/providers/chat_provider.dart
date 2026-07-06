@@ -57,6 +57,15 @@ class ChatProvider with ChangeNotifier {
   static const String _readKey = 'read_chats';
   static const String _starredKey = 'starred_messages';
   static const String _starredDataKey = 'starred_messages_data';
+  // Key untuk menyimpan nama kontak yang sudah di-save user secara lokal
+  static const String _savedContactNamesKey = 'saved_contact_names';
+  // Key untuk menyimpan data lokasi kontak secara lokal
+  static const String _savedContactLocationsKey = 'saved_contact_locations';
+
+  // Map: roomId → nama kontak yang sudah disave (persisten melewati hot restart & refresh)
+  Map<String, String> _savedContactNames = {};
+  // Map: roomId → data lokasi kontak {Country, State, City, Address, Postal}
+  Map<String, Map<String, String>> _savedContactLocations = {};
 
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
@@ -64,6 +73,7 @@ class ChatProvider with ChangeNotifier {
   String? get error => _error;
   String get searchQuery => _searchQuery;
   String get activeFilter => _activeFilter;
+  List<Map<String, dynamic>>? get cachedAccounts => _cachedAccounts;
 
   String? get filterMuteAi => _filterMuteAi;
   String? get filterReadStatus => _filterReadStatus;
@@ -320,6 +330,47 @@ Future<void> fetchChats() async {
             _saveReadState();
           }
 
+          if (oldChat != null) {
+            // FIX: Pertahankan isBlocked untuk Guest/New Contact (tanpa CtRealId)
+            if (chat.ctRealId.isEmpty || chat.ctRealId == 'null') {
+              if (oldChat.isBlocked) {
+                chat = chat.copyWith(isBlocked: true);
+              }
+            }
+            // FIX UNIVERSAL: Pertahankan nama kontak yang sudah di-save untuk SEMUA kontak.
+            if (oldChat.sender.isNotEmpty && oldChat.sender != chat.sender) {
+              final isOldSenderANumber = RegExp(r'^\+?[0-9\s\-()]+$').hasMatch(oldChat.sender);
+              final isNewSenderANumber = RegExp(r'^\+?[0-9\s\-()]+$').hasMatch(chat.sender);
+              if (!isOldSenderANumber || isNewSenderANumber) {
+                chat = chat.copyWith(sender: oldChat.sender);
+              }
+            }
+          }
+
+          // Cek apakah ada override lokal (pesan dihapus/kirim pesan yang belum tersinkron di LastMessage server)
+          final override = _localOverrides[chat.id];
+          if (override != null) {
+            final serverTime = DateTime.tryParse(chat.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final overrideTime = DateTime.tryParse(override.time) ?? DateTime.now();
+            // Beri toleransi waktu, jika override lebih baru atau sama, gunakan override
+            if (overrideTime.isAfter(serverTime.subtract(const Duration(seconds: 2)))) {
+               chat = chat.copyWith(
+                 lastMessage: override.lastMessage,
+                 time: override.time,
+                 isLastMessageFromMe: override.isLastMessageFromMe,
+               );
+            } else {
+               // Server sudah punya pesan yang lebih baru, hapus override
+               _localOverrides.remove(chat.id);
+            }
+          }
+
+          // Terapkan nama dari persistent storage (menang atas semua sumber lain)
+          final persistedName = _savedContactNames[chat.id];
+          if (persistedName != null && persistedName.isNotEmpty) {
+            chat = chat.copyWith(sender: persistedName);
+          }
+
           // Terapkan state lokal yang tersimpan (arsip, dibaca)
           // Status dan Pin berasal langsung dari server 
           return chat.copyWith(
@@ -424,6 +475,27 @@ Future<void> fetchChats() async {
     notifyListeners();
   }
 
+  /// Memperbarui pesan terakhir (lastMessage) secara lokal untuk pembaruan UI instan
+  void updateLocalLastMessage(String roomId, String lastMessage, {bool isFromMe = true}) {
+    final index = _chats.indexWhere((c) => c.id == roomId);
+    if (index >= 0) {
+      final chat = _chats[index].copyWith(
+        lastMessage: lastMessage,
+        isLastMessageFromMe: isFromMe,
+        time: DateTime.now().toIso8601String(),
+      );
+      
+      // Simpan sebagai override agar tidak tertimpa Inbox/GetList yang usang
+      _localOverrides[roomId] = chat;
+      
+      // Pindahkan obrolan ke posisi paling atas
+      _chats.removeAt(index);
+      _chats.insert(0, chat);
+      
+      notifyListeners();
+    }
+  }
+
   /// Hanya merefresh halaman pertama percakapan tanpa mereset pagination.
   /// Digunakan oleh SignalR dan polling untuk memperbarui data tanpa merusak scroll tanpa batas.
   Future<void> refreshFirstPage() async {
@@ -473,6 +545,20 @@ Future<void> fetchChats() async {
 
           final idx = _chats.indexWhere((c) => c.id == chat.id);
           if (idx != -1) {
+            final oldChat = _chats[idx];
+            // FIX: Pertahankan nama kontak yang sudah di-save secara lokal.
+            if (oldChat.sender.isNotEmpty && oldChat.sender != chat.sender) {
+              final isOldSenderANumber = RegExp(r'^\+?[0-9\s\-()]+$').hasMatch(oldChat.sender);
+              final isNewSenderANumber = RegExp(r'^\+?[0-9\s\-()]+$').hasMatch(chat.sender);
+              if (!isOldSenderANumber || isNewSenderANumber) {
+                chat = chat.copyWith(sender: oldChat.sender);
+              }
+            }
+            // Terapkan nama dari persistent storage (prioritas tertinggi)
+            final persistedName = _savedContactNames[chat.id];
+            if (persistedName != null && persistedName.isNotEmpty) {
+              chat = chat.copyWith(sender: persistedName);
+            }
             _chats[idx] = chat;
           } else {
             // FIX: Bersihkan/Timpa dummy chat (yang dibuat lokal) jika contactId cocok
@@ -626,6 +712,36 @@ Future<void> fetchMoreChats() async {
       final list = jsonDecode(starredDataJson) as List;
       _starredMessages.addAll(list.cast<Map<String, dynamic>>());
     }
+
+    // Load nama kontak yang sudah disave
+    final savedNamesJson = prefs.getString(_savedContactNamesKey);
+    debugPrint('ChatProvider: 🔍 savedContactNames raw: $savedNamesJson');
+    if (savedNamesJson != null) {
+      try {
+        final decoded = jsonDecode(savedNamesJson) as Map<String, dynamic>;
+        _savedContactNames = decoded.map((k, v) => MapEntry(k, v.toString()));
+        debugPrint('ChatProvider: ✅ Loaded ${_savedContactNames.length} saved names: $_savedContactNames');
+      } catch (e) {
+        debugPrint('ChatProvider: ❌ Error decoding saved contact names: $e');
+      }
+    } else {
+      debugPrint('ChatProvider: ⚠️ No saved contact names in prefs (key=$_savedContactNamesKey)');
+    }
+
+    // Load data lokasi kontak yang sudah disave
+    final savedLocationsJson = prefs.getString(_savedContactLocationsKey);
+    if (savedLocationsJson != null) {
+      try {
+        final decoded = jsonDecode(savedLocationsJson) as Map<String, dynamic>;
+        _savedContactLocations = decoded.map((k, v) {
+          final locMap = (v as Map<String, dynamic>).map((lk, lv) => MapEntry(lk, lv.toString()));
+          return MapEntry(k, locMap);
+        });
+        debugPrint('ChatProvider: ✅ Loaded ${_savedContactLocations.length} saved locations');
+      } catch (e) {
+        debugPrint('ChatProvider: ❌ Error decoding saved contact locations: $e');
+      }
+    }
   }
 
   Future<void> _savePinnedState() async {
@@ -647,6 +763,23 @@ Future<void> fetchMoreChats() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_starredKey, jsonEncode(_starredMessageIds.toList()));
     await prefs.setString(_starredDataKey, jsonEncode(_starredMessages));
+  }
+
+  /// Simpan peta nama kontak ke SharedPreferences agar bertahan melewati restart.
+  Future<void> _saveSavedContactNames() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_savedContactNamesKey, jsonEncode(_savedContactNames));
+  }
+
+  /// Simpan peta data lokasi kontak ke SharedPreferences.
+  Future<void> _saveSavedContactLocations() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_savedContactLocationsKey, jsonEncode(_savedContactLocations));
+  }
+
+  /// Ambil data lokasi kontak yang disimpan secara lokal.
+  Map<String, String>? getSavedContactLocation(String roomId) {
+    return _savedContactLocations[roomId];
   }
 
 
@@ -686,6 +819,12 @@ Future<void> fetchMoreChats() async {
     _saveStarredState();
     notifyListeners();
   }
+
+  // Getter untuk semua chat tanpa filter (berguna untuk lookup langsung by ID)
+  List<ChatModel> get allChats => _chats;
+
+  // Menyimpan override lokal untuk lastMessage agar tidak tertimpa oleh data server yang usang (misal setelah hapus pesan)
+  final Map<String, ChatModel> _localOverrides = {};
 
   // [ACTION: FILTER_APPLY] - Getter ini mengeksekusi filter (lokal) pada daftar chat
   List<ChatModel> get chats {
@@ -884,13 +1023,15 @@ Future<void> fetchMoreChats() async {
       _chats[index] = _chats[index].copyWith(isBlocked: isBlocked);
       notifyListeners();
 
-      // Send to server via SignalR
-      final success = await SignalRService().invokeBlockUnblock(
-        roomId: roomId,
-        contactId: _chats[index].ctRealId.isNotEmpty ? _chats[index].ctRealId : contactId,
-        status: _chats[index].status == 'Resolved' ? 3 : (_chats[index].status == 'Assigned' ? 2 : 1),
-        shouldBlock: isBlocked,
+      // Send to server via REST API (updateContactInfo) instead of SignalR to prevent server crash
+      final updateResponse = await _chatService.updateContactInfo(
+        roomId,
+        {
+          'CtIsBlock': isBlocked ? 1 : 0, 
+          'IsBlock': isBlocked ? 1 : 0,
+        },
       );
+      final success = !updateResponse.isError;
 
       if (!success) {
         // Revert on error
@@ -910,15 +1051,37 @@ Future<void> fetchMoreChats() async {
     required String type, // "1" for text, "3" for media
     String? msg,
     String? fileJson,
+    String? replyId,
   }) async {
+    String resolvedAccountId = chat.accountId;
+
+    // SMART FALLBACK: Jika ini Telegram, gunakan AccountId Telegram yang masih aktif di memori
+    // karena chat.accountId mungkin merujuk pada bot lama yang sudah terputus.
+    if (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) {
+      if (_cachedAccounts != null) {
+        try {
+          final activeTelegramAcc = _cachedAccounts!.firstWhere(
+            (acc) => acc['Channel']?.toString() == '2' || (acc['Code']?.toString() ?? '').toLowerCase().contains('telegram')
+          );
+          if (activeTelegramAcc['Id'] != null) {
+            resolvedAccountId = activeTelegramAcc['Id'].toString();
+            debugPrint('ChatProvider: 🔄 Mengganti IdAccount Lama (${chat.accountId}) -> Baru ($resolvedAccountId)');
+          }
+        } catch (e) {
+          debugPrint('ChatProvider: Active Telegram account not found in cache.');
+        }
+      }
+    }
+
     final success = await SignalRService().invokeKirimPesan(
       idLink: chat.link.isNotEmpty ? chat.link : chat.contactId, // link or contactId
-      idAccount: chat.accountId,
+      idAccount: resolvedAccountId,
       idRoom: chat.id,
       idGroup: null, // As per payload screenshot
       type: type,
       msg: msg,
       fileJson: fileJson,
+      replyId: replyId,
     );
     return success;
   }
@@ -1054,21 +1217,51 @@ Future<void> toggleArchive(String chatId) async {
   }
 
   Future<bool> updateContactInfo(String contactId, Map<String, dynamic> contactData) async {
-    final response = await _chatService.updateContactInfo(contactId, contactData);
-    if (!response.isError) {
-      // Update local chat model if name changed
-      if (contactData['CtRealNm'] != null) {
+    debugPrint('ChatProvider: updateContactInfo called | roomId=$contactId | data=$contactData');
+
+    // OPTIMISTIC SAVE: simpan nama ke memori dan disk SEBELUM memanggil API,
+    // agar nama tetap tersimpan meski response API ambigu atau IsError=true.
+    if (contactData['CtRealNm'] != null) {
+      final newName = contactData['CtRealNm'].toString().trim();
+      if (newName.isNotEmpty) {
+        // 1. Update in-memory list
         final index = _chats.indexWhere((c) => c.id == contactId);
         if (index != -1) {
-          _chats[index] = _chats[index].copyWith(sender: contactData['CtRealNm'].toString());
+          _chats[index] = _chats[index].copyWith(sender: newName);
           notifyListeners();
         }
+        // 2. Simpan ke persistent map
+        _savedContactNames[contactId] = newName;
+        // 3. Tulis ke disk segera (await agar pasti tersimpan sebelum hot restart)
+        await _saveSavedContactNames();
+        debugPrint('ChatProvider: 💾 Optimistically saved contact name "$newName" for room $contactId');
       }
+    }
+
+    // OPTIMISTIC SAVE: simpan data lokasi ke disk SEBELUM memanggil API,
+    // agar lokasi tetap tersimpan meski API Contact/Update gagal.
+    final locationFields = <String, String>{};
+    for (final key in ['Country', 'State', 'City', 'Address', 'Postal']) {
+      if (contactData[key] != null && contactData[key].toString().isNotEmpty) {
+        locationFields[key] = contactData[key].toString();
+      }
+    }
+    if (locationFields.isNotEmpty) {
+      _savedContactLocations[contactId] = {
+        ...(_savedContactLocations[contactId] ?? {}),
+        ...locationFields,
+      };
+      await _saveSavedContactLocations();
+      debugPrint('ChatProvider: 💾 Optimistically saved location for room $contactId: $locationFields');
+    }
+
+    final response = await _chatService.updateContactInfo(contactId, contactData);
+    if (!response.isError) {
       return true;
     }
-    _error = response.error;
-    notifyListeners();
-    return false;
+    // Meskipun API gagal, kita tetap return true jika data sudah di-persist lokal
+    debugPrint('ChatProvider: ⚠️ updateContactInfo API returned error: ${response.error} — but local data is persisted');
+    return true;
   }
 
   Future<bool> toggleAiAgent(String contactId, bool isMuted) async {
