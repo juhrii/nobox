@@ -266,8 +266,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                           ),
                           child: Builder(
                             builder: (context) {
-                              final isNoBubble = widget.message.messageType == MessageType.sticker ||
-                                  widget.message.messageType == MessageType.image;
+                              final isNoBubble = widget.message.messageType == MessageType.sticker;
                               return Container(
                                 padding: isNoBubble
                                     ? EdgeInsets.zero
@@ -572,13 +571,19 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
       );
     }
 
-    // Untuk pesan normal, gabungkan teks dan jam menggunakan WidgetSpan
-    // agar bubble bisa menyesuaikan lebar secara presisi (shrink-wrap)
-    return _buildTextWithLinks(
-      cleanMessage, 
-      isMe, 
-      isDarkMode, 
-      trailing: _buildTimestampRow(isMe),
+    return Wrap(
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.end,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 4.0, bottom: 2.0, top: 2.0),
+          child: _buildTextWithLinks(cleanMessage, isMe, isDarkMode),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2.0),
+          child: _buildTimestampRow(isMe),
+        ),
+      ],
     );
   }
 
@@ -790,10 +795,13 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     if (trailing != null) {
       // Tambahkan spasi kecil dan widget timestamp di akhir baris teks
       spans.add(WidgetSpan(
-        alignment: PlaceholderAlignment.bottom,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 6.0, bottom: 2.0),
-          child: trailing,
+        alignment: PlaceholderAlignment.middle, // Gunakan middle agar posisinya turun ke tengah baris
+        child: Transform.translate(
+          offset: const Offset(0, 2), // Tambahan sedikit ke bawah agar sejajar sempurna
+          child: Padding(
+            padding: const EdgeInsets.only(left: 8.0),
+            child: trailing,
+          ),
         ),
       ));
     }
@@ -1369,15 +1377,15 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
         break;
       case 3: // Delivered
         icon = Icons.done_all;
-        color = Colors.grey;
+        color = Colors.grey; // Double gray checkmark
         break;
       case 4: // Failed
         icon = Icons.error_outline;
         color = Colors.red;
         break;
-      case 5: // Read — same as delivered per nobox.ai standard
+      case 5: // Read
         icon = Icons.done_all;
-        color = Colors.grey;
+        color = Colors.blue; // Double blue checkmark!
         break;
       default:
         icon = Icons.check;

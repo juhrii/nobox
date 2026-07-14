@@ -628,10 +628,10 @@ class SignalRService {
     try {
       final payload = {
         "Room": {
-          "IdLink": idLink is int ? idLink : int.tryParse(idLink?.toString() ?? ''),
-          "IdGroup": idGroup is int ? idGroup : int.tryParse(idGroup?.toString() ?? ''),
-          "IdAccount": idAccount is int ? idAccount : int.tryParse(idAccount?.toString() ?? ''),
-          "IdRoom": idRoom is int ? idRoom : int.tryParse(idRoom?.toString() ?? '')
+          "IdLink": idLink is int ? idLink : (int.tryParse(idLink?.toString() ?? '') ?? idLink),
+          "IdGroup": idGroup is int ? idGroup : (int.tryParse(idGroup?.toString() ?? '') ?? idGroup),
+          "IdAccount": idAccount is int ? idAccount : (int.tryParse(idAccount?.toString() ?? '') ?? idAccount),
+          "IdRoom": idRoom is int ? idRoom : (int.tryParse(idRoom?.toString() ?? '') ?? idRoom)
         },
         "Msg": {
           "Type": type,
@@ -640,9 +640,9 @@ class SignalRService {
           "Files": null,
           "ReplyId": replyId != null ? (int.tryParse(replyId) ?? replyId) : null,
           "Id": DateTime.now().millisecondsSinceEpoch.toString(),
-          "RoomId": idRoom is int ? idRoom : int.tryParse(idRoom?.toString() ?? ''),
-          "From": idAccount is int ? idAccount : int.tryParse(idAccount?.toString() ?? ''),
-          "To": idLink is int ? idLink : int.tryParse(idLink?.toString() ?? ''),
+          "RoomId": idRoom is int ? idRoom : (int.tryParse(idRoom?.toString() ?? '') ?? idRoom),
+          "From": idAccount is int ? idAccount : (int.tryParse(idAccount?.toString() ?? '') ?? idAccount),
+          "To": idLink is int ? idLink : (int.tryParse(idLink?.toString() ?? '') ?? idLink),
           "AgentId": 1905, // Default/Placeholder, or extract from user profile if available
           "In": DateTime.now().toUtc().toIso8601String(),
           "Up": DateTime.now().toUtc().toIso8601String(),

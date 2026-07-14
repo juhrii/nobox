@@ -159,6 +159,7 @@ class Message {
   final String content;
   final bool isMe;
   final String time;
+  final String rawTime; // RAW ISO string for accurate sorting
   final MessageStatus status;
   final Message? repliedMessage;
   final bool isSystemMessage;
@@ -177,6 +178,7 @@ class Message {
     required this.content,
     required this.isMe,
     required this.time,
+    this.rawTime = '',
     this.status = MessageStatus.sent,
     this.repliedMessage,
     this.isSystemMessage = false,
@@ -216,7 +218,17 @@ class Message {
   // FITUR: Parse Pesan dari JSON
   // FUNGSI: Mengubah response JSON list messages API menjadi objek Message
   factory Message.fromJson(Map<String, dynamic> json, String currentUserEmail, {String? tenantId}) {
-    final id = json['Id']?.toString() ?? '';
+    String id = json['Id']?.toString() ?? '';
+    if (id == '0' || id.isEmpty) {
+      final idAlias = json['IdAlias']?.toString() ?? '';
+      if (idAlias.isNotEmpty && idAlias != '0') {
+        id = idAlias;
+      } else {
+        final timeStr = json['In']?.toString() ?? '';
+        final contentStr = json['Msg']?.toString() ?? '';
+        id = 'temp_${timeStr}_${contentStr.hashCode}';
+      }
+    }
     // ChatMessages/List menggunakan Type: 6 untuk pesan sistem, Type: 1/2 untuk pesan biasa
     final typeVal = json['Type']?.toString();
     final isSystem = json['IsSystemMessage'] == true || 
@@ -235,6 +247,11 @@ class Message {
       content = json['Body']?.toString() ?? json['Message']?.toString() ?? json['message']?.toString() ?? json['Content']?.toString() ?? '';
     }
     
+    // Tangani anomali dari API: 'document(Empty)' atau 'voice(Empty)'
+    if (content.trim().toLowerCase() == 'document(empty)' || content.trim().toLowerCase() == 'voice(empty)') {
+      content = '';
+    }
+
     // Pesan sistem (Type: 6) memiliki JSON di Msg seperti {"msg":"Site.Inbox.UnmuteBotByAgent",...}
     // Parse untuk menampilkan label yang mudah dibaca
     if (isSystem && content.startsWith('{')) {
@@ -265,8 +282,9 @@ class Message {
     // Cek juga nama field lama untuk kompatibilitas mundur
     bool isMe = false;
     if (!isSystem) {
-      if (json['AgentId'] != null) {
-        // AgentId ada → pesan dikirim oleh agen (kita)
+      final agentIdVal = json['AgentId'];
+      if (agentIdVal != null && agentIdVal != 0 && agentIdVal.toString() != '0') {
+        // AgentId ada dan bukan 0 → pesan dikirim oleh agen (kita)
         isMe = true;
       } else if (json['IsMe'] == true) {
         isMe = true;
@@ -292,7 +310,7 @@ class Message {
     // Helper untuk mengecek apakah nama file adalah file audio
     bool isAudioFile(String fileName) {
       final ext = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
-      return ['mp3', 'wav', 'ogg', 'opus', 'm4a', 'aac', 'weba', 'amr'].contains(ext);
+      return ['mp3', 'wav', 'ogg', 'oga', 'opus', 'm4a', 'aac', 'weba', 'amr'].contains(ext);
     }
 
     // Helper untuk mengecek flag Ptt:true (Voice Note marker dari WhatsApp/Telegram)
@@ -300,9 +318,13 @@ class Message {
       if (fileData == null) return false;
       try {
         final decoded = fileData is String ? jsonDecode(fileData) : fileData;
-        if (decoded is Map) return decoded['Ptt'] == true;
+        if (decoded is Map) {
+          final isPttMap = decoded['Ptt'] == true || decoded['ptt'] == true || decoded['IsPtt'] == true || decoded['isPtt'] == true || decoded['IsAudio'] == true || decoded['isAudio'] == true || decoded['Ptt']?.toString().toLowerCase() == 'true' || decoded['ptt']?.toString().toLowerCase() == 'true';
+          if (isPttMap) return true;
+        }
         if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
-          return decoded.first['Ptt'] == true;
+          final first = decoded.first;
+          return first['Ptt'] == true || first['ptt'] == true || first['IsPtt'] == true || first['isPtt'] == true || first['IsAudio'] == true || first['isAudio'] == true || first['Ptt']?.toString().toLowerCase() == 'true' || first['ptt']?.toString().toLowerCase() == 'true';
         }
       } catch (_) {}
       return false;
@@ -395,6 +417,7 @@ class Message {
         // Server NoBox kadang mengembalikan Type=5 untuk voice notes
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        content = '🎵 Voice Note';
       } else if (typeVal == '5' || _isDocumentFlag(firstFile)) {
         // Jika dari API diset sebagai Dokumen (5) atau ada flag IsDocument: true
         msgType = MessageType.document;
@@ -412,8 +435,13 @@ class Message {
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '2') {
         // Fallback berdasarkan API Type saat ekstensi tidak dikenali
-        msgType = MessageType.voice;
-        audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        if (filePath.isNotEmpty || content.isEmpty || content.startsWith('{') || content.startsWith('[')) {
+          msgType = MessageType.voice;
+          audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '🎵 Voice Note';
+        } else {
+          msgType = MessageType.text; // Ignore buggy Type=2 if it's clearly a text message
+        }
       } else if (typeVal == '4') {
         msgType = MessageType.video;
         videoUrl = filePath.startsWith('http') 
@@ -423,12 +451,25 @@ class Message {
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+      } else if (typeVal == '15' || typeVal == '11' || (json['Msg'] != null && json['Msg'].toString().toLowerCase().contains('"lat":'))) {
+        msgType = MessageType.text;
+        content = '📍 Location';
+      } else if (typeVal == '14' || typeVal == '10') {
+        msgType = MessageType.text;
+        content = '👤 Contact';
       } else if (filePath.isNotEmpty) {
-        // Tipe file tidak dikenali → anggap sebagai dokumen
-        msgType = MessageType.document;
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
-        docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-        content = '📄 $docName';
+        if (docName.toLowerCase().contains('document(empty)')) {
+          msgType = MessageType.text;
+          // Pertahankan text content aslinya (kemungkinan ini adalah Link / Caption / Teks lokasi)
+          if (content.isEmpty || content.startsWith('{') || content.startsWith('[')) {
+            content = '📍 Location';
+          }
+        } else {
+          msgType = MessageType.document;
+          docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '📄 $docName';
+        }
       }
     } else if (json['File'] != null && json['File'].toString().isNotEmpty) {
       final filePath = extractFilePath(json['File']);
@@ -440,13 +481,24 @@ class Message {
         content = '🌟 Sticker';
       } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File'])) {
         // Voice note: cek typeVal=='2', ekstensi audio, ATAU flag Ptt:true — sebelum cek document (type 5)
-        msgType = MessageType.voice;
-        audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        if (filePath.isNotEmpty || content.isEmpty || content.startsWith('{') || content.startsWith('[') || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File'])) {
+          msgType = MessageType.voice;
+          audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        } else {
+          msgType = MessageType.text;
+        }
       } else if (typeVal == '5' || _isDocumentFlag(json['File'])) {
-        msgType = MessageType.document;
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
-        docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-        content = '📄 $docName';
+        if (docName.toLowerCase().contains('document(empty)')) {
+          msgType = MessageType.text;
+          if (content.isEmpty || content.startsWith('{') || content.startsWith('[')) {
+            content = '📍 Location';
+          }
+        } else {
+          msgType = MessageType.document;
+          docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '📄 $docName';
+        }
       } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
         msgType = MessageType.video;
         videoUrl = filePath.startsWith('http') 
@@ -465,17 +517,37 @@ class Message {
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+      } else if (typeVal == '15' || typeVal == '11' || (json['Msg'] != null && json['Msg'].toString().toLowerCase().contains('"lat":'))) {
+        msgType = MessageType.text;
+        content = '📍 Location';
+      } else if (typeVal == '14' || typeVal == '10') {
+        msgType = MessageType.text;
+        content = '👤 Contact';
       } else if (filePath.isNotEmpty) {
-        // Unrecognized file type → treat as document
-        msgType = MessageType.document;
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
-        docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-        content = '📄 $docName';
+        if (docName.toLowerCase().contains('document(empty)')) {
+          msgType = MessageType.text;
+          if (content.isEmpty || content.startsWith('{') || content.startsWith('[')) {
+            content = '📍 Location';
+          }
+        } else {
+          msgType = MessageType.document;
+          docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '📄 $docName';
+        }
       }
     } else if (typeVal == '16' || typeVal == '2' || typeVal == '3') {
       // No Files/File data available
       msgType = MessageType.text;
-      content = '⚠️ Pesan ini tidak dapat ditampilkan. Buka WhatsApp di HP untuk melihat pesan ini.';
+      if (content.isEmpty || content.startsWith('{') || content.startsWith('[')) {
+        content = '⚠️ Pesan ini tidak dapat ditampilkan. Buka WhatsApp di HP untuk melihat pesan ini.';
+      }
+    } else if (typeVal == '15' || typeVal == '11') {
+      msgType = MessageType.text;
+      content = '📍 Location';
+    } else if (typeVal == '14' || typeVal == '10') {
+      msgType = MessageType.text;
+      content = '👤 Contact';
     }
 
     // Fallback: if this is an image message but content is empty, set readable label
@@ -509,6 +581,7 @@ class Message {
         content: json['ReplyMsg']?.toString() ?? '',
         isMe: json['ReplyFrom']?.toString() == currentUserEmail,
         time: '', // Waktu tidak dikirimkan oleh API untuk pesan balasan
+        rawTime: '',
       );
     }
 
@@ -517,6 +590,7 @@ class Message {
       content: content,
       isMe: isMe,
       time: formattedTime,
+      rawTime: rawTime,
       status: MessageStatus.read,
       isSystemMessage: isSystem,
       messageType: msgType,

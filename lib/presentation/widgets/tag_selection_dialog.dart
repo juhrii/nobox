@@ -118,7 +118,20 @@ class _TagSelectionDialogState extends State<TagSelectionDialog> {
 
       if (!response.isError) {
         if (widget.onSave != null) {
-          widget.onSave!(tagIdsToSave);
+          // FIX: Kembalikan NAMA tag, bukan ID, agar UI di ContactInfoPage menampilkan teks yang benar (bukan angka/ID)
+          final List<String> tagNamesToSave = tagIdsToSave.map((id) {
+            final foundById = _allTags.firstWhere(
+              (tag) => _getTagId(tag) == id,
+              orElse: () => <String, dynamic>{},
+            );
+            if (foundById.isNotEmpty) {
+              return _getTagName(foundById);
+            }
+            // Fallback, barangkali itu nama tag baru
+            return id;
+          }).toList();
+          
+          widget.onSave!(tagNamesToSave);
         }
         Navigator.pop(context, true);
       } else {

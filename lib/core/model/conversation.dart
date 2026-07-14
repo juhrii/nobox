@@ -119,11 +119,39 @@ class Conversation {
     final rawFnId = getValue(['FnId', 'fn_id', 'fnId', 'FunnelId'])?.toString() ?? '';
     final rawFnName = getValue(['FnNm', 'fn_nm', 'Fn', 'fn'])?.toString() ?? '';
 
+    // FIX: Prioritaskan payload JSON (yang biasanya ada di Category atau LastMsg) 
+    // agar media (Voice Note, Photo) tidak berubah menjadi sekadar "Document" saat refresh
+    String resolveLastMessage(dynamic lastMsgData, dynamic categoryData) {
+      final str1 = lastMsgData?.toString() ?? '';
+      final str2 = categoryData?.toString() ?? '';
+      if (str1.startsWith('{') || str1.startsWith('[')) return str1;
+      if (str2.startsWith('{') || str2.startsWith('[')) return str2;
+      return str1.isNotEmpty ? str1 : str2;
+    }
+
+    final finalLastMessage = resolveLastMessage(
+      getValue(['LastMsg', 'last_message']),
+      getValue(['Category'])
+    );
+
+    // FIX: Server NoBox sering nyangkut di LastMessageType = 2 (Voice Note) atau media lain,
+    // padahal LastMsg sudah update menjadi teks biasa. 
+    // Bersihkan LastMessageType jika pesannya jelas bukan JSON.
+    String? rawLastMessageType = getValue(['LastMessageType', 'last_message_type'])?.toString();
+    if (!finalLastMessage.startsWith('{') && !finalLastMessage.startsWith('[')) {
+      final lower = finalLastMessage.trim().toLowerCase();
+      if (lower.isNotEmpty && lower != 'document(empty)' && lower != 'voice(empty)') {
+        if (rawLastMessageType == '2' || rawLastMessageType == '3' || rawLastMessageType == '4' || rawLastMessageType == '5') {
+          rawLastMessageType = '1';
+        }
+      }
+    }
+
     final conv = Conversation(
       id: getValue(['Id', 'id'])?.toString() ?? '',
       contactId: getValue(['CtId', 'ContactId', 'GrpId', 'Id', 'id'])?.toString() ?? '',
       participantEmail: getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Grp', 'Name', 'participant_email', 'GroupNm', 'GroupName', 'group_name', 'Title', 'pushName'])?.toString() ?? 'Unknown',
-      lastMessage: getValue(['LastMsg', 'Category', 'last_message']) ?? '',
+      lastMessage: finalLastMessage,
       lastMessageTime: getValue(['TimeMsg', 'In', 'last_message_time']) ?? '',
       unreadCount: getValue(['Uc', 'unread_count', 'UnreadCount']) ?? 0,
       status: json['St'] != null
@@ -132,7 +160,7 @@ class Conversation {
       agentName: getValue(['AssignedAgentName', 'AgentName', 'agent_name']) ?? '',
       tags: parsedTags,
       avatarUrl: _resolveAvatarUrl(json),
-      lastMessageType: getValue(['LastMessageType', 'last_message_type']),
+      lastMessageType: rawLastMessageType,
       channelName: _resolveChannelName(json),
       channelType: getValue(['ChNm', 'ChannelName', 'chnm'])?.toString() ?? '',
       isPinned: json['IsPin'] == 2 || json['is_pinned'] == true,
@@ -314,6 +342,7 @@ class Conversation {
       deal: deal,
       groupName: groupName,
       groupId: groupId,
+      isArchived: status.toLowerCase() == 'archived' || status == '4',
     );
   }
 }

@@ -1,0 +1,543 @@
+Id.Nobox.Id documentation
+
+*DASHBOARD PESAN
+
+-Dasbor Pesan merupakan salah satu menu pada NoBox.AI yang digunakan untuk menampilkan ringkasan aktivitas percakapan antara pelanggan dan agen.
+-Menu ini memungkinkan pengguna untuk memantau jumlah pesan masuk, status penanganan, performa agen, serta aktivitas layanan pelanggan secara terpusat untuk mendukung proses evaluasi.
+
+
+*Informasi yang Ditampilkan DI Menu  Dasbor Pesan
+
+-Pada tampilan Dasbor Pesan, terdapat beberapa informasi utama yang mendukung pemantauan layanan pelanggan.
+-Data yang disajikan mencakup jumlah percakapan baru, proses, selesai, arsip, grafik pesan, status agen, serta distribusi tag percakapan.
+
+*Komponen Pada Menu Dasbor Pesan
+
+*Bagian                             *Fungsi
+
+-Baru                               -Menampilkan jumlah percakapan yang belum ditugaskan kepada agen
+-Proses                             -Menampilkan jumlah percakapan yang sedang ditangani agen
+-Selesai                            -Menampilkan jumlah percakapan yang telah diselesaikan
+-Arsip                              -Menampilkan jumlah percakapan yang telah diarsipkan              
+-Percakapan Dibuat                  -Menampilkan grafik jumlah pesan masuk dan keluar berdasarkan waktu
+-Agen & Supervisor                  -Menampilkan jumlah agen dan supervisor yang aktif
+-Tag Percakapan                     -Menampilkan distribusi percakapan berdasarkan tag
+-Status Online Agen                 -Menampilkan status online dan offline agen
+-Funnel Percakapan                  -Menampilkan alur proses percakapan dari awal hingga selesai
+
+*Penjelasan Detail Setiap Komponen Dasbor Pesan
+
+*Baru
+Bagian ini menampilkan jumlah percakapan yang belum ditangani oleh agen.
+Informasi ini digunakan untuk mengetahui jumlah pesan yang masih menunggu respon.
+
+*Proses
+Menampilkan jumlah percakapan yang sedang ditangani oleh agen.
+Data ini menunjukkan beban kerja agen yang sedang berjalan.
+
+*Selesai
+Menampilkan jumlah percakapan yang telah diselesaikan.
+Informasi ini membantu mengevaluasi tingkat penyelesaian layanan.
+
+*Arsip
+Menampilkan percakapan yang telah disimpan sebagai arsip.
+Data ini digunakan sebagai dokumentasi layanan.
+
+*Percakapan Dibuat
+Menampilkan grafik aktivitas pesan berdasarkan waktu.
+Fitur ini membantu melihat tren komunikasi pelanggan.
+
+*Agen & Supervisor
+Menampilkan jumlah anggota tim yang aktif.
+Informasi ini digunakan untuk memantau ketersediaan SDM.
+
+*Tag Percakapan
+Menampilkan distribusi pesan berdasarkan kategori tag.
+Fitur ini memudahkan klasifikasi dan analisis percakapan.
+
+*Status Online Agen
+Menampilkan status online dan offline agen.
+Data ini membantu memastikan kesiapan tim layanan.
+
+*Funnel Percakapan
+Menampilkan alur perjalanan pesan dari masuk hingga selesai.
+Fitur ini membantu mengevaluasi efektivitas proses layanan.
+
+*Cara Membaca Dasbor Pesan
+
+-Panduan Membaca Data Dasbor Pesan
+-Untuk memahami data pada Dasbor Pesan dengan baik, pengguna dapat memperhatikan hal berikut:
+
+-Perhatikan jumlah pesan baru setiap hari.
+-Bandingkan jumlah pesan dengan agen aktif.
+-Pantau status proses dan selesai.
+-Gunakan grafik untuk melihat tren komunikasi.
+
+*Interpretasi Data Dasbor Pesan
+
+Data pada dasbor dapat digunakan untuk menilai kualitas layanan pelanggan.
+Supervisor atau administrator dapat memanfaatkan data ini sebagai bahan evaluasi rutin dan peningkatan performa tim.
+
+*Tips Penggunaan                                            *Penanganan Kendala
+                                    
+Agar penggunaan Dasbor Pesan lebih maksimal, disarankan untuk:                  Jika Mengalamai Kendala,Lakukan Langkah Berikut:
+
+-Memeriksa dasbor secara berkala.                               -Refresh halaman sistem
+-Memastikan agen aktif saat jam operasional.                            -Pastikan koneksi internet stabil 
+-Menggunakan tag percakapan secara konsisten.                           -Periksa hak akses akun pengguna.
+-Memantau funnel untuk evaluasi layanan.                            -Logout dan login kembali.
+-Mengarsipkan percakapan yang telah selesai.                            -Bersihkan cache browser.
+                                                -Hubungi tim support jika kendala masih terjadi.
+
+
+*Kotak Masuk
+
+Kotak Masuk adalah salah satu menu NoBox.AI yang digunakan untuk melayani semua pesan yang masuk dari beberapa channel seperti WhatsApp, Telegram, Shopee dll.
+Menu ini membantu pengguna memantau alur perjalanan pelanggan, mulai dari tahap awal interaksi hingga penyelesaian layanan, sehingga proses pemasaran dan penanganan pelanggan dapat dikelola secara lebih terstruktur dan efektif.
+
+*Fitur pada menu Kotak Masuk
+
+*Fitur/Tombol                    Fungsi
+-Semua                      -Semua percakapan yang masuk.
+-Baru                       -Semua percakapan yang belum ditugaskan ke agen.
+-Proses                     -Berisi percakapan yang telah ditugaskan kepada agen.
+-Selesai                    -Berisi percakapan yang telah selesai/dijawab dengan sempurna dan agen ingin menutup percakapan.
+
+*Filter, Arsip, dan Pencarian Percakapan
+Arsip Percakapan adalah fitur untuk menyimpan atau menyortir pesan-pesan yang mungkin tidak lagi relevan atau perlu ditanggapi. Dengan mengarsipkan, pengguna dapat membersihkan daftar percakapan utama mereka tanpa menghapus pesan-pesan tersebut secara permanen. Silahkan klik ikon [Arsip] untuk menampilkan percakapan yang diarsipkan.
+
+Anda dapat filter percakapan sesuai dengan Status, Kanal, Akun, Kontak, dsb. Untuk filter percakapan silahkan klik ikon []  maka akan tampil filter percakapan. Filter data yang diinginkan klik tombol [Tampilkan] maka percakapan akan tampil sesuai dengan filter. Klik [Reset] untuk menghapus filter percakapan.
+
+-Fitur Buat Percakapan memungkinkan pengguna untuk memulai percakapan baru dengan kontak yang sudah ada dalam daftar mereka. Ini bisa sangat berguna untuk inisiasi obrolan dengan seseorang tanpa harus mencari nama kontak atau grup secara manual. Silahkan klik ikon [ Percakapan Baru ] untuk membuat percakapan baru.
+
+-Fitur Pencarian digunakan untuk melakukan mencari percakapan atau kontak yang sesuai dengan kata kunci yang diketik.
+
+*Pembagian Pesan Masuk ke Agen
+ 
+-Pada halaman Kotak Masuk, supervisor dapat mengalokasikan pelanggan kepada agen yang tersedia. Untuk tambah agen silahkan klik tombol [+ Agen] maka akan tampil agen-agen yang tersedia klik nama agen untuk pilih agen tersebut. Sistem juga seccara ortomatis mendistribusikan pelanggan kepada agen  yang sedang online.
+
+*Cara Mengaktifkan Selesai Otomatis atau Arsip Otomatis
+
+Untuk mengaktifkan fitur Selesai Otomatis dan Arsip Otomatis, dapat Anda lakukan dengan cara berikut:
+
+Buka modul [Pengaturan] ➔ klik menu [Profil Usaha].
+Aktifkan pada kategori Selesai Otomatis atau Arsip Otomatis.
+Isi setiap berapa jam akan otomatis menutup percakapan atau arsip percakapan.
+
+*Selesai Otomatis
+
+Pada halaman Kotak Masuk, terdapat fitur selesai otomatis yang digunakan untuk pengaturan aktif atau tidaknya menandai selesai pada percakapan secara otomatis. Fitur ini berlaku untuk chat yang statusnya Proses.
+
+Jika Anda ingin menandai selesai secara langsung tanpa menunggu dari Selesai Otomatis Anda dapat klik ikon [ Menu ] maka akan tampil pop up pilih [Tandai Selesai].
+
+*Arsip Otomatis
+
+Pada halaman Kotak Masuk, terdapat fitur arsip otomatis yang digunakan untuk pengaturan aktif atau tidaknya mengarsipkan pada percakapan secara otomatis. Fitur ini berlaku untuk chat yang statusnya Selesai. Jika Anda ingin mengarsipkan secara langsung tanpa menunggu dari arsip otomatis Anda dapat klik ikon [ Arsip ] maka secara langsung percakapan akan terarsipkan.
+
+*Manajemen Percakapan
+
+Pin Percakapan
+Pada halaman Kotak Masuk, terdapat fitur pin percakapan yang digunakan untuk menyematkan pesan penting. Jika Anda ingin pin percakapan Anda dapat klik ikon [ Menu ] maka akan tampil pop up pilih [Pin].
+
+*Unpin Percakapan
+
+Anda juga dapat menghapus pin percakapan dengan cara pilih salah satu percakapan yang sudah terpin, kemudian klik ikon [ Menu ] maka akan tampil pop up pilih [Unpin].
+
+*Informasi Percakapan
+Pada halaman Kotak Masuk terdapat informasi chat, silahkan klik tombol [ Informasi ] maka informasi percakapan akan tampil.
+
+-Terdapat beberapa bagian yang mempunyai fungsi masing-masing. Penjelasan dari fungsi tersebut adalah sebagai berikut:
+
+Informasi (nama, foto profile dan nomer telp).
+Riwayat Percakapan adalah fitur yang digunakan untuk menampilkan riwayat percakapan yang telah selesai.
+
+-Terdapat informasi nama dan alamat kontak, untuk edit data kontak silahkan klik ikon [ Edit Kontak ] maka akan diarahkan ke edit kontak.
+-Terdapat informasi percakapan dari akun yang menangani, tanggal buat percakapan dan tanggal terakhir kirim pesan
+-Notes adalah catatan terkait dengan percakapan yang dipilih, untuk catatan bisa ditambah, edit dan di hapus. Jadi agen yang lain dapat menambahkan catatan.
+-Tags adalah salah satu fitur yang digunakan untuk mengelompokkan data percakapan Anda dan bisa menambahkan lebih dari satu tag di dalam suatu chat.
+-Promosi adalah salah satu fitur yang digunakan untuk informasi promosi yang terhubung dengan percakapan tersebut.
+-Funnel salah satu fitur yang digunakan untuk mengkategorikan tahapan proses pemasaran dan support, atau juga bisa Anda buat funnel baru.
+-Deal adalah salah satu fitur yang digunakan untuk menghubungkan deal dengan percakapan tersebut.
+-Agen adalah salah satu fitur yang digunakan untuk informasi agen siapa saja yang menangani percakapan tersebut.
+
+*Manajemen Pesan
+
+-Cara Balas Pesan
+
+-Anda dapat membalas pesan masuk secara langsung dengan NoBox untuk membalas pesan yang masuk. Buka salah satu percakapan, kemudian balas sesuai dengan apa yang ditanyakan.
+Informasi pesan terkirim atau tidak dapat dilihat dari tanda pesan. Jika pesan bertanda [ Ceklis 2 ] pesan sudah terkirim, jika pesan bertanda [ Ceklis 1 ] pesan belum terkirim.
+
+
+*Hapus Pesan
+
+Pada halaman Kotak Masuk, terdapat fitur hapus pesan yang digunakan untuk menghilangkan pesan dari percakapan, fitur ini hanya untuk hapus pesan di NoBox saja. Untuk menghapus pesan, silahkan pilih satu pesan yang akan dihapus, kemudian klik [Hapus] maka akan muncul konfirmasi apakah Anda ingin menghapus pesan tersebut. Jika ya klik [Ya] jika tidak klik [Tidak].
+
+*Informasi Penting
+
+Penghapusan pesan hanya menghapus pesan dari NoBox, tidak menghapus pesan di platform asli (seperti WhatsApp). Penghapusan bersifat permanen dan tidak dapat dibatalkan.
+
+*Kirim File
+
+-Pada halaman Kotak Masuk, terdapat fitur untuk mengirim file dari file berupa gambar, photo, voice note, pdf, excel dll. Untuk kirim file, silahkan klik ikon [ Kirim File ] pilih yang akan file yang akan dikirim [ Tipe File ]. Maka akan tampil dialog [Pilih File] upload file dan kirim.
+
+*Balasan Cepat
+
+-Salah satu menu pada NoBox yang digunakan untuk template pesan agar dapat membalas pesan lebih cepat berupa pesan text atau media seperti gambar, GIF dan Video. Untuk mengirimkan balasan cepat, Anda perlu mengikuti langkah-langkah berikut:
+
+Pada inputan pesan, tekan "/" .
+Kemudian, muncul list untuk memilih quick reply yang tersedia. Pilih salah satu balasan cepat.
+Maka, balasan cepat akan otomatis tertulis di kolom pesan, lalu Anda dapat tekan tombol [ Kirim ] untuk mengirimkan pesan tersebut.
+
+*Tips Penggunaan                                  *Penanganan Kendala
+
+Beberapa tips untuk memaksimalkan penggunaan menu Kotak Masuk:              Penanganan KendalaJika terjadi kendala dalam penggunaan menu Kotak Masuk, lakukan langkah-langkah 
+                                            berikut:
+-Periksa pesan baru secara berkala agar tidak ada pelanggan yang terlewat.
+-Gunakan fitur filter untuk mempermudah pencarian percakapan tertentu.          -Pastikan koneksi internet dalam kondisi stabil.
+-Manfaatkan fitur pin untuk menyimpan percakapan penting.               -Refresh halaman jika percakapan tidak muncul atau tidak ter-update.
+-Gunakan tags untuk mengelompokkan jenis percakapan.                    -Periksa status akun dan kanal yang terhubung.
+-Aktifkan arsip otomatis untuk menjaga tampilan tetap rapi.             -Pastikan agen telah ditugaskan dengan benar.
+-Tambahkan catatan (notes) untuk memudahkan koordinasi antar agen.          -Periksa pengaturan selesai otomatis dan arsip otomatis.
+-Gunakan balasan cepat untuk mempercepat respon kepada pelanggan.           -Logout dan login kembali jika fitur tidak berfungsi normal.
+                                            -Hapus cache browser jika tampilan tidak sesuai.
+                                            -Hubungi tim support jika kendala masih berlanjut.
+
+*Percakapan
+
+-Percakapan adalah salah satu menu pada NoBox.AI yang digunakan untuk monitoring data percakapan.
+
+
+Menu ini membantu pengguna memantau riwayat komunikasi, mengelola pesan masuk dan keluar, meninjau respons pelanggan, serta memastikan setiap percakapan tertangani dengan baik untuk mendukung kualitas layanan.
+
+*Fitur Filter Data Menu Percakapan
+
+-Pada menu Percakapan, pengguna dapat memfilter data percakapan berdasarkan beberapa kategori berikut:
+
+*Filter Status
+-Digunakan untuk menyaring data percakapan berdasarkan status penanganan, seperti aktif, diproses, atau selesai.
+
+*Filter Kanal
+-Digunakan untuk menampilkan data percakapan berdasarkan channel komunikasi yang digunakan, seperti WhatsApp, Telegram, atau platform lainnya.
+
+*Filter Akun
+-Digunakan untuk memfilter percakapan berdasarkan akun atau nomor yang terhubung dalam sistem.
+
+*Filter Tambahan
+-Selain filter utama, tersedia juga filter lain yang dapat digunakan sesuai kebutuhan monitoring data.
+
+Pengguna dapat mengombinasikan beberapa filter sekaligus untuk mendapatkan hasil data yang lebih spesifik dan akurat.
+
+*Melihat Detail Percakapan
+-Untuk melihat detail data percakapan, Anda dapat melakukan langkah berikut:
+
+-Pilih salah satu data percakapan pada daftar.
+-Klik ikon [ Buka Pesan ] [Buka Percakapan].
+-Sistem akan mengarahkan Anda ke halaman percakapan yang dipilih.
+
+-Pada Tips Penggunaan menu percakapan, pengguna dapat melihat isi pesan, informasi kontak, serta riwayat komunikasi secara lengkap.
+
+
+*Tips Penggunaan                                  *Penanganan Kendala
+
+Agar penggunaan menu Percakapan lebih optimal, perhatikan beberapa tips berikut:    Jika mengalami kendala saat mengggunakan menu percakapan, Anda dapat mencoba Langkah berikut:
+                                                
+-Gunakan filter secara rutin untuk memantau status percakapan.              -Refresh halaman sistem  
+-Lakukan pengecekan data percakapan secara berkala.                 -Perika koneksi internet
+-Manfaatkan fitur pencarian dan filter untuk efisiensi waktu.               -Pastikan akun memiliki hak akses yang sesuai 
+-Pastikan data akun dan channel selalu terhubung dengan baik.               -Logout lalu login Kembali
+-Gunakan menu ini sebagai bahan evaluasi performa layanan.              -Bersihkan Chache browser jika diperlukan
+
+
+*Balasan Cepat  
+
+-Balasan Cepat adalah salah satu menu pada NoBox.AI yang digunakan untuk template pesan agar dapat membalas pesan lebih cepat berupa pesan teks atau media seperti gambar, GIF dan Video.
+
+Menu ini membantu meningkatkan efisiensi komunikasi dengan menyediakan pesan-pesan siap pakai yang dapat digunakan berulang kali, terutama untuk menjawab pertanyaan umum, memberikan informasi produk, atau menindaklanjuti pelanggan.
+
+*Tambah Balasan Cepat
+
+Untuk membuat data balasan cepat, silahkan klik menu [Balasan Cepat] ➔ [Tambah Balasan Cepat].
+Maka akan tampil dialog [Tambah Balasan Cepat], kemudian lengkapi isian-isian yang terdapat pada dialog tersebut.
+
+Tombol Tambah Balasan Cepat
+-Tombol [Tambah] digunakan untuk membuka form input data balasan cepat yang baru.
+
+*Isian Dialog Tambah Balasan Cepat
+
+Isian                           Uraian              Contoh
+Perintah                        Perintah balasan        Rekening
+File                            Pilih file  
+Type                            Type Balasan            General
+Konten Pesan                        Isi pesan           Pembayaran ditransfer ke Bank BCA xxx.xxxx.xxx an Ana. Bank Mandiri xxx-xx-xxxx-x an Ana. Setelah transfer silahkan kirim buktinya ke WA 0810000-0000
+
+-Setelah semua isian dilengkapi dengan benar, klik tombol [Simpan] untuk menyimpan data balasan cepat ke dalam sistem.
+
+*Edit dan Hapus Data Balasan Cepat
+
+-Edit Data Balasan Cepat
+
+Untuk mengedit suatu data balasan cepat, silahkan pilih terlebih dahulu data mana yang akan diedit. Editlah data Anda dan klik [Simpan] untuk menyimpan perubahan tersebut.
+Perubahan data akan langsung tersimpan dan dapat digunakan kembali pada percakapan.
+
+-Hapus Data Balasan Cepat
+
+Untuk menghapus suatu data balasan cepat, silahkan pilih data balasan cepat yang akan dihapus, kemudian klik [Hapus] maka akan muncul konfirmasi apakah Anda ingin menghapus data tersebut.
+Jika ya klik [Ya], jika tidak klik [Tidak].
+
+*Informasi Penting
+
+Penghapusan data balasan cepat bersifat permanen dan tidak dapat dibatalkan. Pastikan data yang akan dihapus benar-benar tidak diperlukan lagi.
+
+*Cara Penggunaan Balasan Cepat
+
+Fitur Balasan Cepat dapat digunakan secara langsung pada halaman percakapan di Kotak Masuk.
+
+Untuk mengirimkan balasan cepat, Anda perlu mengikuti langkah-langkah berikut:
+
+1.Pilih modul [Pesan ➔ Kotak Masuk] untuk melihat semua percakapan masuk. Kemudian pilih salah satu pesan tersebut.
+2.Pada inputan pesan, tekan tombol "/" pada keyboard Anda.
+3.Kemudian, akan muncul daftar balasan cepat yang tersedia. Pilih salah satu balasan cepat yang Anda perlukan.
+4.Maka, balasan cepat akan otomatis tertulis di kolom pesan. Anda juga dapat mengedit isi pesan sebelum dikirim.
+5.Selanjutnya, tekan tombol [ Kirim ] untuk mengirimkan pesan tersebut.
+
+*Funnel
+
+-Funnel adalah fitur pada NoBox.AI yang digunakan untuk mengkategorikan tahapan proses pemasaran dan dukungan pelanggan (customer support). Fitur ini divisualisasikan dalam bentuk alur kerja yang membantu tim Anda memantau perjalanan pelanggan, mulai dari interaksi awal hingga penyelesaian layanan atau transaksi.
+
+Dengan sistem funnel yang terstruktur, Anda dapat melakukan evaluasi efektivitas kampanye dan kecepatan respon tim di setiap titik kontak pelanggan.  
+
+*Manajemen data funnel
+ 
+  Tambah Funnel Baru
+1.Klik menu [Funnel] ➔ tombol [Tambah Funnel].
+2.Masukkan nama tahapan funnel (misal: "Prospek Baru", "Negosiasi", "Lunas").
+3.Klik [Simpan] untuk mendaftarkan tahapan ke dalam sistem.
+
+
+*Edit dan Hapus Data Funnel
+
+-Edit: Pilih data funnel, sesuaikan penamaannya, lalu klik [Simpan]. Perubahan akan langsung tercermin pada seluruh profil pelanggan yang terhubung.
+-Hapus: Pilih data yang ingin dibuang dan klik tombol [Hapus].
+
+*Cara Penggunaan Funnel
+
+-Funnel dapat diaplikasikan langsung saat Anda berinteraksi dengan pelanggan di halaman percakapan.
+
+1.Buka menu [Kotak Masuk] dan pilih salah satu chat.
+2.Klik ikon informasi [ Informasi ] di pojok kanan atas untuk membuka panel detail.
+3.Pada bagian Funnel, klik dropdown dan pilih tahapan yang sesuai untuk pelanggan tersebut.
+
+*Tips Penggunaan
+
+-Optimalkan alur bisnis Anda dengan tips manajemen funnel berikut:
+
+1.Buatlah tahapan funnel yang logis dan mengikuti perjalanan asli pelanggan Anda (Customer Journey).
+2.Gunakan penamaan yang singkat dan jelas (misal: "MQL", "SQL", "Closed Won").
+3.Lakukan evaluasi berkala; jika terlalu banyak kontak menumpuk di satu tahapan, tandanya ada sumbatan (bottleneck) dalam proses bisnis Anda.
+4.Manfaatkan funnel untuk memprioritaskan penanganan chat; fokuslah pada pelanggan yang berada di tahapan akhir (mendekati transaksi).
+5.Berikan pelatihan kepada tim agar disiplin dalam memperbarui status funnel setiap kali terjadi perkembangan dalam percakapan.
+
+*Penanganan Kendala
+
+-Jika menemui masalah pada fitur Funnel, silakan ikuti langkah berikut:
+
+1.Funnel Tidak Muncul di Dropdown Chat: Pastikan Anda sudah menekan tombol Simpan saat membuat funnel dan statusnya aktif.
+2.Gagal Mengubah Status Funnel: Periksa koneksi internet Anda atau coba muat ulang (refresh) halaman dashboard.
+3.Data Funnel Terhapus Tidak Sengaja: Sayangnya data yang dihapus bersifat permanen. Segera buat kembali tahapan tersebut dan lakukan pengasosiakan ulang ke kontak terkait.
+4.Hak Akses Terbatas: Pastikan peran (role) akun Anda memiliki otoritas untuk menambah atau mengedit data CRM.
+5.Aplikasi Melambat saat Pilih Funnel: Bersihkan cache browser Anda untuk mempercepat pemuatan data dropdown.
+
+
+*Tag Pesan
+
+-Tag Pesan adalah salah satu menu pada NoBox.AI yang digunakan untuk mengelompokkan data pesan Anda.
+ Menu ini membantu pengguna dalam mengatur, mengelola, dan memfilter percakapan dengan lebih mudah, sehingga pesan dapat ditemukan dan ditangani secara lebih cepat dan terstruktur.
+
+*Tambah Tag
+
+-Untuk membuat data tag, silahkan klik menu [Tag Pesan] ➔ [Tambah Tag Pesan]. Maka akan tampil dialog [Tambah Tag Pesan] kemudian isi nama tag pada dialog tersebut.
+
+
+*Edit dan Hapus Data Tag Pesan 
+
+-Edit Data Tag Pesan 
+
+-Untuk mengedit suatu data tag, silahkan pilih terlebih dahulu data mana yang akan diedit. Editlah data Anda dan klik [Simpan] untuk menyimpan perubahan tersebut.
+ Perubahan data akan langsung tersimpan dan dapat digunakan kembali dalam sistem.
+
+-Hapus Data Tag Pesan
+
+-Untuk menghapus suatu data tag adalah dengan pilih data tag yang akan dihapus, kemudian klik [Hapus], maka akan tampil dialog konfirmasi apakah Anda ingin menghapus data tersebut.
+ Jika ya, klik [Ya] jika tidak maka klik [Tidak].
+
+*Cara Penggunaan Tag Pesan
+
+-Tag Pesan dapat digunakan langsung pada halaman percakapan untuk membantu pengelompokan dan monitoring pesan.
+
+Berikut langkah-langkah penggunaan Tag Pesan:
+
+1. Buka menu [Kotak Masuk], pilih salah satu percakapan yang ada.
+2. Klik ikon [ Informasi ] maka akan tampil detail dari percakapan tersebut.
+3. Klik pada bagian Tag Pesan maka akan tampil data tag yang telah dibuat sebelumnya atau tambahkan tag baru.
+4. Pilih satu atau lebih dari data tag tersebut.
+
+
+*Laporan
+-Laporan adalah salah satu menu pada NoBox.AI yang digunakan untuk menampilkan laporan dari percakapan yang dilakukan.
+
+Menu ini membantu pengguna memantau performa komunikasi dengan pelanggan, menganalisis jumlah percakapan, respon agen, tingkat penyelesaian layanan, serta efektivitas penanganan pesan.
+
+
+*Tampilan Menu Laporan
+
+-Menu Laporan menampilkan berbagai jenis data statistik dan aktivitas percakapan yang terjadi dalam sistem NoBox.AI.
+
+Pada halaman ini, pengguna dapat memantau performa agen, distribusi pesan, serta efektivitas layanan pelanggan.
+
+*Status Agen
+
+-Informasi Status Agen
+
+Pada salah satu submenu NoBox.AI ini berisi informasi mengenai seluruh agen yang mengubah statusnya menjadi online maupun offline, serta data waktu terakhir agen melakukan login ke dalam sistem.
+
+Informasi ini sangat penting untuk mengetahui tingkat kehadiran agen, kesiapan dalam melayani pelanggan, serta membantu supervisor dalam mengatur jadwal kerja dan pembagian tugas secara lebih efektif
+
+*Pindahkan Percakapan
+
+-Informasi Pindahkan Percakapan
+
+Menu ini berisi informasi terkait proses penyerahan atau pemindahan pesan dari satu agen ke agen lainnya.
+
+Fitur ini biasanya digunakan ketika agen yang sedang menangani percakapan tidak dapat melanjutkan layanan, mengalami kendala, atau ketika diperlukan penanganan oleh agen yang lebih sesuai.
+
+
+*Percakapan Agen
+
+ -Informasi Percakapan Agen
+
+Submenu ini menampilkan informasi berupa daftar agen beserta jumlah percakapan yang sedang maupun telah ditangani oleh masing-masing agen.
+Data ini mencakup jumlah chat masuk, chat yang masih diproses, serta chat yang telah diselesaikan oleh setiap agen.
+
+*Kinerja Agen
+  
+  -Informasi Kinerja Agen
+
+Menu ini berisikan data terkait performa masing-masing agen, seperti total percakapan yang berhasil diselesaikan, jumlah pesan yang telah terkirim, serta jumlah pesan yang ditetapkan atau dialokasikan kepada agen.
+Data kinerja ini disajikan dalam bentuk ringkasan maupun detail sesuai dengan periode waktu tertentu.
+
+*Tag Conversations
+   
+  -Informasi Tag Conversations
+
+Submenu ini menampilkan data penggunaan tag percakapan dalam bentuk laporan berdasarkan tanggal, bulan, dan tahun tertentu.
+Data disajikan dalam bentuk grafik atau tabel yang menunjukkan jumlah tag yang digunakan dalam setiap periode waktu.
+Informasi ini dapat difilter sesuai kebutuhan pengguna untuk memudahkan analisis tren percakapan.
+
+
+*CAMPAIGNS (KAMPANYE)
+
+-Campaigns (Kampanye) adalah salah satu menu pada NoBox.AI yang digunakan untuk melakukan promosi secara mudah dan efisien kepada target promosi dengan mengintegrasikannya ke berbagai channel seperti WhatsApp, Telegram, dll. 
+-Menu ini memungkinkan bisnis untuk mengelola distribusi informasi, penawaran promosi, dan strategi interaksi pelanggan secara terpusat melalui satu tampilan.
+
+*Tampilan Menu Campaigns
+
+-Halaman ini merupakan dasbor utama menu Kampanye. 
+-Melalui tampilan ini, pengguna dapat memantau daftar kampanye, melacak status pengiriman secara real-time, serta mengelola konfigurasi teknis untuk setiap inisiatif pemasaran.
+
+*Memahami Status Kampanye
+
+Status membantu Anda melacak siklus perjalanan dari upaya pemasaran yang dilakukan:
+-Draft (Draf): Kampanye sedang dalam tahap pengaturan. Belum ada pesan yang dikirim ke pelanggan.
+-Processing (Proses): Pesan sedang dalam proses pengiriman aktif kepada penerima.
+-Done (Selesai): Kampanye telah berakhir; seluruh pesan telah berhasil terkirim.
+-Cancelled (Batal): Kampanye dihentikan secara manual oleh pengguna sebelum proses pengiriman selesai.
+
+*Tambah Kampanye Baru
+
+-Untuk memulai kampanye pemasaran baru, silakan klik menu [Campaigns] -> tombol [Add Campaign] (Tambah Kampanye).
+
+*Isian Dialog Tambah Kampanye
+
+Isian                     Uraian                                                  Contoh
+-Name                     Identitas internal kampanye untuk laporan               2024 Year-End Flash Sale
+-Channel                  Media komunikasi untuk siaran pesan                     WhatsApp
+-Account                  Memilih akun terintegrasi spesifik yang mengirim        s_whatsapp_main
+-List                     Basis data daftar kontak yang menjadi target            Year-End Leads
+-Group                    Segmentasi kelompok pelanggan                           -
+-Tag                      Label untuk kategorisasi kampanye                       December-Promo
+-Team                     Menugaskan tanggung jawab kampanye ke departemen        Sales-Team-A
+-Message Format           Pilihan format pengiriman pesan                         Text
+-Shorten Link             Mengaktifkan pelacakan klik secara real-time            Inactive
+-Message Body             Konten utama promosi Anda.                              Dapatkan Paket Sahur DISKON 50%!
+-Attachment               Lampiran aset visual atau dokumen                       -
+-Source-Based Attachments Mengirim lampiran unik per penerima                     Inactive
+-Date Range               Jendela waktu operasional pengiriman pesan              28-11-2024 to 29-11-2024
+-Schedule Toggle          Mengotomatiskan pengiriman pada waktu spesifik          Inactive
+-Schedule Time            Tanggal dan jam presisi peluncuran pesan otomatis       -
+-Internal Notes           Dokumentasi bagi supervisor terkait tujuan kampanye     Targeting previous buyers
+
+Note: Setelah selesai dikonfigurasi, klik [Save] (Simpan). Kampanye akan berstatus Draft terlebih dahulu untuk peninjauan akhir sebelum diproses.
+
+*Memaksimalkan Template Pesan
+
+Fitur Message Templates (Template Pesan) membantu menjaga konsistensi brand dan memotong waktu pembuatan pesan:
+-Template Library: Menjelajahi dan memilih format pesan yang telah disetujui.
+-User Variables: Memasukkan nama pengirim atau detail akun secara otomatis.
+-Company Branding: Menarik nama resmi bisnis, alamat, atau email ke bagian kaki pesan.
+-Contact Tags: Personalisasi sapaan menggunakan data dari rekam kontak penerima.
+-External Data: Memetakan konten pesan secara langsung dari sumber Excel/CSV.
+-Randomization Tools: Menyisipkan karakter acak untuk memvariasikan isi pesan agar tidak menjadi spam.
+-Spinners & Synonyms: Penggantian kata otomatis untuk memastikan pesan tidak identik.
+-Tracking Links: Menyisipkan URL pelacak untuk memantau klik promosi.
+-Split Messages: Memecah teks panjang menjadi beberapa gelembung chat terpisah.
+
+*Pengujian Kampanye (Pre-Flight)
+
+-Selalu gunakan fitur Test Message Delivery sebelum menyiarkan pesan ke ratusan pelanggan. Langkah ini memastikan bahwa format teks, variabel, dan tautan berfungsi sesuai harapan.
+-Cara Melakukan Uji Kirim: Klik tombol [Test Send Message]. Sistem akan mengirimkan contoh pesan kampanye ke nomor atau email Anda sendiri.
+
+Lembar Cek Kesuksesan Pengujian:
+-Apakah teks terformat dengan benar (penebalan huruf, jarak spasi)?
+-Apakah nama variabel menarik data yang benar?
+-Apakah tautan (link) mengarah ke halaman tujuan yang benar?
+-Apakah lampiran gambar/video termuat dengan jelas?
+-Apakah tampilan pesan terlihat profesional pada aplikasi seluler?
+
+*Penerbitan dan Manajemen Batch (Kelompok Pesan)
+
+-Pembuatan Batch Pesan
+Masuk ke tab [Send Message], lalu klik tombol [Generate Messages] (Buat Pesan). Sistem akan mencocokkan daftar kontak Anda dengan template untuk membuat pesan unik.
+
+-Memproses Siaran Kampanye
+Jika Anda sudah puas dengan hasil batch pesan, klik tombol [Process] (Proses). Status kampanye akan berubah menjadi Process, dan sistem akan mengalirkan pengiriman pesan.
+Penting: NoBox.AI mengatur kecepatan keluar pesan secara otomatis untuk menghindari pemblokiran akun.
+
+*Monitoring Real-Time & Pemulihan Gagal Kirim
+
+-Fitur Monitoring Feed
+Pengguna dapat memantau status pengiriman pesan (Terkirim, Dibaca, atau Gagal) melalui menu Kotak Masuk atau tab Send Message.
+
+-Menangani Pesan Gagal Kirim
+Gunakan fitur [Failures to Queue] (Gagal ke Antrean) untuk mencoba mengirim kembali pesan-pesan yang sempat gagal tanpa membuat ulang kampanye dari awal.
+
+*Analisis & Kontrol Siklus Kampanye
+
+-Statistik Pengiriman: Menyediakan ringkasan tingkat tinggi mengenai jangkauan kampanye.
+-Menutup Kampanye: Klik tombol [Done] (Selesai) untuk mengarsipkan kampanye jika seluruh tujuan pemasaran telah terpenuhi.
+-Penghentian Paksa: Klik tombol [Cancel] (Batal) untuk segera menghentikan antrean pengiriman pesan yang tersisa.
+
+*Fitur Integrasi Lanjutan (Advanced)
+
+-Pelacakan Tautan Bitly: Hubungkan akun Bitly Anda melalui menu [Business Profile] -> [Integrations].
+-Sumber Data Excel: Unggah file sumber data Anda pada tab [Data Source]. Pilih opsi [Map From] -> [Excel Columns]. Gunakan variabel data untuk memanggil kolom spesifik (Contoh: "Hai [Data:NamaPelanggan]").
+
+*Tips Penggunaan                                  *Penanganan Kendala
+
+Tips Memaksimalkan Menu Campaigns:                Jika Terjadi Kendala pada Campaigns:
+
+-Memeriksa detail kampanye sebelum mengirim.      -Refresh halaman atau aktifkan auto refresh.
+-Menggunakan fitur uji kirim (test send).         -Periksa koneksi internet & filter data.
+-Memanfaatkan variabel personalisasi.             -Pastikan akun memiliki hak akses.
+-Menggunakan fitur shorten link.                  -Lengkapi seluruh kolom wajib formulir.
+-Memantau statistik secara real-time.             -Bersihkan cache browser.
+-Mengelola pesan gagal secara berkala.            -Hubungi administrator sistem.

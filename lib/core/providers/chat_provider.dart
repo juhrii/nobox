@@ -61,6 +61,8 @@ class ChatProvider with ChangeNotifier {
   static const String _savedContactNamesKey = 'saved_contact_names';
   // Key untuk menyimpan data lokasi kontak secara lokal
   static const String _savedContactLocationsKey = 'saved_contact_locations';
+  // Key untuk menyimpan override pesan lokal (supaya bertahan saat hot restart)
+  static const String _localOverridesKey = 'local_overrides';
 
   // Map: roomId → nama kontak yang sudah disave (persisten melewati hot restart & refresh)
   Map<String, String> _savedContactNames = {};
@@ -345,23 +347,56 @@ Future<void> fetchChats() async {
                 chat = chat.copyWith(sender: oldChat.sender);
               }
             }
+
+            // FIX UNIVERSAL MEDIA PRESERVATION:
+            // Jika memori lokal mencatat pesan terakhir adalah media (Foto/Video/Voice),
+            // tetapi API REST membalas dengan pesan kosong/generik (misal: "document(Empty)"),
+            // TOLAK update API tersebut dan pertahankan wujud media lokalnya!
+            final oldLower = oldChat.lastMessage.trim().toLowerCase();
+            final isOldMedia = oldChat.lastMessageType == '2' || oldChat.lastMessageType == '3' || 
+                               oldChat.lastMessageType == '4' || oldChat.lastMessageType == '5' || oldChat.lastMessageType == '16' ||
+                               oldLower.contains('voice') || oldLower.contains('pesan suara') || 
+                               oldLower.contains('photo') || oldLower.contains('foto') || 
+                               oldLower.contains('video') || oldLower.contains('audio');
+                               
+            final newLower = chat.lastMessage.trim().toLowerCase();
+            final isNewGeneric = newLower.isEmpty || newLower == 'document(empty)' || newLower == 'voice(empty)' || newLower == 'file' || newLower == 'null';
+            
+            if (isOldMedia && isNewGeneric) {
+               chat = chat.copyWith(
+                 lastMessageType: oldChat.lastMessageType,
+                 lastMessage: oldChat.lastMessage, 
+               );
+            }
           }
 
           // Cek apakah ada override lokal (pesan dihapus/kirim pesan yang belum tersinkron di LastMessage server)
           final override = _localOverrides[chat.id];
           if (override != null) {
             final serverTime = DateTime.tryParse(chat.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final overrideTime = DateTime.tryParse(override.time) ?? DateTime.now();
-            // Beri toleransi waktu, jika override lebih baru atau sama, gunakan override
-            if (overrideTime.isAfter(serverTime.subtract(const Duration(seconds: 2)))) {
+            
+            // Gunakan waktu PEMBUATAN override untuk membandingkan dengan serverTime,
+            // bukan waktu pesan itu sendiri. Ini krusial saat menghapus pesan (waktu pesan mundur).
+            final overrideCreatedAtStr = _overrideTimestamps[chat.id];
+            final overrideCreatedAt = overrideCreatedAtStr != null ? DateTime.tryParse(overrideCreatedAtStr) ?? DateTime.now().toUtc() : (DateTime.tryParse(override.time) ?? DateTime.now().toUtc());
+            
+            final diff = overrideCreatedAt.difference(serverTime).inSeconds;
+            
+            // Beri toleransi waktu yang lebih besar (60 detik) untuk override media, 
+            // karena upload ke server bisa lambat dan membuat serverTime lebih baru dari overrideCreatedAt.
+            final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => override.lastMessage.toLowerCase().contains(lbl));
+            final tolerance = isOverrideMedia ? -60 : -2;
+
+            if (diff >= tolerance) {
                chat = chat.copyWith(
                  lastMessage: override.lastMessage,
                  time: override.time,
                  isLastMessageFromMe: override.isLastMessageFromMe,
                );
             } else {
-               // Server sudah punya pesan yang lebih baru, hapus override
+               // Server sudah punya pesan yang lebih baru (melewati batas toleransi), hapus override
                _localOverrides.remove(chat.id);
+               _overrideTimestamps.remove(chat.id);
             }
           }
 
@@ -369,6 +404,48 @@ Future<void> fetchChats() async {
           final persistedName = _savedContactNames[chat.id];
           if (persistedName != null && persistedName.isNotEmpty) {
             chat = chat.copyWith(sender: persistedName);
+          }
+
+          // FIX: Cegah string generik ("File", "Document") menimpa JSON array media yang sudah valid
+          final shieldReference = oldChat ?? override;
+          if (shieldReference != null) {
+            final lowerNew = chat.lastMessage.toLowerCase().trim();
+            final oldMsg = shieldReference.lastMessage.trim();
+            
+            final isGeneric = lowerNew.contains('file') || lowerNew.contains('document') || lowerNew.contains('voice note') || 
+                              lowerNew.contains('photo') || lowerNew.contains('video') || lowerNew.contains('audio') || 
+                              lowerNew.contains('image') || lowerNew.contains('attachment') || lowerNew.contains('pesan suara') ||
+                              RegExp(r'^[\d\.:]+$').hasMatch(lowerNew);
+            
+            final oldIsLocalLabel = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => oldMsg.toLowerCase().contains(lbl));
+
+            if (isGeneric) {
+              if (oldMsg.startsWith('{') || oldMsg.startsWith('[') || oldIsLocalLabel) {
+                chat = chat.copyWith(
+                  lastMessage: shieldReference.lastMessage,
+                  lastMessageType: shieldReference.lastMessageType,
+                );
+              }
+            } else if (lowerNew.startsWith('{') || lowerNew.startsWith('[')) {
+              // Jika JSON baru datang, tapi tidak memiliki ciri-ciri audio yang jelas
+              final newIsAudioJson = lowerNew.contains('"type":2') || lowerNew.contains('"type": 2') || lowerNew.contains('"ptt":true') || lowerNew.contains('"ptt": true') || lowerNew.contains('.ogg') || lowerNew.contains('.mp3') || lowerNew.contains('.opus');
+              
+              final oldIsAudioJson = oldMsg.toLowerCase().contains('"type":2') || oldMsg.toLowerCase().contains('"type": 2') || oldMsg.toLowerCase().contains('"ptt":true') || oldMsg.toLowerCase().contains('"ptt": true');
+              final oldIsAudioLabel = oldMsg.toLowerCase().contains('voice note') || oldMsg.toLowerCase().contains('pesan suara');
+              if ((oldIsAudioJson || oldIsAudioLabel) && !newIsAudioJson) {
+                chat = chat.copyWith(
+                  lastMessage: shieldReference.lastMessage,
+                  lastMessageType: shieldReference.lastMessageType,
+                );
+              }
+            } else if (oldIsLocalLabel || oldMsg.startsWith('{') || oldMsg.startsWith('[')) {
+              if (lowerNew.isNotEmpty && oldMsg.toLowerCase().contains(lowerNew)) {
+                chat = chat.copyWith(
+                  lastMessage: shieldReference.lastMessage,
+                  lastMessageType: shieldReference.lastMessageType,
+                );
+              }
+            }
           }
 
           // Terapkan state lokal yang tersimpan (arsip, dibaca)
@@ -385,30 +462,40 @@ Future<void> fetchChats() async {
         _hasMore = response.data!.length >= _pageSize;
         debugPrint('📄 [Pagination] Initial fetch: loaded ${response.data!.length} items, hasMore=$_hasMore');
 
-        // Ambil juga percakapan yang diarsipkan dari server dan gabungkan
+        // Segera perbarui UI agar pengguna tidak menunggu lama
+        _isLoading = false;
+        notifyListeners();
+
+        // Ambil juga percakapan yang diarsipkan dari server dan gabungkan (di background)
         try {
           //getArchivedConversations() digunakan untuk memanggil API untuk menyelaraskan dengan databae sever
           final archivedResponse = await _chatService.getArchivedConversations();
           if (!archivedResponse.isError && archivedResponse.data != null) {
             final existingIds = _chats.map((c) => c.id).toSet();
+            bool hasNewArchived = false;
             for (final archivedConv in archivedResponse.data!) {
               final archivedChat = archivedConv.toChatModel();
               if (!existingIds.contains(archivedChat.id)) {
                 _chats.add(archivedChat.copyWith(isArchived: true));
                 _archivedIds.add(archivedChat.id);
+                hasNewArchived = true;
               }
             }
-            _saveArchivedState();
+            if (hasNewArchived) {
+              _saveArchivedState();
+              notifyListeners();
+            }
           }
         } catch (e) {
           debugPrint('ChatProvider: Failed to fetch archived chats: $e');
         }
       } else {
         _error = response.error ?? 'Gagal memuat chat';
+        _isLoading = false;
+        notifyListeners();
       }
     } catch (e) {
       _error = e.toString();
-    } finally {
       _isLoading = false;
       notifyListeners();
     }
@@ -430,7 +517,42 @@ Future<void> fetchChats() async {
     if (index >= 0) {
       // Update existing chat
       final existing = _chats[index];
-      final lastMsg = roomData['LastMsg']?.toString() ?? existing.lastMessage;
+      String lastMsg = roomData['LastMsg']?.toString() ?? existing.lastMessage;
+      
+      // FIX: Cegah string generik ("File", "Document") menimpa JSON array media yang sudah valid
+      final lowerNew = lastMsg.toLowerCase().trim();
+      final oldMsg = existing.lastMessage.trim();
+      
+      final isGeneric = lowerNew.isEmpty || lowerNew == 'null' || lowerNew.contains('file') || lowerNew.contains('document') || lowerNew.contains('voice note') || 
+                        lowerNew.contains('photo') || lowerNew.contains('video') || lowerNew.contains('audio') || 
+                        lowerNew.contains('image') || lowerNew.contains('attachment') || lowerNew.contains('pesan suara') ||
+                        RegExp(r'^[\d\.:]+$').hasMatch(lowerNew);
+      
+      final oldIsLocalLabel = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => oldMsg.toLowerCase().contains(lbl));
+      
+      if (isGeneric) {
+        if (oldMsg.startsWith('{') || oldMsg.startsWith('[') || oldIsLocalLabel) {
+          lastMsg = existing.lastMessage;
+        }
+      } else if (lowerNew.startsWith('{') || lowerNew.startsWith('[')) {
+        // Jika JSON baru datang, tapi tidak memiliki ciri-ciri audio yang jelas
+        final newIsAudioJson = lowerNew.contains('"type":2') || lowerNew.contains('"type": 2') || lowerNew.contains('"ptt":true') || lowerNew.contains('"ptt": true') || lowerNew.contains('.ogg') || lowerNew.contains('.mp3') || lowerNew.contains('.opus');
+        
+        // Apakah pesan lama adalah audio? (JSON lengkap ATAU label manual)
+        final oldIsAudioJson = oldMsg.toLowerCase().contains('"type":2') || oldMsg.toLowerCase().contains('"type": 2') || oldMsg.toLowerCase().contains('"ptt":true') || oldMsg.toLowerCase().contains('"ptt": true');
+        final oldIsAudioLabel = oldMsg.toLowerCase().contains('voice note') || oldMsg.toLowerCase().contains('pesan suara');
+        if ((oldIsAudioJson || oldIsAudioLabel) && !newIsAudioJson) {
+          lastMsg = existing.lastMessage;
+        }
+      } else if (oldIsLocalLabel || oldMsg.startsWith('{') || oldMsg.startsWith('[')) {
+        // Jika pesan baru bukan JSON dan bukan generic, MUNGKIN itu adalah caption yang di-strip oleh server.
+        // Jika teks baru tersebut sudah ada di dalam pesan lama kita (misal: "📷 Photo Hello" mengandung "Hello"),
+        // maka pertahankan pesan lama yang lebih kaya (punya icon/JSON).
+        if (lowerNew.isNotEmpty && oldMsg.toLowerCase().contains(lowerNew)) {
+          lastMsg = existing.lastMessage;
+        }
+      }
+
       final uc = roomData['Uc'] is int ? roomData['Uc'] as int : existing.unreadCount;
       final timeMsg = roomData['TimeMsg']?.toString() ?? existing.time;
       final isNeedReply = roomData['IsNeedReply'] == 1 || roomData['IsNeedReply'] == true;
@@ -444,8 +566,28 @@ Future<void> fetchChats() async {
         resolvedIsBlocked = existing.isBlocked;
       }
 
+      // FIX Bug #4: Bersihkan LastMessageType yang usang jika pesan baru bukan JSON
+      String? updatedType = roomData['LastMessageType']?.toString();
+      if (!lastMsg.startsWith('{') && !lastMsg.startsWith('[')) {
+        final lower = lastMsg.trim().toLowerCase();
+        if (lower.isNotEmpty && lower != 'document(empty)' && lower != 'voice(empty)') {
+          if (updatedType == '2' || updatedType == '3' || updatedType == '4' || updatedType == '5') {
+            updatedType = '1';
+          }
+        }
+      }
+      if (updatedType == null) {
+        final lower = lastMsg.trim().toLowerCase();
+        if (lastMsg.startsWith('{') || lastMsg.startsWith('[') || lower.isEmpty || lower == 'null' || lower == 'document(empty)' || lower == 'voice(empty)') {
+          updatedType = existing.lastMessageType;
+        } else {
+          updatedType = '1'; // Force Text
+        }
+      }
+
       _chats[index] = existing.copyWith(
         lastMessage: lastMsg,
+        lastMessageType: updatedType,
         unreadCount: uc,
         time: timeMsg,
         needReply: isNeedReply,
@@ -475,23 +617,34 @@ Future<void> fetchChats() async {
     notifyListeners();
   }
 
-  /// Memperbarui pesan terakhir (lastMessage) secara lokal untuk pembaruan UI instan
-  void updateLocalLastMessage(String roomId, String lastMessage, {bool isFromMe = true}) {
+  void updateLocalLastMessage(String roomId, String lastMessage, {bool isFromMe = true, bool updateTimeAndPosition = true, String? overrideTime, String? lastMessageType}) {
     final index = _chats.indexWhere((c) => c.id == roomId);
     if (index >= 0) {
+      final newTime = overrideTime ?? (updateTimeAndPosition ? DateTime.now().toUtc().toIso8601String() : _chats[index].time);
       final chat = _chats[index].copyWith(
         lastMessage: lastMessage,
+        lastMessageType: lastMessageType ?? '1',
         isLastMessageFromMe: isFromMe,
-        time: DateTime.now().toIso8601String(),
+        time: newTime,
       );
       
       // Simpan sebagai override agar tidak tertimpa Inbox/GetList yang usang
       _localOverrides[roomId] = chat;
+      _overrideTimestamps[roomId] = DateTime.now().toUtc().toIso8601String(); // Catat KAPAN override ini dibuat
       
-      // Pindahkan obrolan ke posisi paling atas
-      _chats.removeAt(index);
-      _chats.insert(0, chat);
       
+      if (updateTimeAndPosition) {
+        // Pindahkan obrolan ke posisi paling atas
+        _chats.removeAt(index);
+        _chats.insert(0, chat);
+      } else {
+        // Hanya update di tempat, tapi waktu bisa mundur (misal saat hapus pesan)
+        _chats[index] = chat;
+        // Opsional: sort _chats jika ingin posisi langsung akurat saat pesan dihapus
+        _chats.sort((a, b) => (b.time).compareTo(a.time));
+      }
+      
+      _saveLocalOverrides();
       notifyListeners();
     }
   }
@@ -559,6 +712,49 @@ Future<void> fetchChats() async {
             if (persistedName != null && persistedName.isNotEmpty) {
               chat = chat.copyWith(sender: persistedName);
             }
+            
+            // FIX: Cegah string generik ("File", "Document") menimpa JSON array media yang sudah valid
+            final lowerNew = chat.lastMessage.toLowerCase().trim();
+            final oldMsg = oldChat.lastMessage.trim();
+            
+            final isGeneric = lowerNew.contains('file') || lowerNew.contains('document') || lowerNew.contains('voice note') || 
+                              lowerNew.contains('photo') || lowerNew.contains('video') || lowerNew.contains('audio') || 
+                              lowerNew.contains('image') || lowerNew.contains('attachment') || lowerNew.contains('pesan suara');
+            
+            final oldIsLocalLabel = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => oldMsg.toLowerCase().contains(lbl));
+
+            if (isGeneric) {
+              if (oldMsg.startsWith('{') || oldMsg.startsWith('[') || oldIsLocalLabel) {
+                chat = chat.copyWith(
+                  lastMessage: oldChat.lastMessage,
+                  lastMessageType: oldChat.lastMessageType,
+                );
+              }
+            } else if (lowerNew.startsWith('{') || lowerNew.startsWith('[')) {
+              // Jika JSON baru datang, tapi tidak memiliki ciri-ciri audio yang jelas
+              final newIsAudioJson = lowerNew.contains('"type":2') || lowerNew.contains('"type": 2') || lowerNew.contains('"ptt":true') || lowerNew.contains('"ptt": true') || lowerNew.contains('.ogg') || lowerNew.contains('.mp3') || lowerNew.contains('.opus');
+              
+              // Apakah pesan lama adalah audio? (JSON lengkap ATAU label manual)
+              final oldIsAudioJson = oldMsg.toLowerCase().contains('"type":2') || oldMsg.toLowerCase().contains('"type": 2') || oldMsg.toLowerCase().contains('"ptt":true') || oldMsg.toLowerCase().contains('"ptt": true');
+              final oldIsAudioLabel = oldMsg.toLowerCase().contains('voice note') || oldMsg.toLowerCase().contains('pesan suara');
+              if ((oldIsAudioJson || oldIsAudioLabel) && !newIsAudioJson) {
+                chat = chat.copyWith(
+                  lastMessage: oldChat.lastMessage,
+                  lastMessageType: oldChat.lastMessageType,
+                );
+              }
+            } else if (oldIsLocalLabel || oldMsg.startsWith('{') || oldMsg.startsWith('[')) {
+              // Jika pesan baru bukan JSON dan bukan generic, MUNGKIN itu adalah caption yang di-strip oleh server.
+              // Jika teks baru tersebut sudah ada di dalam pesan lama kita (misal: "📷 Photo Hello" mengandung "Hello"),
+              // maka pertahankan pesan lama yang lebih kaya (punya icon/JSON).
+              if (lowerNew.isNotEmpty && oldMsg.toLowerCase().contains(lowerNew)) {
+                chat = chat.copyWith(
+                  lastMessage: oldChat.lastMessage,
+                  lastMessageType: oldChat.lastMessageType,
+                );
+              }
+            }
+
             _chats[idx] = chat;
           } else {
             // FIX: Bersihkan/Timpa dummy chat (yang dibuat lokal) jika contactId cocok
@@ -684,64 +880,73 @@ Future<void> fetchMoreChats() async {
   // ── Persisted State Management ──
 
   Future<void> _loadPersistedState() async {
-    final prefs = await SharedPreferences.getInstance();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Load Overrides
+      await _loadLocalOverrides();
+
+      final pinnedJson = prefs.getString(_pinnedKey);
+      if (pinnedJson != null) {
+        _pinnedIds = Set<String>.from(jsonDecode(pinnedJson));
+      }
+
+      final archivedJson = prefs.getString(_archivedKey);
+      if (archivedJson != null) {
+        _archivedIds = Set<String>.from(jsonDecode(archivedJson));
+      }
+
+      final readJson = prefs.getString(_readKey);
+      if (readJson != null) {
+        _readIds = Set<String>.from(jsonDecode(readJson));
+      }
+
+      final starredJson = prefs.getString(_starredKey);
+      if (starredJson != null) {
+        _starredMessageIds = Set<String>.from(jsonDecode(starredJson));
+      }
+
+      final starredDataJson = prefs.getString(_starredDataKey);
+      if (starredDataJson != null) {
+        _starredMessages.clear();
+        final list = jsonDecode(starredDataJson) as List;
+        _starredMessages.addAll(list.cast<Map<String, dynamic>>());
+      }
+
+      // Load nama kontak yang sudah disave
+      final savedNamesJson = prefs.getString(_savedContactNamesKey);
+      debugPrint('ChatProvider: 🔍 savedContactNames raw: $savedNamesJson');
+      if (savedNamesJson != null) {
+        try {
+          final decoded = jsonDecode(savedNamesJson) as Map<String, dynamic>;
+          _savedContactNames = decoded.map((k, v) => MapEntry(k, v.toString()));
+          debugPrint('ChatProvider: ✅ Loaded ${_savedContactNames.length} saved names: $_savedContactNames');
+        } catch (e) {
+          debugPrint('ChatProvider: ❌ Error decoding saved contact names: $e');
+        }
+      } else {
+        debugPrint('ChatProvider: ⚠️ No saved contact names in prefs (key=$_savedContactNamesKey)');
+      }
+
+      // Load data lokasi kontak yang sudah disave
+      final savedLocationsJson = prefs.getString(_savedContactLocationsKey);
+      if (savedLocationsJson != null) {
+        try {
+          final decoded = jsonDecode(savedLocationsJson) as Map<String, dynamic>;
+          _savedContactLocations = decoded.map((k, v) {
+            final locMap = (v as Map<String, dynamic>).map((lk, lv) => MapEntry(lk, lv.toString()));
+            return MapEntry(k, locMap);
+          });
+          debugPrint('ChatProvider: ✅ Loaded ${_savedContactLocations.length} saved locations');
+        } catch (e) {
+          debugPrint('ChatProvider: ❌ Error decoding saved contact locations: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('ChatProvider: ❌ Error loading persisted state: $e');
+    }
     
-    final pinnedJson = prefs.getString(_pinnedKey);
-    if (pinnedJson != null) {
-      _pinnedIds = Set<String>.from(jsonDecode(pinnedJson));
-    }
-
-    final archivedJson = prefs.getString(_archivedKey);
-    if (archivedJson != null) {
-      _archivedIds = Set<String>.from(jsonDecode(archivedJson));
-    }
-
-    final readJson = prefs.getString(_readKey);
-    if (readJson != null) {
-      _readIds = Set<String>.from(jsonDecode(readJson));
-    }
-
-    final starredJson = prefs.getString(_starredKey);
-    if (starredJson != null) {
-      _starredMessageIds = Set<String>.from(jsonDecode(starredJson));
-    }
-
-    final starredDataJson = prefs.getString(_starredDataKey);
-    if (starredDataJson != null) {
-      _starredMessages.clear();
-      final list = jsonDecode(starredDataJson) as List;
-      _starredMessages.addAll(list.cast<Map<String, dynamic>>());
-    }
-
-    // Load nama kontak yang sudah disave
-    final savedNamesJson = prefs.getString(_savedContactNamesKey);
-    debugPrint('ChatProvider: 🔍 savedContactNames raw: $savedNamesJson');
-    if (savedNamesJson != null) {
-      try {
-        final decoded = jsonDecode(savedNamesJson) as Map<String, dynamic>;
-        _savedContactNames = decoded.map((k, v) => MapEntry(k, v.toString()));
-        debugPrint('ChatProvider: ✅ Loaded ${_savedContactNames.length} saved names: $_savedContactNames');
-      } catch (e) {
-        debugPrint('ChatProvider: ❌ Error decoding saved contact names: $e');
-      }
-    } else {
-      debugPrint('ChatProvider: ⚠️ No saved contact names in prefs (key=$_savedContactNamesKey)');
-    }
-
-    // Load data lokasi kontak yang sudah disave
-    final savedLocationsJson = prefs.getString(_savedContactLocationsKey);
-    if (savedLocationsJson != null) {
-      try {
-        final decoded = jsonDecode(savedLocationsJson) as Map<String, dynamic>;
-        _savedContactLocations = decoded.map((k, v) {
-          final locMap = (v as Map<String, dynamic>).map((lk, lv) => MapEntry(lk, lv.toString()));
-          return MapEntry(k, locMap);
-        });
-        debugPrint('ChatProvider: ✅ Loaded ${_savedContactLocations.length} saved locations');
-      } catch (e) {
-        debugPrint('ChatProvider: ❌ Error decoding saved contact locations: $e');
-      }
-    }
+    notifyListeners();
   }
 
   Future<void> _savePinnedState() async {
@@ -823,8 +1028,53 @@ Future<void> fetchMoreChats() async {
   // Getter untuk semua chat tanpa filter (berguna untuk lookup langsung by ID)
   List<ChatModel> get allChats => _chats;
 
-  // Menyimpan override lokal untuk lastMessage agar tidak tertimpa oleh data server yang usang (misal setelah hapus pesan)
-  final Map<String, ChatModel> _localOverrides = {};
+  // Local overrides untuk lastMessage agar tidak tertimpa data usang dari server
+  Map<String, ChatModel> _localOverrides = {};
+  Map<String, String> _overrideTimestamps = {}; // Waktu kapan override dibuat (UTC)
+
+  Future<void> _loadLocalOverrides() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final overridesJson = prefs.getString(_localOverridesKey);
+      if (overridesJson != null) {
+        final decoded = jsonDecode(overridesJson) as Map<String, dynamic>;
+        _localOverrides.clear();
+        for (final entry in decoded.entries) {
+          final val = entry.value as Map<String, dynamic>;
+          _localOverrides[entry.key] = ChatModel(
+            id: entry.key,
+            sender: '',
+            lastMessage: val['lastMessage']?.toString() ?? '',
+            time: val['time']?.toString() ?? '',
+            isLastMessageFromMe: val['isLastMessageFromMe'] == true,
+          );
+        }
+      }
+      
+      final timestampsJson = prefs.getString('override_timestamps');
+      if (timestampsJson != null) {
+        final Map<String, dynamic> decodedTs = jsonDecode(timestampsJson);
+        _overrideTimestamps = decodedTs.map((key, value) => MapEntry(key, value.toString()));
+      }
+    } catch (e) {
+      debugPrint('ChatProvider: Error loading local overrides: $e');
+    }
+  }
+
+  Future<void> _saveLocalOverrides() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final Map<String, dynamic> data = _localOverrides.map((k, v) => MapEntry(k, {
+        'lastMessage': v.lastMessage,
+        'isLastMessageFromMe': v.isLastMessageFromMe,
+        'time': v.time,
+      }));
+      await prefs.setString(_localOverridesKey, jsonEncode(data));
+      await prefs.setString('override_timestamps', jsonEncode(_overrideTimestamps));
+    } catch (e) {
+      debugPrint('ChatProvider: Failed to save local overrides: $e');
+    }
+  }
 
   // [ACTION: FILTER_APPLY] - Getter ini mengeksekusi filter (lokal) pada daftar chat
   List<ChatModel> get chats {
@@ -1163,6 +1413,15 @@ Future<void> toggleArchive(String chatId) async {
     notifyListeners();
     return false;
   }
+
+  void updateLocalContactTags(String contactId, List<String> tagIds, List<String> tagNames) {
+    final index = _chats.indexWhere((c) => c.id == contactId);
+    if (index != -1) {
+      _chats[index] = _chats[index].copyWith(tags: tagNames);
+      notifyListeners();
+    }
+  }
+
 
   Future<bool> updateContactFunnel(String contactId, String funnelId, {String? funnelName}) async {
     final response = await _chatService.updateContactFunnel(contactId, funnelId);

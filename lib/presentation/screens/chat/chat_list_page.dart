@@ -1388,11 +1388,179 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
         ? Colors.red 
         : (isDark ? Colors.grey.shade400 : Colors.black87);
     
-    // Check for special message types
-    if (chat.lastMessageType != null && chat.lastMessageType!.isNotEmpty) {
-      final isUnsupported = chat.lastMessageType!.toLowerCase().contains('unsupported');
+    String displayMessage = chat.lastMessage;
+    if (displayMessage.trim().toLowerCase() == 'document(empty)') {
+      displayMessage = '';
+    }
+    final trimmedMsg = displayMessage.trim();
+    bool parsedAsMedia = false;
+    
+    // FIX: Tangani label manual (fallback) terlebih dahulu sebelum JSON parsing.
+    // Jika lastMessage diketik paksa secara lokal (misal: "🎤 Pesan Suara" saat merekam),
+    // langsung atur ke Voice Note agar tidak tertimpa oleh chat.lastMessageType ("Document") yang usang.
+    final lowerTrimmed = trimmedMsg.toLowerCase();
+    final exactAudioLabels = ['voice note', '🎵 voice note', 'pesan suara', '🎤 pesan suara', 'audio', 'voice(empty)', 'voice (empty)'];
+    final exactPhotoLabels = ['photo', '📷 photo', 'image', 'foto', '📷 foto'];
+    final exactVideoLabels = ['video', '🎥 video', '🎬 video'];
 
-      if (isUnsupported) {
+    if (exactAudioLabels.contains(lowerTrimmed)) {
+      displayMessage = '🎵 Voice Note';
+      parsedAsMedia = true;
+    } else if (exactPhotoLabels.contains(lowerTrimmed)) {
+      displayMessage = '📷 Photo';
+      parsedAsMedia = true;
+    } else if (exactVideoLabels.contains(lowerTrimmed)) {
+      displayMessage = '🎥 Video';
+      parsedAsMedia = true;
+    }
+
+    // 1. Coba parse JSON terlebih dahulu (karena prioritas detail media dari JSON lebih akurat daripada lastMessageType)
+    if (!parsedAsMedia && (trimmedMsg.startsWith('{') || trimmedMsg.startsWith('['))) {
+      try {
+        final decoded = jsonDecode(trimmedMsg);
+        final fileMap = decoded is List ? (decoded.isNotEmpty ? decoded.first : {}) : decoded;
+        
+        if (fileMap is Map) {
+          // EXTRACT NESTED MAP IF PRESENT (Some backend payloads wrap the file details)
+          Map targetMap = fileMap;
+          if (targetMap['File'] is String && (targetMap['File'].toString().startsWith('{') || targetMap['File'].toString().startsWith('['))) {
+             try { 
+               final decodedFile = jsonDecode(targetMap['File']); 
+               if (decodedFile is List && decodedFile.isNotEmpty) targetMap = decodedFile.first;
+               else if (decodedFile is Map) targetMap = decodedFile;
+             } catch (_) {}
+          } else if (targetMap['Files'] is List && (targetMap['Files'] as List).isNotEmpty) {
+             targetMap = targetMap['Files'].first;
+          } else if (targetMap['Files'] is String && (targetMap['Files'].toString().startsWith('{') || targetMap['Files'].toString().startsWith('['))) {
+             try { 
+               final decodedFiles = jsonDecode(targetMap['Files']);
+               if (decodedFiles is List && decodedFiles.isNotEmpty) targetMap = decodedFiles.first;
+               else if (decodedFiles is Map) targetMap = decodedFiles;
+             } catch (_) {}
+          } else if (targetMap['Msg'] is String && (targetMap['Msg'].toString().startsWith('{') || targetMap['Msg'].toString().startsWith('['))) {
+             try { 
+               final decodedMsg = jsonDecode(targetMap['Msg']); 
+               if (decodedMsg is List && decodedMsg.isNotEmpty) targetMap = decodedMsg.first;
+               else if (decodedMsg is Map) targetMap = decodedMsg;
+             } catch (_) {}
+          }
+
+          // FIX: Buat pengecekan key JSON menjadi case-insensitive dan tangani tipe string
+          final typeVal = targetMap['Type']?.toString() ?? targetMap['type']?.toString() ?? fileMap['Type']?.toString() ?? '';
+          
+          final isPtt = targetMap['Ptt'] == true || targetMap['IsPtt'] == true || targetMap['ptt'] == true || targetMap['isPtt'] == true ||
+                        targetMap['Ptt']?.toString().toLowerCase() == 'true' || targetMap['ptt']?.toString().toLowerCase() == 'true';
+                        
+          final filename = targetMap['Filename']?.toString().toLowerCase() ?? 
+                           targetMap['filename']?.toString().toLowerCase() ?? 
+                           targetMap['url']?.toString().toLowerCase() ?? 
+                           targetMap['Url']?.toString().toLowerCase() ?? '';
+                           
+          final originalName = targetMap['OriginalName']?.toString().toLowerCase() ?? targetMap['originalname']?.toString().toLowerCase() ?? '';
+          final caption = targetMap['Caption']?.toString() ?? targetMap['caption']?.toString() ?? '';
+          
+          final isAudio = isPtt || typeVal == '2' || 
+                         ['.ogg', '.oga', '.mp3', '.wav', '.m4a', '.opus', '.aac', '.weba', '.amr'].any((ext) => filename.contains(ext) || originalName.contains(ext));
+          
+          final isImage = typeVal == '3' || 
+                         ['.jpg', '.jpeg', '.png', '.gif', '.webp'].any((ext) => filename.contains(ext) || originalName.contains(ext));
+                         
+          final isVideo = typeVal == '4' || 
+                         ['.mp4', '.avi', '.mov', '.3gp'].any((ext) => filename.contains(ext) || originalName.contains(ext));
+                         
+          final isLocation = typeVal == '15' || typeVal == '11' || trimmedMsg.toLowerCase().contains('"lat":');
+          final isContact = typeVal == '14' || typeVal == '10';
+
+          if (isAudio) {
+            displayMessage = '🎵 Voice Note';
+            parsedAsMedia = true;
+          } else if (isImage) {
+            displayMessage = '📷 Photo${caption.isNotEmpty ? ' $caption' : ''}';
+            parsedAsMedia = true;
+          } else if (isVideo) {
+            displayMessage = '🎥 Video${caption.isNotEmpty ? ' $caption' : ''}';
+            parsedAsMedia = true;
+          } else if (isLocation) {
+            displayMessage = '📍 Location';
+            parsedAsMedia = true;
+          } else if (isContact) {
+            displayMessage = '👤 Contact';
+            parsedAsMedia = true;
+          } else if (filename.isNotEmpty || originalName.isNotEmpty || typeVal == '5') {
+            // Cek apakah backend secara eksplisit memberitahu tipe media di lastMessageType
+            final overrideType = chat.lastMessageType?.toLowerCase() ?? '';
+            if (overrideType.contains('voice note') || overrideType.contains('audio')) {
+              displayMessage = '🎵 Voice Note';
+            } else if (overrideType.contains('image') || overrideType.contains('photo')) {
+              displayMessage = '📷 Photo${caption.isNotEmpty ? ' $caption' : ''}';
+            } else if (overrideType.contains('video')) {
+              displayMessage = '🎥 Video${caption.isNotEmpty ? ' $caption' : ''}';
+            } else {
+              String docName = 'Document';
+              if (originalName.isNotEmpty) {
+                docName = targetMap['OriginalName']?.toString() ?? targetMap['originalname']?.toString() ?? 'Document';
+              } else if (filename.isNotEmpty) {
+                docName = (targetMap['Filename']?.toString() ?? targetMap['url']?.toString() ?? 'Document').split('/').last;
+              }
+              
+              if (docName.toLowerCase().contains('document(empty)')) {
+                 final rawText = targetMap['Msg']?.toString() ?? targetMap['Body']?.toString() ?? targetMap['Message']?.toString() ?? targetMap['Content']?.toString() ?? '';
+                 if (rawText.isNotEmpty && !rawText.startsWith('{') && !rawText.startsWith('[')) {
+                    displayMessage = rawText;
+                 } else {
+                    displayMessage = '📄 File';
+                 }
+                 parsedAsMedia = true; // Set to true so it doesn't get overridden by fallback logic
+              } else {
+                // DEBUG: Tampilkan isi mentah dari pesan agar kita bisa melihat bentuk data JSON-nya
+                if (trimmedMsg.isNotEmpty) {
+                  final preview = trimmedMsg.length > 35 ? '${trimmedMsg.substring(0, 35)}...' : trimmedMsg;
+                  displayMessage = '📄 RAW: $preview';
+                } else {
+                  displayMessage = '📄 $docName';
+                }
+                parsedAsMedia = true;
+              }
+            } // Close the `else` block from line 1495
+            parsedAsMedia = true;
+          }
+        }
+      } catch (_) {
+        // Abaikan error parse, mungkin bukan JSON media
+      }
+    }
+    
+    // 2. Jika tidak berhasil diparse sebagai media JSON secara spesifik, cek lastMessageType dari backend
+    if (!parsedAsMedia && chat.lastMessageType != null && chat.lastMessageType!.isNotEmpty) {
+      final overrideType = chat.lastMessageType!.toLowerCase();
+      
+      if (overrideType.contains('voice note') || overrideType.contains('audio') || overrideType == '2') {
+        displayMessage = '🎵 Voice Note';
+      } else if (overrideType.contains('image') || overrideType.contains('photo') || overrideType == '3') {
+        final cleaned = displayMessage.replaceAll('📷', '').replaceAll('Photo', '').trim();
+        displayMessage = '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+      } else if (overrideType.contains('video') || overrideType == '4') {
+        final cleaned = displayMessage.replaceAll('🎥', '').replaceAll('📹', '').replaceAll('Video', '').trim();
+        displayMessage = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+      } else if (overrideType.contains('document') || overrideType.contains('file') || overrideType == '5') {
+        if (displayMessage.contains('📄') || displayMessage.contains('📁')) {
+          // sudah ada emoji
+        } else if (displayMessage.isEmpty) {
+          final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
+          if (isTelegram) {
+            displayMessage = '🎵 Voice Note'; // HACK: Asumsi server NoBox untuk file .ogg Telegram tanpa caption
+          } else {
+            displayMessage = '📄 File';
+          }
+        } else {
+          final preview = trimmedMsg.length > 35 ? '${trimmedMsg.substring(0, 35)}...' : trimmedMsg;
+          displayMessage = '📄 $preview';
+        }
+      } else if (overrideType == '15' || overrideType == '11' || overrideType.contains('location')) {
+        displayMessage = '📍 Location';
+      } else if (overrideType == '14' || overrideType == '10' || overrideType.contains('contact')) {
+        displayMessage = '👤 Contact';
+      } else if (overrideType.contains('unsupported')) {
         return Row(
           children: [
             Icon(Icons.block, size: 14, color: Colors.red.shade400),
@@ -1407,52 +1575,30 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             ),
           ],
         );
+      } else if (overrideType == '1' || overrideType == 'text') {
+        // Teks biasa, abaikan
+      } else {
+        // Fallback untuk tipe lain yang tidak dikenal
+        displayMessage = '🌟 ${chat.lastMessageType}${displayMessage.isNotEmpty ? ' $displayMessage' : ''}';
       }
-
-      // Sticker or other special types
-      return Row(
-        children: [
-          const Text('🌟 ', style: TextStyle(fontSize: 14)),
-          Text(
-            chat.lastMessageType!,
-            style: TextStyle(
-              fontSize: 13,
-              color: messageColor,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      );
+      
+      if (overrideType != '1' && overrideType != 'text') {
+        parsedAsMedia = true;
+      }
+    }
+    
+    // 3. Fallback jika string kosong dan bukan media
+    if (!parsedAsMedia && displayMessage.isEmpty) {
+      final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
+      if (isTelegram) {
+        displayMessage = '🎵 Voice Note'; // ULTIMATE HACK: Any empty unrecognized message from Telegram is a Voice Note
+      } else {
+        displayMessage = '📄 File';
+      }
     }
 
-    String displayMessage = chat.lastMessage;
-    
-    // Cegah JSON mentah tampil di UI jika pesan berisi attachment/media (dari forward atau API)
-    final trimmedMsg = displayMessage.trim();
-    if ((trimmedMsg.startsWith('{') || trimmedMsg.startsWith('[')) && trimmedMsg.contains('"Filename"')) {
-      if (trimmedMsg.contains('"Ptt":true') || trimmedMsg.contains('"Ptt": true')) {
-        displayMessage = '🎵 Voice Note';
-      } else if (trimmedMsg.toLowerCase().contains('.jpg') || trimmedMsg.toLowerCase().contains('.png') || trimmedMsg.toLowerCase().contains('.jpeg')) {
-        displayMessage = '📷 Photo';
-      } else if (trimmedMsg.toLowerCase().contains('.mp4')) {
-        displayMessage = '🎥 Video';
-      } else {
-        String docName = 'Document';
-        try {
-          final decoded = jsonDecode(trimmedMsg);
-          final fileMap = decoded is List ? (decoded.isNotEmpty ? decoded.first : {}) : decoded;
-          if (fileMap is Map) {
-            if (fileMap['OriginalName'] != null && fileMap['OriginalName'].toString().isNotEmpty) {
-              docName = fileMap['OriginalName'].toString();
-            } else if (fileMap['Filename'] != null && fileMap['Filename'].toString().isNotEmpty) {
-              docName = fileMap['Filename'].toString().split('/').last;
-            }
-          }
-        } catch (_) {}
-        displayMessage = '📄 $docName';
-      }
-    } else if (displayMessage.isEmpty) {
-      displayMessage = '📄 Document';
+    if (!parsedAsMedia && (displayMessage == 'Document' || displayMessage == '📄 Document')) {
+       displayMessage = '📄 File';
     }
 
     return Text(

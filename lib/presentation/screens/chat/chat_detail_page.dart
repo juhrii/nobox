@@ -56,10 +56,23 @@ class ChatDetailPage extends StatefulWidget {
   State<ChatDetailPage> createState() => _ChatDetailPageState();
 }
 
+// Helper class untuk local cache pesan yang belum dikonfirmasi server
+class _CachedSentMessage {
+  final Message message;
+  final DateTime addedAt;
+  _CachedSentMessage(this.message, this.addedAt);
+}
+
 class _ChatDetailPageState extends State<ChatDetailPage> {
   late ChatModel chat;
   final TextEditingController _messageController = TextEditingController();
   final ChatService _chatService = ChatService();
+  
+  // *** LOCAL SENT CACHE ***
+  // Menyimpan pesan yang sudah dikirim tapi belum dikonfirmasi server.
+  // Bertahan selama app berjalan (static). Dibersihkan setelah 2 jam atau dikonfirmasi AckPolling.
+  static final Map<String, List<_CachedSentMessage>> _localSentCache = {};
+  
   // FITUR: State Pesan Utama
   // FUNGSI: Menyimpan data daftar pesan (_messages) dan state loading saat memuat histori.
   List<Message> _messages = [];
@@ -118,6 +131,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           });
         }
       }
+      
+      debugPrint('=== DIAGNOSTIC CHAT IDS ===');
+      debugPrint('RoomId (id): ${chat.id}');
+      debugPrint('ContactId: ${chat.contactId}');
+      debugPrint('CtRealId: ${chat.ctRealId}');
+      debugPrint('Link: ${chat.link}');
+      debugPrint('GroupId: ${chat.groupId}');
+      debugPrint('ChannelType: ${chat.channelType}');
+      debugPrint('===========================');
       _isInit = true;
 
       if (chat.id.isNotEmpty) {
@@ -519,10 +541,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       // ── NORMAL: gunakan getMessageHistory seperti biasa ──
       debugPrint('ChatDetail: Chat is active, using getMessageHistory');
       
-      // FIX: Batasi `take: 20` agar loading masuk ke layar percakapan jauh lebih cepat
-      final response = await _chatService.getMessageHistory(chat.id, currentUserEmail, take: 20);
+      // FIX: Fetch more messages (take: 75) and sort locally by absolute ISO time 
+      // to fix UTC timezone sorting bugs from the backend for Telegram messages.
+      final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
       
-      debugPrint('ChatDetail API Response for ${chat.id}: Error? ${response.isError}, Data Length: ${response.data?.length}');
+      // *** DEBUG *** - Tampilkan semua ID agar kita tahu kenapa pesan WA hilang
+      debugPrint('===== LOAD MESSAGES DEBUG =====');
+      debugPrint('chat.id       : ${chat.id}');
+      debugPrint('chat.contactId: ${chat.contactId}');
+      debugPrint('chat.ctRealId : ${chat.ctRealId}');
+      debugPrint('chat.groupId  : ${chat.groupId}');
+      debugPrint('chat.chId     : ${chat.chId}');
+      debugPrint('isTelegram    : $isTelegram');
+      final response = await _chatService.getMessageHistory(chat.id, currentUserEmail, take: 75, contactId: chat.contactId, groupId: chat.groupId, ctRealId: chat.ctRealId, link: chat.link, isTelegram: isTelegram);
 
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -535,13 +566,89 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               _debugApiState = 'API berhasil dipanggil tapi mengembalikan 0 pesan (Kosong) dari server.';
             } else {
               _debugApiState = 'Berhasil mengambil ${response.data!.length} pesan.';
-              _messages = response.data!;
+              
+              // Lakukan sorting lokal untuk memastikan urutan sesuai waktu
+              final sortedList = List<Message>.from(response.data!);
+              sortedList.sort((a, b) {
+                if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
+                try {
+                  String ta = a.rawTime;
+                  String tb = b.rawTime;
+                  if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                  if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                  return DateTime.parse(ta).compareTo(DateTime.parse(tb));
+                } catch (_) {
+                  return 0;
+                }
+              });
+              _messages = sortedList;
+              
+              // *** MERGE LOCAL SENT CACHE ***
+              // Tambahkan pesan yang sudah dikirim tapi belum dikonfirmasi server
+              final cache = _localSentCache[chat.id] ?? [];
+              debugPrint('LocalCache: Found ${cache.length} items in cache for ${chat.id} before filter.');
+              
+              // Bersihkan cache yang sudah > 2 jam
+              final activeCache = cache.where((c) => DateTime.now().difference(c.addedAt).inHours < 2).toList();
+              
+              final List<_CachedSentMessage> remainingCache = [];
+              final serverMatchedIndices = <int>{};
+              
+              for (final cached in activeCache) {
+                 final cContent = cached.message.content.trim().toLowerCase();
+                 final cTime = cached.message.time;
+                 
+                 // Cari 1-to-1 match dengan pesan dari server (cek teks & jam yang sama)
+                 int matchIdx = _messages.indexWhere((m) {
+                     int idx = _messages.indexOf(m);
+                     return !serverMatchedIndices.contains(idx) && 
+                            m.isMe && 
+                            m.content.trim().toLowerCase() == cContent && 
+                            m.time == cTime;
+                 });
+                 
+                 if (matchIdx != -1) {
+                    serverMatchedIndices.add(matchIdx);
+                    debugPrint('LocalCache: Server ALREADY HAS "${cached.message.content}". Dropping from cache.');
+                 } else {
+                    remainingCache.add(cached);
+                    _messages.add(cached.message);
+                    debugPrint('LocalCache: INJECTED: "${cached.message.content}"');
+                 }
+              }
+              
+              // Update cache hanya dengan pesan yang benar-benar belum masuk server
+              _localSentCache[chat.id] = remainingCache;
+              debugPrint('LocalCache: Cache updated. ${remainingCache.length} items remaining.');
             }
           });
           if (!response.isError && response.data != null && response.data!.isNotEmpty) {
              _injectLocalReplies(_messages).then((_) {
                if (mounted) setState(() {});
              });
+             
+             // HACK/FIX: Sinkronisasi ikon media ke ChatProvider agar list obrolan memunculkan icon media
+             // yang benar dan tidak hilang saat polling (/Chatrooms/List).
+             final lastMsg = _messages.last;
+             String newContent = lastMsg.content;
+             if (lastMsg.messageType == MessageType.image) {
+                final cleaned = newContent.replaceAll('📷', '').replaceAll('Photo', '').trim();
+                newContent = '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+             } else if (lastMsg.messageType == MessageType.voice) {
+                newContent = '🎵 Voice Note';
+             } else if (lastMsg.messageType == MessageType.video) {
+                final cleaned = newContent.replaceAll('🎥', '').replaceAll('📹', '').replaceAll('Video', '').trim();
+                newContent = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+             } else if (lastMsg.messageType == MessageType.document) {
+                if (!newContent.contains('📄') && !newContent.contains('📁')) {
+                  newContent = '📄 $newContent';
+                }
+             }
+             Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(
+               chat.id, 
+               newContent,
+               updateTimeAndPosition: false, // JANGAN pindahkan obrolan ke atas hanya karena sinkronisasi ikon!
+             );
           }
         });
       }
@@ -564,8 +671,8 @@ void _startChatSyncPolling() {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final currentUserEmail = authProvider.currentUser ?? '';
       
-      // FIX: Samakan dengan initial load (take 20) agar tidak terjadi jumping (menarik pesan lama dan menganggapnya baru)
-      final response = await _chatService.getMessageHistory(chat.id, currentUserEmail, take: 20);
+      final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
+      final response = await _chatService.getMessageHistory(chat.id, currentUserEmail, take: 75, contactId: chat.contactId, groupId: chat.groupId, ctRealId: chat.ctRealId, link: chat.link, isTelegram: isTelegram);
       if (!mounted) return;
       
       if (!response.isError && response.data != null) {
@@ -592,12 +699,18 @@ void _startChatSyncPolling() {
                      final oldClean = oldMsg.content.replaceAll(RegExp(r'\s+'), '').toLowerCase();
                      
                      // Pencocokan persis (exact match)
-                     if (mClean == oldClean) return true;
+                     if (mClean == oldClean) {
+                         // Pastikan jam-nya sama agar tidak tertukar dengan pesan masa lalu yang kebetulan teksnya persis
+                         if (m.time == oldMsg.time) return true;
+                     }
                      
-                     // Pencocokan sebagian (partial match) - Berguna jika server menambahkan konteks reply (misal: > Pesan asli\n\nBalasan kita)
-                     if (mClean.contains(oldClean) || oldClean.contains(mClean)) {
-                       debugPrint('AckPolling MATCH: Partial text match successful for ID ${m.id}');
-                       return true;
+                     // Pencocokan sebagian (hanya aman jika pesannya panjang, misalnya > 5 karakter)
+                     // dan waktunya harus SANGAT berdekatan (jam/menit sama)
+                     if (oldClean.length > 5 && (mClean.contains(oldClean) || oldClean.contains(mClean))) {
+                       if (m.time == oldMsg.time) {
+                           debugPrint('AckPolling MATCH: Partial text match successful for ID ${m.id}');
+                           return true;
+                       }
                      }
                    }
                    
@@ -659,12 +772,11 @@ void _startChatSyncPolling() {
                     if (updatedMsg.id.isNotEmpty) {
                       matchedServerIds.add(updatedMsg.id); // Tandai sebagai sudah diklaim
                       
-                      // FIX: Jangan timpa messageType jika pesan lokal adalah dokumen.
-                      // Server sering mengklasifikasikan ulang dokumen (BodyType=5) menjadi
-                      // gambar (Type=3) atau video (Type=4) berdasarkan ekstensi file.
-                      // Prioritas: tipe lokal menang jika user sengaja kirim sebagai dokumen.
-                      final resolvedType = (_messages[i].messageType == MessageType.document)
-                          ? MessageType.document
+                      // FIX: Jangan timpa messageType jika pesan lokal adalah dokumen atau voice note.
+                      // Server sering mengklasifikasikan ulang file audio/dokumen secara salah.
+                      // Prioritas: tipe lokal menang jika user sengaja kirim dari UI yang spesifik.
+                      final resolvedType = (_messages[i].messageType == MessageType.document || _messages[i].messageType == MessageType.voice)
+                          ? _messages[i].messageType
                           : updatedMsg.messageType;
                       
                       _messages[i] = _messages[i].copyWith(
@@ -680,6 +792,19 @@ void _startChatSyncPolling() {
                       // UPDATE: Save local reply if this message had a repliedMessage
                       if (_messages[i].repliedMessage != null) {
                          _saveLocalReplyContext(updatedMsg.id, _messages[i].repliedMessage!);
+                      }
+                      
+                      // REMOVE DARI CACHE LOKAL KARENA SUDAH DIKONFIRMASI SERVER
+                      final cacheList = _localSentCache[chat.id];
+                      if (cacheList != null) {
+                        int removeIdx = cacheList.indexWhere((c) => 
+                            c.message.content.trim().toLowerCase() == _messages[i].content.trim().toLowerCase() && 
+                            c.message.time == _messages[i].time
+                        );
+                        if (removeIdx != -1) {
+                            cacheList.removeAt(removeIdx);
+                            debugPrint('LocalCache: Dihapus dari cache via AckPolling karena sudah dikonfirmasi ID-nya.');
+                        }
                       }
                     }
                  }
@@ -699,7 +824,22 @@ void _startChatSyncPolling() {
               .map((m) => m.content.trim().toLowerCase())
               .toSet();
 
-          for (final msg in newMessages) {
+          // Lakukan sorting lokal untuk memastikan urutan sesuai waktu
+          final sortedList = List<Message>.from(newMessages);
+          sortedList.sort((a, b) {
+             if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
+             try {
+               String ta = a.rawTime;
+               String tb = b.rawTime;
+               if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+               if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+               return DateTime.parse(ta).compareTo(DateTime.parse(tb));
+             } catch (_) {
+               return 0;
+             }
+          });
+
+          for (final msg in sortedList) {
             if (msg.id.isNotEmpty && !updatedCurrentIds.contains(msg.id)) {
                // Guard tambahan: jangan tambahkan jika kontennya ada di pending local (pesan kita yang baru dikirim belum dapat ID)
                if (msg.isMe && pendingLocalContents.contains(msg.content.trim().toLowerCase())) {
@@ -724,6 +864,19 @@ void _startChatSyncPolling() {
           }
           
           if (hasNewMessages) {
+            // Lakukan sorting lokal lagi untuk memastikan urutan total tidak berantakan
+            _messages.sort((a, b) {
+              if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
+              try {
+                String ta = a.rawTime;
+                String tb = b.rawTime;
+                if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                return DateTime.parse(ta).compareTo(DateTime.parse(tb));
+              } catch (_) {
+                return 0;
+              }
+            });
             _scrollToBottom();
             // Send read receipt
             try {
@@ -754,8 +907,14 @@ void _startChatSyncPolling() {
       debugPrint('ChatDetailPage: TerimaPesan | room=$incomingRoomId | current=${chat.id}');
 
       // ❗ FILTER: Hanya proses pesan yang ditujukan untuk ROOM INI
-      if (incomingRoomId.isEmpty || incomingRoomId != chat.id) {
-        debugPrint('SignalR: 🛑 Pesan DIABAIKAN. (Beda Room). Incoming: $incomingRoomId | Current: ${chat.id}');
+      // FIX: Telegram webhook mungkin mengirim RoomId hanya dengan contactId (tanpa prefix chId_)
+      final currentRoomIdExt = chat.id.contains('_') ? chat.id.split('_').last : chat.id;
+      if (incomingRoomId.isEmpty || (incomingRoomId != chat.id && incomingRoomId != currentRoomIdExt && incomingRoomId != chat.contactId && incomingRoomId != chat.groupId && incomingRoomId != chat.ctRealId)) {
+        final errMsg = '🛑 IGNORED! Incoming: $incomingRoomId | ChatId: ${chat.id} | CtId: ${chat.contactId} | GrpId: ${chat.groupId} | RealId: ${chat.ctRealId}';
+        debugPrint(errMsg);
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errMsg), duration: const Duration(seconds: 5), backgroundColor: Colors.orange));
+        }
         return;
       }
 
@@ -810,45 +969,56 @@ void _startChatSyncPolling() {
         return; // Don't add as a new message
       }
 
-      // Extract content from NoBox payload
-      final content = messageData['Msg']?.toString() ?? '';
+      // Extract ID and check duplicate
       final incomingId = messageData['Id']?.toString() ?? '';
-      final timeStr = messageData['In']?.toString() ?? DateTime.now().toIso8601String();
+      
+      // Guard duplikasi: cek apakah pesan ini sudah ada di list (berdasarkan ID)
+      final alreadyExists = _messages.any((m) {
+        if (incomingId.isNotEmpty && m.id == incomingId) return true;
+        return false;
+      });
 
-      if (mounted && content.isNotEmpty) {
-        // Guard duplikasi: cek apakah pesan ini sudah ada di list (berdasarkan ID atau konten)
-        final alreadyExists = _messages.any((m) {
-          if (incomingId.isNotEmpty && m.id == incomingId) return true; // sama ID
-          // Sama konten + bukan pesan dari saya + waktu berdekatan (60 detik)
-          if (!m.isMe && m.content == content) {
-            try {
-              final incomingTime = DateTime.tryParse(timeStr);
-              if (incomingTime != null) {
-                // Parse waktu pesan lokal
-                return true; // konten sama, penerima sama → anggap duplikat
+      if (alreadyExists) {
+        debugPrint('SignalR: ⚠️ Pesan duplikat diabaikan. ID=$incomingId');
+        return;
+      }
+      
+      // FIX: Jangan merakit objek Message secara manual karena akan menghilangkan semua attachment media (Voice Note, Gambar, dll).
+      // Gunakan Message.fromJson agar semua parsing tipe pesan berjalan sempurna!
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUserEmail = authProvider.currentUser ?? '';
+      
+      try {
+        final parsedMessage = Message.fromJson(
+          messageData, 
+          currentUserEmail, 
+          tenantId: _chatService.currentTenantId
+        );
+        
+        // SignalR messages from customers should always be read immediately when on this page
+        final newMessage = parsedMessage.copyWith(status: MessageStatus.read);
+        
+        if (mounted) {
+          setState(() {
+            _messages.add(newMessage);
+            _messages.sort((a, b) {
+              if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
+              try {
+                String ta = a.rawTime;
+                String tb = b.rawTime;
+                if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                return DateTime.parse(ta).compareTo(DateTime.parse(tb));
+              } catch (_) {
+                return 0;
               }
-            } catch (_) {}
-            return true;
-          }
-          return false;
-        });
-
-        if (alreadyExists) {
-          debugPrint('SignalR: ⚠️ Pesan duplikat diabaikan. Content="$content" ID=$incomingId');
-          return;
+            });
+          });
+          _scrollToBottom();
         }
-
-        final msgTime = DateTime.tryParse(timeStr) ?? DateTime.now();
-        setState(() {
-          _messages.add(Message(
-            id: incomingId,
-            content: content,
-            isMe: false,
-            time: _formatFullTime(msgTime),
-            status: MessageStatus.read,
-          ));
-        });
-        _scrollToBottom();
+      } catch (e) {
+        debugPrint('SignalR: ❌ Error parsing incoming message: $e');
+      }
 
         // Tell server we've read this message
         try {
@@ -859,7 +1029,6 @@ void _startChatSyncPolling() {
         } catch (e) {
           debugPrint('Error caught at _loadChatHistory (sendReadCount): $e');
         }
-      }
     });
   }
 
@@ -899,6 +1068,9 @@ void _startChatSyncPolling() {
       currentUserEmail,
       skip: _messageSkip + _messagePageSize,
       take: _messagePageSize,
+      contactId: chat.contactId,
+      groupId: chat.groupId,
+      ctRealId: chat.ctRealId,
     );
 
     if (mounted) {
@@ -915,8 +1087,9 @@ void _startChatSyncPolling() {
           final existingIds = _messages.map((m) => m.id).where((id) => id.isNotEmpty).toSet();
           final uniqueOlder = olderMessages.where((m) => m.id.isEmpty || !existingIds.contains(m.id)).toList();
 
-          // Prepend older messages (they come in ASC order from service)
-          _messages.addAll(uniqueOlder);
+          // Prepend older messages. Server returns ASCENDING [oldest, older].
+          // We can directly insert them at the start of _messages.
+          _messages.insertAll(0, uniqueOlder);
           _messageSkip += _messagePageSize;
           
           // Inject local replies for the older messages
@@ -1156,29 +1329,45 @@ void _startChatSyncPolling() {
           isTelegram: isTelegram,
         ),
       );
+      debugPrint('_sendMessage: Receiver=${chat.id}');
       
       isSuccess = !response.isError;
       errorMsg = response.error;
     }
 
-    if (mounted && messageIndex < _messages.length) {
+    // Find message by reference or by content to survive modifications
+    int currentIndex = _messages.indexOf(newMessage);
+    if (currentIndex == -1) {
+      currentIndex = _messages.indexWhere((m) => m.content == newMessage.content && m.isMe && m.time == newMessage.time);
+    }
+    
+    // CACHE DULU WALAU USER SUDAH KELUAR HALAMAN (mounted = false)
+    if (isSuccess) {
+      final updatedMessage = currentIndex != -1 ? _messages[currentIndex].copyWith(status: MessageStatus.delivered, ack: 2) 
+                           : newMessage.copyWith(status: MessageStatus.delivered, ack: 2);
+      
+      _localSentCache.putIfAbsent(chat.id, () => []);
+      _localSentCache[chat.id]!.add(_CachedSentMessage(updatedMessage, DateTime.now()));
+      debugPrint('LocalCache: Pesan (Sukses) disimpan ke cache walau user pindah halaman. Total cache[${chat.id}]: ${_localSentCache[chat.id]!.length}');
+    }
+
+    if (mounted && currentIndex != -1) {
       if (isSuccess) {
         setState(() {
-          _messages[messageIndex] = _messages[messageIndex].copyWith(
+          _messages[currentIndex] = _messages[currentIndex].copyWith(
             status: MessageStatus.delivered,
             ack: 2,
           );
           _isSending = false;
         });
+        
         Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(chat.id, content);
-        // Tunda 2 detik sebelum polling restart agar echo-back SignalR sempat mengisi ID
-        // sebelum AckPolling pertama berjalan dan menambahkan pesan duplikat.
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) _startChatSyncPolling();
         });
       } else {
         setState(() {
-          _messages[messageIndex] = _messages[messageIndex].copyWith(
+          _messages[currentIndex] = _messages[currentIndex].copyWith(
             ack: 4,
           );
           _isSending = false;
@@ -1255,18 +1444,21 @@ void _startChatSyncPolling() {
       imagePath: pickedFile.path,
     );
 
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
     setState(() {
       _messages.add(newMessage);
     });
 
     _scrollToBottom();
+    chatProvider.updateLocalLastMessage(chat.id, '📷 Photo');
 
     final messageIndex = _messages.indexOf(newMessage);
 
     final response = await _chatService.sendImageMessage(
       chat.id,
       pickedFile.path,
-      accountId: _getResolvedAccountId(Provider.of<ChatProvider>(context, listen: false)),
+      accountId: _getResolvedAccountId(chatProvider),
       channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
       contactId: chat.contactId,
       link: chat.link,
@@ -1281,8 +1473,6 @@ void _startChatSyncPolling() {
             imageUrl: response.data,
           );
         });
-        Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(chat.id, '📷 Photo');
-
         Timer(const Duration(seconds: 2), () {
           if (mounted && messageIndex < _messages.length) {
             setState(() {
@@ -1346,18 +1536,21 @@ void _startChatSyncPolling() {
       ack: 1,
     );
 
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
     setState(() {
       _messages.add(newMessage);
     });
 
     _scrollToBottom();
+    chatProvider.updateLocalLastMessage(chat.id, '🎬 Video');
 
     final messageIndex = _messages.indexOf(newMessage);
 
     final response = await _chatService.sendImageMessage(
       chat.id,
       pickedFile.path,
-      accountId: _getResolvedAccountId(Provider.of<ChatProvider>(context, listen: false)),
+      accountId: _getResolvedAccountId(chatProvider),
       channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
       contactId: chat.contactId,
       link: chat.link,
@@ -1373,7 +1566,6 @@ void _startChatSyncPolling() {
             ack: 2,
           );
         });
-        Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(chat.id, '🎬 Video');
       } else {
         setState(() {
           _messages[messageIndex] = _messages[messageIndex].copyWith(
@@ -1410,15 +1602,16 @@ void _startChatSyncPolling() {
       ack: 1,
     );
 
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
     setState(() {
       _messages.add(newMessage);
     });
 
     _scrollToBottom();
+    chatProvider.updateLocalLastMessage(chat.id, '📷 Photo');
 
     final messageIndex = _messages.indexOf(newMessage);
-
-
 
     final response = await _chatService.sendImageMessage(
       chat.id,
@@ -1439,7 +1632,6 @@ void _startChatSyncPolling() {
             ack: 2,
           );
         });
-        Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(chat.id, '📷 Photo');
       } else {
         setState(() {
           _messages[messageIndex] = _messages[messageIndex].copyWith(
@@ -1537,20 +1729,21 @@ void _startChatSyncPolling() {
         ack: 1,
       );
 
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
       setState(() {
         _messages.add(newMessage);
       });
 
       _scrollToBottom();
+      chatProvider.updateLocalLastMessage(chat.id, '📄 ${file.name}');
 
       final messageIndex = _messages.indexOf(newMessage);
-
-
 
       final response = await _chatService.sendImageMessage(
         chat.id,
         file.path!,
-        accountId: _getResolvedAccountId(Provider.of<ChatProvider>(context, listen: false)),
+        accountId: _getResolvedAccountId(chatProvider),
         channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
         contactId: chat.contactId,
         link: chat.link,
@@ -1567,7 +1760,6 @@ void _startChatSyncPolling() {
               ack: 2,
             );
           });
-          Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(chat.id, '📄 ${file.name}');
         } else {
           setState(() {
             _messages[messageIndex] = _messages[messageIndex].copyWith(
@@ -1893,18 +2085,23 @@ void _startChatSyncPolling() {
         audioPath: path,
         audioDuration: duration,
       );
-
+      final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+      
       setState(() {
         _messages.add(voiceMessage);
       });
       _scrollToBottom();
+      
+      // FIX: Langsung beritahu daftar chat bahwa kita mengirim Voice Note sebelum proses upload dimulai
+      // Sehingga kalau user langsung pencet tombol Back (keluar dari ruang obrolan), tulisan 'Voice Note' tetap muncul!
+      chatProvider.updateLocalLastMessage(chat.id, '🎤 Pesan Suara');
 
       final messageIndex = _messages.indexOf(voiceMessage);
 
       final response = await _chatService.sendImageMessage(
         chat.id,
         path,
-        accountId: _getResolvedAccountId(Provider.of<ChatProvider>(context, listen: false)),
+        accountId: _getResolvedAccountId(chatProvider),
         channelId: (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) ? '2' : chat.chId,
         contactId: chat.contactId,
         link: chat.link,
@@ -1913,15 +2110,15 @@ void _startChatSyncPolling() {
 
       if (mounted && messageIndex < _messages.length) {
        // ✅ FIX
-if (!response.isError) {
-  setState(() {
-    _messages[messageIndex] = _messages[messageIndex].copyWith(
-      status: MessageStatus.delivered,
-      audioPath: response.data, // URL dari server
-    );
-  });
-  Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(chat.id, '🎤 Pesan Suara');
-          Timer(const Duration(seconds: 2), () {
+       if (!response.isError) {
+         setState(() {
+           _messages[messageIndex] = _messages[messageIndex].copyWith(
+             status: MessageStatus.delivered,
+             audioPath: response.data, // URL dari server
+           );
+         });
+         
+         Timer(const Duration(seconds: 2), () {
             if (mounted && messageIndex < _messages.length) {
               setState(() {
                 _messages[messageIndex] = _messages[messageIndex].copyWith(
@@ -2461,23 +2658,11 @@ if (!response.isError) {
                 _showResolveConfirmation();
               } else if (value == 'archive_conversation') {
                 _handleArchiveConversation();
-              } else if (value == 'starred_messages') {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const StarredMessagesPage()));
               } else if (value == 'help') {
                 _openHelpUrl();
               }
             },
             itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'starred_messages',
-                child: Row(
-                  children: [
-                    const Icon(Icons.star, size: 24, color: Colors.amber),
-                    const SizedBox(width: 16),
-                    const Text('Pesan Berbintang', style: TextStyle(fontSize: 16)),
-                  ],
-                ),
-              ),
               PopupMenuItem(
                 value: 'add_agent',
                 child: Row(
@@ -2680,23 +2865,11 @@ if (!response.isError) {
               _showResolveConfirmation();
             } else if (value == 'archive_conversation') {
               _handleArchiveConversation();
-            } else if (value == 'starred_messages') {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const StarredMessagesPage()));
             } else if (value == 'help') {
               _openHelpUrl();
             }
           },
           itemBuilder: (context) => [
-            PopupMenuItem(
-              value: 'starred_messages',
-              child: Row(
-                children: [
-                  const Icon(Icons.star, size: 24, color: Colors.amber),
-                  const SizedBox(width: 16),
-                  const Text('Pesan Berbintang', style: TextStyle(fontSize: 16)),
-                ],
-              ),
-            ),
             PopupMenuItem(
               value: 'add_agent',
               child: Row(
@@ -2886,12 +3059,19 @@ if (!response.isError) {
                               newLastContent = '🎥 Video';
                            }
                          }
-                         Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(chat.id, newLastContent);
+                         Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(
+                           chat.id, 
+                           newLastContent,
+                           updateTimeAndPosition: false,
+                           overrideTime: lastMsg.time,
+                         );
                       } else {
-                         Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(chat.id, '');
+                         Provider.of<ChatProvider>(context, listen: false).updateLocalLastMessage(
+                           chat.id, 
+                           '',
+                           updateTimeAndPosition: false,
+                         );
                       }
-
-                      
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text(hasError ? 'Beberapa pesan gagal dihapus, pastikan endpoint Nobox tersedia.' : 'Pesan berhasil dihapus dari server.')),
                       );
@@ -3108,7 +3288,11 @@ if (!response.isError) {
         return Column(
           children: [
             if (dateSeparator != null) dateSeparator,
-              MessageBubbleWidget(
+            Container(
+              color: isSelected 
+                  ? (isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.withOpacity(0.15))
+                  : Colors.transparent,
+              child: MessageBubbleWidget(
                 message: message,
                 allMessages: _messages,
                 isSelected: isSelected,
@@ -3145,6 +3329,7 @@ if (!response.isError) {
                    );
                 },
               ),
+            ),
           ],
         );
         },

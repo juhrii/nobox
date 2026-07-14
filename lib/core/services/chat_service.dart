@@ -835,7 +835,7 @@ class ChatService {
   // 🛑 [API ENDPOINT: AMBIL RIWAYAT CHAT]
   // Endpoint ini memanggil rute `/Chatmessages/List` untuk menyedot jutaan baris data obrolan
   // dari database server ke layar HP. Ini bertugas melayani fitur pagination / tarik layar ke bawah.
-  Future<ApiResponse<List<Message>>> getMessageHistory(String roomId, String currentUserEmail, {int skip = 0, int take = 50}) async {
+  Future<ApiResponse<List<Message>>> getMessageHistory(String roomId, String currentUserEmail, {int skip = 0, int take = 50, String contactId = '', String groupId = '', String ctRealId = '', String link = '', String participantEmail = '', bool isTelegram = false}) async {
     if (currentTenantId == null) {
       // Ensure we have TenantId before fetching messages to construct WhatsApp image URLs
       await getAccounts();
@@ -853,7 +853,7 @@ class ChatService {
         ],
         'ColumnSelection': 1,
         'EqualityFilter': {
-          'RoomId': [int.tryParse(roomId) ?? roomId]
+          'RoomId': roomId
         },
       };
 
@@ -893,6 +893,191 @@ class ChatService {
 
         final messages = dataList.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
 
+        // FALLBACK: Juga fetch menggunakan CtRealId jika berbeda dari RoomId utama.
+        // Ini KRUSIAL untuk WA dan Telegram karena NoBox sering menyimpan pesan baru
+        // di bawah CtRealId (ID asli kontak) bukan RoomId gabungan.
+        debugPrint('===FALLBACK CHECK: roomId=$roomId, ctRealId=$ctRealId, isEmpty=${ctRealId.isEmpty}, sameId=${ctRealId == roomId}===');
+        if (ctRealId.isNotEmpty && ctRealId != roomId) {
+          debugPrint('ChatService: │ [FALLBACK] Fetching CtRealId: $ctRealId (chId=$roomId)');
+          try {
+            final payload2 = Map<String, dynamic>.from(payload);
+            payload2['EqualityFilter'] = {'RoomId': ctRealId};
+            final response2 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload2);
+            if (response2.statusCode == 200 && response2.data != null) {
+              final raw2 = response2.data;
+              List<dynamic> list2 = [];
+              if (raw2 is List) list2 = raw2;
+              else if (raw2 is Map && raw2['IsError'] != true) list2 = raw2['Entities'] ?? raw2['Values'] ?? raw2['data'] ?? [];
+              
+              if (list2.isNotEmpty) {
+                final msgs2 = list2.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
+                
+                // Merge unique messages by ID
+                final uniqueMsgs = <String, Message>{};
+                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                for (var m in msgs2) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                
+                messages.clear();
+                messages.addAll(uniqueMsgs.values);
+                
+                // Re-sort DESCENDING (Newest first) because the API normally returns In DESC.
+                messages.sort((a, b) {
+                  try {
+                    String ta = a.rawTime;
+                    String tb = b.rawTime;
+                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                    return DateTime.parse(tb).compareTo(DateTime.parse(ta)); // DESC
+                  } catch (_) { return 0; }
+                });
+                
+                // Take the newest 'take' amount
+                if (messages.length > take) {
+                  messages.removeRange(take, messages.length);
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
+        // FALLBACK 3: Coba juga dengan contactId (server kadang simpan di sini)
+        if (contactId.isNotEmpty && contactId != roomId && contactId != ctRealId) {
+          debugPrint('ChatService: │ [FALLBACK-3] Fetching ContactId: $contactId');
+          try {
+            final payload3 = Map<String, dynamic>.from(payload);
+            payload3['EqualityFilter'] = {'RoomId': contactId};
+            final response3 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload3);
+            if (response3.statusCode == 200 && response3.data != null) {
+              final raw3 = response3.data;
+              List<dynamic> list3 = [];
+              if (raw3 is List) list3 = raw3;
+              else if (raw3 is Map && raw3['IsError'] != true) list3 = raw3['Entities'] ?? raw3['Values'] ?? raw3['data'] ?? [];
+              if (list3.isNotEmpty) {
+                final msgs3 = list3.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
+                final uniqueMsgs3 = <String, Message>{};
+                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs3[m.id] = m; }
+                for (var m in msgs3) { if (m.id.isNotEmpty) uniqueMsgs3[m.id] = m; }
+                messages.clear();
+                messages.addAll(uniqueMsgs3.values);
+                messages.sort((a, b) {
+                  try {
+                    String ta = a.rawTime, tb = b.rawTime;
+                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                    return DateTime.parse(tb).compareTo(DateTime.parse(ta));
+                  } catch (_) { return 0; }
+                });
+                if (messages.length > take) messages.removeRange(take, messages.length);
+                debugPrint('ChatService: │ [FALLBACK-3] Found ${msgs3.length} messages from contactId');
+              }
+            }
+          } catch (_) {}
+        }
+        
+        // FALLBACK 4: Coba juga dengan link (untuk Telegram)
+        if (link.isNotEmpty && link != roomId && link != ctRealId && link != contactId) {
+          debugPrint('ChatService: │ [FALLBACK-4] Fetching Link: $link');
+          try {
+            final payload4 = Map<String, dynamic>.from(payload);
+            payload4['EqualityFilter'] = {'RoomId': link};
+            final response4 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload4);
+            if (response4.statusCode == 200 && response4.data != null) {
+              final raw4 = response4.data;
+              List<dynamic> list4 = [];
+              if (raw4 is List) list4 = raw4;
+              else if (raw4 is Map && raw4['IsError'] != true) list4 = raw4['Entities'] ?? raw4['Values'] ?? raw4['data'] ?? [];
+              if (list4.isNotEmpty) {
+                final msgs4 = list4.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
+                final uniqueMsgs = <String, Message>{};
+                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                for (var m in msgs4) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                messages.clear();
+                messages.addAll(uniqueMsgs.values);
+                messages.sort((a, b) {
+                  try {
+                    String ta = a.rawTime, tb = b.rawTime;
+                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                    return DateTime.parse(tb).compareTo(DateTime.parse(ta));
+                  } catch (_) { return 0; }
+                });
+                if (messages.length > take) messages.removeRange(take, messages.length);
+                debugPrint('ChatService: │ [FALLBACK-4] Found ${msgs4.length} messages from link');
+              }
+            }
+          } catch (_) {}
+        }
+
+        // FALLBACK 5: Coba juga dengan groupId
+        if (groupId.isNotEmpty && groupId != roomId && groupId != ctRealId && groupId != contactId && groupId != link) {
+          debugPrint('ChatService: │ [FALLBACK-5] Fetching GroupId: $groupId');
+          try {
+            final payload5 = Map<String, dynamic>.from(payload);
+            payload5['EqualityFilter'] = {'RoomId': groupId};
+            final response5 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload5);
+            if (response5.statusCode == 200 && response5.data != null) {
+              final raw5 = response5.data;
+              List<dynamic> list5 = [];
+              if (raw5 is List) list5 = raw5;
+              else if (raw5 is Map && raw5['IsError'] != true) list5 = raw5['Entities'] ?? raw5['Values'] ?? raw5['data'] ?? [];
+              if (list5.isNotEmpty) {
+                final msgs5 = list5.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
+                final uniqueMsgs = <String, Message>{};
+                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                for (var m in msgs5) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                messages.clear();
+                messages.addAll(uniqueMsgs.values);
+                messages.sort((a, b) {
+                  try {
+                    String ta = a.rawTime, tb = b.rawTime;
+                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                    return DateTime.parse(tb).compareTo(DateTime.parse(ta));
+                  } catch (_) { return 0; }
+                });
+                if (messages.length > take) messages.removeRange(take, messages.length);
+                debugPrint('ChatService: │ [FALLBACK-5] Found ${msgs5.length} messages from groupId');
+              }
+            }
+          } catch (_) {}
+        }
+        
+        // FALLBACK 6: Coba juga dengan participantEmail
+        if (participantEmail.isNotEmpty && participantEmail != roomId && participantEmail != ctRealId && participantEmail != contactId && participantEmail != link && participantEmail != groupId) {
+          debugPrint('ChatService: │ [FALLBACK-6] Fetching ParticipantEmail: $participantEmail');
+          try {
+            final payload6 = Map<String, dynamic>.from(payload);
+            payload6['EqualityFilter'] = {'RoomId': participantEmail};
+            final response6 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload6);
+            if (response6.statusCode == 200 && response6.data != null) {
+              final raw6 = response6.data;
+              List<dynamic> list6 = [];
+              if (raw6 is List) list6 = raw6;
+              else if (raw6 is Map && raw6['IsError'] != true) list6 = raw6['Entities'] ?? raw6['Values'] ?? raw6['data'] ?? [];
+              if (list6.isNotEmpty) {
+                final msgs6 = list6.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
+                final uniqueMsgs = <String, Message>{};
+                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                for (var m in msgs6) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                messages.clear();
+                messages.addAll(uniqueMsgs.values);
+                messages.sort((a, b) {
+                  try {
+                    String ta = a.rawTime, tb = b.rawTime;
+                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                    return DateTime.parse(tb).compareTo(DateTime.parse(ta));
+                  } catch (_) { return 0; }
+                });
+                if (messages.length > take) messages.removeRange(take, messages.length);
+                debugPrint('ChatService: │ [FALLBACK-6] Found ${msgs6.length} messages from participantEmail');
+              }
+            }
+          } catch (_) {}
+        }
+        
+        debugPrint('ChatService: │ Total merged messages: ${messages.length}');
+
         // Balik urutan: API kirim DESC (terbaru dulu),
         // tapi tampilan chat butuh ASC (terlama di atas)
         final reversed = messages.reversed.toList();
@@ -917,8 +1102,12 @@ class ChatService {
       // Sama seperti 503, aplikasi tidak akan macet/putih, melainkan akan me-return 
       // pesan "Connection error" ke UI agar user tahu masalahnya ada di jaringannya sendiri.
       debugPrint('ChatService: getMessageHistory DioException: ${e.message}');
+      String errorMessage = e.message ?? 'Connection error while loading messages';
+      if (e.response?.statusCode == 500 || errorMessage.contains('500')) {
+        errorMessage = 'Internal Server Error (500). Server gagal memproses riwayat obrolan ini.';
+      }
       return ApiResponse.failure(
-        e.message ?? 'Connection error while loading messages',
+        errorMessage,
         e.response?.statusCode ?? 500,
       );
     } catch (e) {
@@ -1305,6 +1494,7 @@ class ChatService {
           return ApiResponse.failure(errorMsg, 200);
         }
         debugPrint('ChatService: │ ✅ Message sent via REST API!');
+        debugPrint('ChatService: │ Send Response Body: ${response.data}');
         debugPrint('ChatService: └─────────────────────────');
         return ApiResponse.success(true, 200);
       } else {
@@ -1446,7 +1636,9 @@ class ChatService {
       final bool isTelegram = (channelId == '2' || channelId == 'Telegram');
       // PENTING: Telegram (SignalR) WAJIB menggunakan TemporaryUpload agar file masuk ke folder 'temporary/'
       // Sesuai dengan payload Web NoBox, server backend akan gagal mengirim jika menggunakan Base64.
-      final bool useBase64 = (!isTelegram && (bodyType == 5 || forceDocument));
+      // WAJIB: Audio/Voice Note (bodyType 2) untuk WhatsApp HARUS menggunakan Base64 agar ekstensi .ogg 
+      // tidak dihapus oleh TemporaryUpload. Tanpa .ogg, WhatsApp akan mengubahnya menjadi Dokumen.
+      final bool useBase64 = (!isTelegram && (bodyType == 5 || bodyType == 2 || forceDocument));
 
       try {
         if (useBase64) {
@@ -1541,11 +1733,12 @@ class ChatService {
         'OriginalName': fileName,
         'IsImage': forceDocument ? false : (bodyType == 3),
         'IsDocument': forceDocument ? true : (bodyType == 5),
+        'IsVideo': forceDocument ? false : (bodyType == 4),
       };
       // Add Ptt (push-to-talk) flag for voice notes so WhatsApp shows it
       // as a voice message bubble instead of a document attachment
       if (bodyType == 2) {
-        attachmentMap['Ptt'] =true;
+        attachmentMap['Ptt'] = true;
       }
       final attachmentData = jsonEncode([attachmentMap]);
 

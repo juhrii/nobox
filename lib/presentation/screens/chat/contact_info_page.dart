@@ -6,6 +6,9 @@ import 'edit_contact_page.dart';
 import 'conversation_history_page.dart';
 import '../../widgets/tag_selection_dialog.dart';
 import '../../widgets/add_funnel_dialog.dart';
+import '../../../core/services/filter_api_service.dart';
+import '../../../core/model/filter_data_item.dart';
+import '../../../core/model/api_response.dart';
 
 // =====================================================================
 // FITUR: Halaman Detail Kontak (Info)
@@ -106,6 +109,20 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
           debugPrint('ContactInfo: No ContactReal key found in Data');
         }
       }
+      // PRE-FETCH MASTER TAGS SECARA UNCONDITIONAL
+      // Agar _convertNamesToIds selalu memiliki akses ke seluruh daftar tag, bukan hanya tag yang ter-assign di chat ini.
+      List<Map<String, dynamic>>? masterTagsFallback;
+      try {
+        final tagRes = await FilterApiService().getTags();
+        if (!tagRes.isError && tagRes.data != null) {
+          masterTagsFallback = tagRes.data!;
+        }
+      } catch (e) {
+        debugPrint('ContactInfo: Gagal pre-fetch master tags: $e');
+      }
+
+      if (!mounted) return;
+
       setState(() {
         // roomData = data['Data'], room = data['Data']['Room']
         final room = roomData is Map ? (roomData['Room'] ?? {}) : {};
@@ -148,28 +165,27 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
         // Tags: dari Data → Tags (list of tag objects)
         final serverTags = roomData is Map ? roomData['Tags'] : null;
         debugPrint('ContactInfo: Tags type=${serverTags.runtimeType}, data=$serverTags');
-        if (serverTags is List && serverTags.isNotEmpty) {
-          // Simpan full tag objects untuk dialog
+        
+        // SELALU utamakan masterTagsFallback karena berisi SEMUA tag, 
+        // sehingga fungsi _convertNamesToIds dapat memetakan nama ke ID dengan benar!
+        if (masterTagsFallback != null && masterTagsFallback.isNotEmpty) {
+          _availableTagsFromServer = masterTagsFallback;
+          debugPrint('ContactInfo: Saved ${_availableTagsFromServer.length} tags from masterTagsFallback');
+        } else if (serverTags is List && serverTags.isNotEmpty) {
           _availableTagsFromServer = serverTags.whereType<Map<String, dynamic>>().toList();
-          debugPrint('ContactInfo: Saved ${_availableTagsFromServer.length} tags from server');
-          
-          // Set current tags (yang sudah di-assign ke chat ini) dari Room.TagsIds
-          final roomTagsIds = room['TagsIds']?.toString() ?? '';
-          if (roomTagsIds.isNotEmpty) {
-            // TagsIds bisa berupa comma-separated IDs
-            final assignedIds = roomTagsIds.split(',').map((t) => t.trim()).toSet();
-            _currentTags = _availableTagsFromServer
-                .where((t) => assignedIds.contains(t['Id']?.toString()))
-                .map((t) => t['Name']?.toString() ?? t['Nm']?.toString() ?? '')
-                .where((t) => t.isNotEmpty)
-                .toList();
-          }
-        } else {
-          // Fallback: cek dari Room → TagsIds (string comma-separated)
-          final roomTags = room['TagsIds']?.toString() ?? '';
-          if (roomTags.isNotEmpty) {
-            _currentTags = roomTags.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
-          }
+          debugPrint('ContactInfo: Saved ${_availableTagsFromServer.length} tags from serverTags');
+        }
+        
+        // Set current tags (yang sudah di-assign ke chat ini) dari Room.TagsIds
+        final roomTagsIds = room['TagsIds']?.toString() ?? '';
+        if (roomTagsIds.isNotEmpty) {
+          // TagsIds bisa berupa comma-separated IDs
+          final assignedIds = roomTagsIds.split(',').map((t) => t.trim()).toSet();
+          _currentTags = _availableTagsFromServer
+              .where((t) => assignedIds.contains(t['Id']?.toString()))
+              .map((t) => t['Name']?.toString() ?? t['Nm']?.toString() ?? '')
+              .where((t) => t.isNotEmpty)
+              .toList();
         }
         
         // Update toggles dari Room
@@ -225,7 +241,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
               _contactCountry = localLocation['Country']!;
             }
             if (_contactState.isEmpty && localLocation['State'] != null) {
-              _contactState = localLocation['State']!;
+              _contactState = localLocation['State']!;  
             }
             if (_contactCity.isEmpty && localLocation['City'] != null) {
               _contactCity = localLocation['City']!;
@@ -561,8 +577,22 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
     );
   }
 
+  List<String> _convertNamesToIds(List<String> tagNames) {
+    return tagNames.map((name) {
+      final found = _availableTagsFromServer.firstWhere(
+        (t) => (t['Name']?.toString() ?? t['Nm']?.toString() ?? '') == name,
+        orElse: () => <String, dynamic>{},
+      );
+      if (found.isNotEmpty) {
+        return found['Id']?.toString() ?? name;
+      }
+      return name;
+    }).toList();
+  }
+
   void _showRemoveTagConfirmation(String tag) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -617,8 +647,9 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                     Navigator.pop(context);
                     
                     final newTagsList = List<String>.from(_currentTags)..remove(tag);
+                    final tagIdsList = _convertNamesToIds(newTagsList);
                     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                    final success = await chatProvider.updateContactTags(widget.chat.id, newTagsList);
+                    final success = await chatProvider.updateContactTags(widget.chat.id, tagIdsList, tagNames: newTagsList);
                     if (success && mounted) {
                       setState(() => _currentTags.remove(tag));
                     }
@@ -704,8 +735,9 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                       final newTag = tagController.text.trim();
                       if (newTag.isNotEmpty && !_currentTags.contains(newTag)) {
                         final newTagsList = List<String>.from(_currentTags)..add(newTag);
+                        final tagIdsList = _convertNamesToIds(newTagsList);
                         final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                        final success = await chatProvider.updateContactTags(widget.chat.id, newTagsList);
+                        final success = await chatProvider.updateContactTags(widget.chat.id, tagIdsList, tagNames: newTagsList);
                         if (success) {
                           setState(() => _currentTags = newTagsList);
                         } else {
@@ -736,6 +768,9 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             setState(() {
               _currentTags = updatedTags;
             });
+            final tagIdsList = _convertNamesToIds(updatedTags);
+            Provider.of<ChatProvider>(context, listen: false)
+                .updateLocalContactTags(widget.chat.id, tagIdsList, updatedTags);
           }
         },
       ),
@@ -835,84 +870,183 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
   void _showCampaignDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
+    // API data
+    List<CampaignItem> campaigns = [];
+    bool isLoadingData = true;
+    String? loadError;
+    
+    String selectedCampaignName = _currentCampaign;
+    int? selectedCampaignId;
+
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-          contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-          actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            // Fetch campaigns
+            if (isLoadingData && campaigns.isEmpty && loadError == null) {
+              Future.microtask(() async {
+                try {
+                  final resp = await chatProvider.getCampaignsResponse();
+                  setDialogState(() {
+                    isLoadingData = false;
+                    if (!resp.isError && resp.data != null) {
+                      campaigns = resp.data!.map((e) => CampaignItem.fromJson(e)).toList();
+                      // find matching ID if we already have a name
+                      if (selectedCampaignName.isNotEmpty) {
+                        try {
+                          final match = campaigns.firstWhere((c) => c.name.toLowerCase() == selectedCampaignName.toLowerCase());
+                          selectedCampaignId = int.tryParse(match.id);
+                        } catch (_) {}
+                      }
+                    }
+                  });
+                } catch (e) {
+                  setDialogState(() {
+                    isLoadingData = false;
+                    loadError = e.toString();
+                  });
+                }
+              });
+            }
+
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.campaign, color: Colors.blue.shade600, size: 24),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.campaign, color: Colors.blue.shade600, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Text('Select Campaign', style: TextStyle(color: Colors.blue.shade600, fontWeight: FontWeight.w600, fontSize: 18)),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Text('Select Campaign', style: TextStyle(color: Colors.blue.shade600, fontWeight: FontWeight.w600, fontSize: 18)),
+                  InkWell(
+                    onTap: () => Navigator.pop(context),
+                    child: Icon(Icons.close, color: Colors.blue.shade600, size: 24),
+                  ),
                 ],
               ),
-              InkWell(
-                onTap: () => Navigator.pop(context),
-                child: Icon(Icons.close, color: Colors.blue.shade600, size: 24),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Campaign', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 8),
+                  if (isLoadingData)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 50),
+                      child: const Center(child: CircularProgressIndicator()),
+                    )
+                  else if (loadError != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      child: Text('Error: $loadError', style: const TextStyle(color: Colors.red)),
+                    )
+                  else if (campaigns.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 50),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(Icons.inbox, size: 48, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          Text('No campaigns available', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          hint: Text('--select campaign--', style: TextStyle(color: Colors.grey.shade500)),
+                          icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
+                          value: selectedCampaignId,
+                          dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+                          items: campaigns.map((c) {
+                            return DropdownMenuItem<int>(
+                              value: int.tryParse(c.id),
+                              child: Text(c.name, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                            );
+                          }).toList(),
+                          onChanged: (newValue) {
+                            setDialogState(() {
+                              selectedCampaignId = newValue;
+                              try {
+                                final c = campaigns.firstWhere((c) => c.id == newValue.toString());
+                                selectedCampaignName = c.name;
+                              } catch (_) {}
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Campaign', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 50),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
+              actions: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Icon(Icons.inbox, size: 48, color: Colors.grey.shade400),
-                    const SizedBox(height: 12),
-                    Text('No campaigns available', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Cancel', style: TextStyle(color: Colors.blue.shade600, fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: (selectedCampaignId != null && !isLoadingData) ? Colors.blue : Colors.grey.shade300,
+                        foregroundColor: (selectedCampaignId != null && !isLoadingData) ? Colors.white : Colors.grey.shade500,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      onPressed: (selectedCampaignId == null || isLoadingData) ? null : () async {
+                        final success = await chatProvider.updateCampaign(widget.chat.id, selectedCampaignId);
+                        if (success) {
+                          if (mounted) {
+                            setState(() {
+                              _currentCampaign = selectedCampaignName;
+                            });
+                          }
+                        } else {
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to update campaign')));
+                        }
+                        if (mounted) Navigator.pop(context);
+                      },
+                      child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                    ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Cancel', style: TextStyle(color: Colors.blue.shade600, fontWeight: FontWeight.w600)),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade300,
-                    foregroundColor: Colors.grey.shade500,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  onPressed: null, // Disabled because there are no campaigns
-                  child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                ),
               ],
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -1400,7 +1534,11 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                   title: 'Contact',
                   actions: [
                     IconButton(
-                      icon: Icon(Icons.block, size: 20, color: Colors.grey.shade500),
+                      icon: Icon(
+                        Icons.block,
+                        size: 20, 
+                        color: _isBlocked ? Colors.green : Colors.red,
+                      ),
                       onPressed: () {
                         _showBlockDialog(context, isDark, chat.sender);
                       },
@@ -2130,12 +2268,12 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: (isCurrentlyBlocked ? Colors.green : Colors.blue).withOpacity(0.1),
+                  color: (isCurrentlyBlocked ? Colors.green : Colors.red).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  isCurrentlyBlocked ? Icons.check_circle_outline : Icons.block, 
-                  color: isCurrentlyBlocked ? Colors.green.shade600 : Colors.blue.shade600, 
+                  Icons.block, 
+                  color: isCurrentlyBlocked ? Colors.green.shade600 : Colors.red.shade600, 
                   size: 24
                 ),
               ),
@@ -2165,7 +2303,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                backgroundColor: isCurrentlyBlocked ? Colors.green.shade600 : Colors.blue.shade600,
+                backgroundColor: isCurrentlyBlocked ? Colors.green.shade600 : Colors.red.shade600,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
