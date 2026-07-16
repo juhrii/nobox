@@ -992,12 +992,15 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                         context.read<ChatProvider>().insertLocalChat(newChat);
                                       }
                                       
-                                      Navigator.push(
+                                      await Navigator.push(
                                         context,
                                         MaterialPageRoute(
                                           builder: (context) => ChatDetailPage(chat: newChat),
                                         ),
                                       );
+                                      if (mounted) {
+                                        context.read<ChatProvider>().refreshFirstPage();
+                                      }
                                     }
                                   }
                                 } else {
@@ -1152,7 +1155,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade300,
           ),
           InkWell(
-            onTap: () {
+            onTap: () async {
               if (_selectedChats.isNotEmpty) {
                 setState(() {
                   if (isSelected) _selectedChats.remove(chat.id);
@@ -1161,12 +1164,18 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                 return;
               }
               chatProvider.markAsRead(chat.id);
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => ChatDetailPage(chat: chat),
                 ),
               );
+              
+              if (mounted) {
+                // Refresh list percakapan setelah kembali dari ruang chat 
+                // untuk memastikan last message tersinkronisasi akurat.
+                chatProvider.refreshFirstPage();
+              }
             },
             onLongPress: () {
               if (_selectedChats.isEmpty) {
@@ -1404,10 +1413,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     final exactVideoLabels = ['video', '🎥 video', '🎬 video'];
 
     if (exactAudioLabels.contains(lowerTrimmed)) {
-      displayMessage = '🎵 Voice Note';
+      displayMessage = '🎤 Pesan Suara';
       parsedAsMedia = true;
     } else if (exactPhotoLabels.contains(lowerTrimmed)) {
-      displayMessage = '📷 Photo';
+      displayMessage = '📷 Foto';
       parsedAsMedia = true;
     } else if (exactVideoLabels.contains(lowerTrimmed)) {
       displayMessage = '🎥 Video';
@@ -1459,48 +1468,60 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
           final originalName = targetMap['OriginalName']?.toString().toLowerCase() ?? targetMap['originalname']?.toString().toLowerCase() ?? '';
           final caption = targetMap['Caption']?.toString() ?? targetMap['caption']?.toString() ?? '';
           
+          final isDocument = typeVal == '5';
+
           final isAudio = isPtt || typeVal == '2' || 
-                         ['.ogg', '.oga', '.mp3', '.wav', '.m4a', '.opus', '.aac', '.weba', '.amr'].any((ext) => filename.contains(ext) || originalName.contains(ext));
+                         (!isDocument && (['.ogg', '.oga', '.mp3', '.wav', '.m4a', '.opus', '.aac', '.weba', '.amr'].any((ext) => filename.contains(ext) || originalName.contains(ext)) ||
+                          originalName.contains('voice note') || originalName.contains('voice_') || filename.contains('voice_')));
           
           final isImage = typeVal == '3' || 
-                         ['.jpg', '.jpeg', '.png', '.gif', '.webp'].any((ext) => filename.contains(ext) || originalName.contains(ext));
+                         (!isDocument && ['.jpg', '.jpeg', '.png', '.gif', '.webp'].any((ext) => filename.contains(ext) || originalName.contains(ext)));
                          
           final isVideo = typeVal == '4' || 
-                         ['.mp4', '.avi', '.mov', '.3gp'].any((ext) => filename.contains(ext) || originalName.contains(ext));
+                         (!isDocument && ['.mp4', '.avi', '.mov', '.3gp'].any((ext) => filename.contains(ext) || originalName.contains(ext)));
                          
           final isLocation = typeVal == '15' || typeVal == '11' || trimmedMsg.toLowerCase().contains('"lat":');
           final isContact = typeVal == '14' || typeVal == '10';
 
-          if (isAudio) {
-            displayMessage = '🎵 Voice Note';
+          if (isDocument) {
+            String docName = 'Dokumen';
+            if (originalName.isNotEmpty) {
+              docName = targetMap['OriginalName']?.toString() ?? targetMap['originalname']?.toString() ?? 'Dokumen';
+            } else if (filename.isNotEmpty) {
+              docName = (targetMap['Filename']?.toString() ?? targetMap['url']?.toString() ?? 'Dokumen').split('/').last;
+            }
+            displayMessage = '📄 $docName';
+            parsedAsMedia = true;
+          } else if (isAudio) {
+            displayMessage = '🎤 Pesan Suara';
             parsedAsMedia = true;
           } else if (isImage) {
-            displayMessage = '📷 Photo${caption.isNotEmpty ? ' $caption' : ''}';
+            displayMessage = '📷 Foto${caption.isNotEmpty ? ' $caption' : ''}';
             parsedAsMedia = true;
           } else if (isVideo) {
             displayMessage = '🎥 Video${caption.isNotEmpty ? ' $caption' : ''}';
             parsedAsMedia = true;
           } else if (isLocation) {
-            displayMessage = '📍 Location';
+            displayMessage = '📍 Lokasi';
             parsedAsMedia = true;
           } else if (isContact) {
-            displayMessage = '👤 Contact';
+            displayMessage = '👤 Kontak';
             parsedAsMedia = true;
-          } else if (filename.isNotEmpty || originalName.isNotEmpty || typeVal == '5') {
+          } else if (filename.isNotEmpty || originalName.isNotEmpty) {
             // Cek apakah backend secara eksplisit memberitahu tipe media di lastMessageType
             final overrideType = chat.lastMessageType?.toLowerCase() ?? '';
             if (overrideType.contains('voice note') || overrideType.contains('audio')) {
-              displayMessage = '🎵 Voice Note';
+              displayMessage = '🎤 Pesan Suara';
             } else if (overrideType.contains('image') || overrideType.contains('photo')) {
-              displayMessage = '📷 Photo${caption.isNotEmpty ? ' $caption' : ''}';
+              displayMessage = '📷 Foto${caption.isNotEmpty ? ' $caption' : ''}';
             } else if (overrideType.contains('video')) {
               displayMessage = '🎥 Video${caption.isNotEmpty ? ' $caption' : ''}';
             } else {
-              String docName = 'Document';
+              String docName = 'Lampiran';
               if (originalName.isNotEmpty) {
-                docName = targetMap['OriginalName']?.toString() ?? targetMap['originalname']?.toString() ?? 'Document';
+                docName = targetMap['OriginalName']?.toString() ?? targetMap['originalname']?.toString() ?? 'Lampiran';
               } else if (filename.isNotEmpty) {
-                docName = (targetMap['Filename']?.toString() ?? targetMap['url']?.toString() ?? 'Document').split('/').last;
+                docName = (targetMap['Filename']?.toString() ?? targetMap['url']?.toString() ?? 'Lampiran').split('/').last;
               }
               
               if (docName.toLowerCase().contains('document(empty)')) {
@@ -1508,16 +1529,16 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                  if (rawText.isNotEmpty && !rawText.startsWith('{') && !rawText.startsWith('[')) {
                     displayMessage = rawText;
                  } else {
-                    displayMessage = '📄 File';
+                    displayMessage = '📎 Lampiran';
                  }
                  parsedAsMedia = true; // Set to true so it doesn't get overridden by fallback logic
               } else {
                 // DEBUG: Tampilkan isi mentah dari pesan agar kita bisa melihat bentuk data JSON-nya
                 if (trimmedMsg.isNotEmpty) {
                   final preview = trimmedMsg.length > 35 ? '${trimmedMsg.substring(0, 35)}...' : trimmedMsg;
-                  displayMessage = '📄 RAW: $preview';
+                  displayMessage = '📎 RAW: $preview';
                 } else {
-                  displayMessage = '📄 $docName';
+                  displayMessage = '📎 $docName';
                 }
                 parsedAsMedia = true;
               }
@@ -1535,31 +1556,31 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
       final overrideType = chat.lastMessageType!.toLowerCase();
       
       if (overrideType.contains('voice note') || overrideType.contains('audio') || overrideType == '2') {
-        displayMessage = '🎵 Voice Note';
+        displayMessage = '🎤 Pesan Suara';
       } else if (overrideType.contains('image') || overrideType.contains('photo') || overrideType == '3') {
-        final cleaned = displayMessage.replaceAll('📷', '').replaceAll('Photo', '').trim();
-        displayMessage = '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+        final cleaned = displayMessage.replaceAll('📷', '').replaceAll('Photo', '').replaceAll('Foto', '').trim();
+        displayMessage = '📷 Foto${cleaned.isNotEmpty ? ' $cleaned' : ''}';
       } else if (overrideType.contains('video') || overrideType == '4') {
         final cleaned = displayMessage.replaceAll('🎥', '').replaceAll('📹', '').replaceAll('Video', '').trim();
         displayMessage = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
       } else if (overrideType.contains('document') || overrideType.contains('file') || overrideType == '5') {
-        if (displayMessage.contains('📄') || displayMessage.contains('📁')) {
+        if (displayMessage.contains('📎') || displayMessage.contains('📁') || displayMessage.contains('📄')) {
           // sudah ada emoji
         } else if (displayMessage.isEmpty) {
           final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
           if (isTelegram) {
-            displayMessage = '🎵 Voice Note'; // HACK: Asumsi server NoBox untuk file .ogg Telegram tanpa caption
+            displayMessage = '🎤 Pesan Suara'; // HACK: Asumsi server NoBox untuk file .ogg Telegram tanpa caption
           } else {
-            displayMessage = '📄 File';
+            displayMessage = '📎 Lampiran';
           }
         } else {
           final preview = trimmedMsg.length > 35 ? '${trimmedMsg.substring(0, 35)}...' : trimmedMsg;
-          displayMessage = '📄 $preview';
+          displayMessage = '📎 $preview';
         }
       } else if (overrideType == '15' || overrideType == '11' || overrideType.contains('location')) {
-        displayMessage = '📍 Location';
+        displayMessage = '📍 Lokasi';
       } else if (overrideType == '14' || overrideType == '10' || overrideType.contains('contact')) {
-        displayMessage = '👤 Contact';
+        displayMessage = '👤 Kontak';
       } else if (overrideType.contains('unsupported')) {
         return Row(
           children: [
@@ -1591,14 +1612,62 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     if (!parsedAsMedia && displayMessage.isEmpty) {
       final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
       if (isTelegram) {
-        displayMessage = '🎵 Voice Note'; // ULTIMATE HACK: Any empty unrecognized message from Telegram is a Voice Note
+        displayMessage = '🎤 Pesan Suara'; // ULTIMATE HACK: Any empty unrecognized message from Telegram is a Voice Note
       } else {
-        displayMessage = '📄 File';
+        displayMessage = '📎 Lampiran';
       }
     }
 
-    if (!parsedAsMedia && (displayMessage == 'Document' || displayMessage == '📄 Document')) {
-       displayMessage = '📄 File';
+    if (!parsedAsMedia && (displayMessage == 'Document' || displayMessage == '📄 Document' || displayMessage == '📄 File' || displayMessage == '📎 Lampiran')) {
+       displayMessage = '📎 Lampiran';
+    }
+
+    // 4. Deteksi nama file mentah (non-JSON) berdasarkan ekstensi/pola nama
+    bool isGenericAttachment = displayMessage.startsWith('📎') || displayMessage == 'Lampiran' || displayMessage.contains('RAW:');
+    bool isDocumentAlready = displayMessage.startsWith('📄');
+    
+    if (!parsedAsMedia || isGenericAttachment || isDocumentAlready) {
+      final lower = displayMessage.toLowerCase().replaceAll('📎', '').replaceAll('📄', '').replaceAll('raw:', '').trim();
+      
+      // Jika sudah ditandai sebagai dokumen (📄), TETAP jadikan Dokumen terlepas dari ekstensinya!
+      if (isDocumentAlready) {
+        // Tampilkan nama aslinya jika ada (tapi dibersihkan), atau cukup "Dokumen" jika berantakan
+        if (lower.contains('img-') || lower.contains('vid-') || lower.contains('wa00')) {
+           displayMessage = '📄 Dokumen';
+        } else {
+           // Pertahankan nama file asli jika dirasa rapi (misal: "📄 Laporan.pdf")
+           displayMessage = displayMessage;
+        }
+        parsedAsMedia = true;
+      }
+      // Deteksi ekstensi gambar
+      else if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].any((ext) => lower.endsWith(ext)) || 
+          lower.startsWith('img-') || lower.startsWith('img_') || lower.startsWith('photo')) {
+        displayMessage = '📷 Foto';
+        parsedAsMedia = true;
+      }
+      // Deteksi ekstensi video
+      else if (['.mp4', '.avi', '.mov', '.3gp', '.mkv', '.webm'].any((ext) => lower.endsWith(ext)) || 
+               lower.startsWith('vid-') || lower.startsWith('vid_')) {
+        displayMessage = '🎥 Video';
+        parsedAsMedia = true;
+      }
+      // Deteksi ekstensi audio/voice note
+      else if (['.ogg', '.opus', '.mp3', '.wav', '.m4a', '.aac', '.amr', '.weba'].any((ext) => lower.endsWith(ext)) || 
+               lower.startsWith('voice_') || lower.startsWith('ptt-') || lower.startsWith('aud-')) {
+        displayMessage = '🎤 Pesan Suara';
+        parsedAsMedia = true;
+      }
+      // Deteksi ekstensi dokumen
+      else if (['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.zip', '.rar'].any((ext) => lower.endsWith(ext))) {
+        displayMessage = '📄 Dokumen';
+        parsedAsMedia = true;
+      }
+      // Jika ada ekstensi file apapun (generic file detection)
+      else if (RegExp(r'\.[a-zA-Z0-9]{2,5}$').hasMatch(lower) && !lower.contains(' ') && lower.length < 100) {
+        displayMessage = '📎 Lampiran';
+        parsedAsMedia = true;
+      }
     }
 
     return Text(

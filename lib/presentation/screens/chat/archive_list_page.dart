@@ -297,18 +297,49 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
           Text(chat.lastMessageType!, style: TextStyle(fontSize: 13, color: messageColor, fontStyle: FontStyle.italic)),
         ],
       );
-    }
+    } 
     String displayMessage = chat.lastMessage;
     if (displayMessage.startsWith('{') && displayMessage.contains('"Filename"')) {
-      if (displayMessage.contains('"Ptt":true') || displayMessage.contains('"Ptt": true')) {
-        displayMessage = '🎵 Voice Note';
-      } else if (displayMessage.toLowerCase().contains('.jpg') || displayMessage.toLowerCase().contains('.png') || displayMessage.toLowerCase().contains('.jpeg')) {
-        displayMessage = '📷 Photo';
-      } else if (displayMessage.toLowerCase().contains('.mp4')) {
+      final lower = displayMessage.toLowerCase();
+      if (lower.contains('"ptt":true') || lower.contains('"ptt": true') || lower.contains('.ogg') || lower.contains('.mp3') || lower.contains('voice note') || lower.contains('pesan suara') || lower.contains('voice_')) {
+        displayMessage = '🎤 Pesan Suara';
+      } else if (lower.contains('.jpg') || lower.contains('.png') || lower.contains('.jpeg') || lower.contains('photo') || lower.contains('foto')) {
+        displayMessage = '📷 Foto';
+      } else if (lower.contains('.mp4') || lower.contains('video')) {
         displayMessage = '🎥 Video';
       } else {
-        displayMessage = '📎 Attachment';
+        displayMessage = '📎 Lampiran';
       }
+    }
+
+    // Deteksi nama file mentah (non-JSON) berdasarkan ekstensi/pola nama
+    bool isDocumentAlready = displayMessage.startsWith('📄');
+    if (!displayMessage.startsWith('📷') && !displayMessage.startsWith('🎥') && 
+        !displayMessage.startsWith('🎤') && !isDocumentAlready &&
+        !displayMessage.startsWith('📎') && !displayMessage.startsWith('📍') &&
+        !displayMessage.startsWith('👤') && !displayMessage.startsWith('🌟')) {
+      final lower = displayMessage.toLowerCase().trim();
+      if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].any((ext) => lower.endsWith(ext)) || 
+          lower.startsWith('img-') || lower.startsWith('img_') || lower.startsWith('photo')) {
+        displayMessage = '📷 Foto';
+      } else if (['.mp4', '.avi', '.mov', '.3gp', '.mkv', '.webm'].any((ext) => lower.endsWith(ext)) || 
+                 lower.startsWith('vid-') || lower.startsWith('vid_')) {
+        displayMessage = '🎥 Video';
+      } else if (['.ogg', '.opus', '.mp3', '.wav', '.m4a', '.aac', '.amr', '.weba'].any((ext) => lower.endsWith(ext)) || 
+                 lower.startsWith('voice_') || lower.startsWith('ptt-') || lower.startsWith('aud-')) {
+        displayMessage = '🎤 Pesan Suara';
+      } else if (['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.zip', '.rar'].any((ext) => lower.endsWith(ext))) {
+        displayMessage = '📄 Dokumen';
+      } else if (RegExp(r'\.[a-zA-Z0-9]{2,5}$').hasMatch(lower) && !lower.contains(' ') && lower.length < 100) {
+        displayMessage = '📎 Lampiran';
+      }
+    } else if (isDocumentAlready || displayMessage.startsWith('📎')) {
+       final lower = displayMessage.toLowerCase().trim();
+       if (isDocumentAlready && (lower.contains('img-') || lower.contains('vid-') || lower.contains('wa00'))) {
+         displayMessage = '📄 Dokumen';
+       } else if (displayMessage.startsWith('📎') && (lower.contains('img-') || lower.contains('img_'))) {
+         displayMessage = '📷 Foto';
+       }
     }
 
     return Text(
@@ -331,7 +362,7 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
           InkWell(
             // FITUR: Tap Chat (Buka Room atau Pilih)
             // FUNGSI: Jika dalam mode seleksi massal, menambah/menghapus pilihan. Jika mode normal, menavigasi pengguna ke layar ChatDetailPage.
-            onTap: () {
+            onTap: () async {
               // Jika dalam mode pilih, ketuk chat menambah pilihan
               if (_selectedChats.isNotEmpty) {
                 setState(() {
@@ -342,12 +373,16 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
               }
               // Jika normal, pergi ke ruangan chat
               chatProvider.markAsRead(chat.id);
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => ChatDetailPage(chat: chat),
                 ),
               );
+              
+              if (mounted) {
+                chatProvider.refreshFirstPage(customStatusCode: 4);
+              }
             },
             // FITUR: Long Press Chat (Aktifkan Mode Seleksi)
             // FUNGSI: Memulai mode seleksi massal saat pengguna menahan chat tile, yang mengubah AppBar ke mode unarchive.

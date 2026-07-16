@@ -519,6 +519,32 @@ Future<void> fetchChats() async {
       final existing = _chats[index];
       String lastMsg = roomData['LastMsg']?.toString() ?? existing.lastMessage;
       
+      // FIX: Lindungi override lokal agar tidak tertimpa oleh data server yang USANG.
+      // Override bertahan SELAMANYA sampai server mengirim pesan yang BENAR-BENAR lebih baru.
+      if (_localOverrides.containsKey(roomId)) {
+        final localChat = _localOverrides[roomId]!;
+        final localTimeStr = localChat.time; // Waktu pesan lokal
+        final localTime = DateTime.tryParse(localTimeStr.endsWith('Z') ? localTimeStr : '${localTimeStr}Z');
+        final serverTimeStr = roomData['TimeMsg']?.toString() ?? '';
+        final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
+        
+        // Hanya terima data server jika waktu pesannya BENAR-BENAR lebih baru dari pesan lokal
+        final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime));
+        
+        if (serverIsNewer) {
+          // Ada pesan baru yang sungguhan! Hapus override dan terima data server.
+          _localOverrides.remove(roomId);
+          _overrideTimestamps.remove(roomId);
+          _saveLocalOverrides();
+          debugPrint('ChatProvider: ✅ Override cleared for $roomId — server has newer message');
+        } else {
+          // Server masih mengembalikan data lama, PERTAHANKAN override lokal
+          lastMsg = existing.lastMessage;
+          roomData['LastMessageType'] = existing.lastMessageType;
+          debugPrint('ChatProvider: 🛡️ Override protected for $roomId — server data is stale');
+        }
+      }
+
       // FIX: Cegah string generik ("File", "Document") menimpa JSON array media yang sudah valid
       final lowerNew = lastMsg.toLowerCase().trim();
       final oldMsg = existing.lastMessage.trim();
@@ -651,11 +677,11 @@ Future<void> fetchChats() async {
 
   /// Hanya merefresh halaman pertama percakapan tanpa mereset pagination.
   /// Digunakan oleh SignalR dan polling untuk memperbarui data tanpa merusak scroll tanpa batas.
-  Future<void> refreshFirstPage() async {
+  Future<void> refreshFirstPage({int? customStatusCode}) async {
     if (_isLoading || _isLoadingMore) return;
 
     try {
-      final statusCode = _statusCodeForFilter(_activeFilter);
+      final statusCode = customStatusCode ?? _statusCodeForFilter(_activeFilter);
       // ── Jalur 1: Server-Side Filters only ──────────────────────────────────
       final response = await _chatService.getConversations(
         statusCode: statusCode,
@@ -711,6 +737,35 @@ Future<void> fetchChats() async {
             final persistedName = _savedContactNames[chat.id];
             if (persistedName != null && persistedName.isNotEmpty) {
               chat = chat.copyWith(sender: persistedName);
+            }
+
+            // FIX: Lindungi override lokal agar tidak tertimpa oleh data server yang USANG.
+            // Override bertahan SELAMANYA sampai server mengirim pesan yang BENAR-BENAR lebih baru.
+            if (_localOverrides.containsKey(chat.id)) {
+              final localChat = _localOverrides[chat.id]!;
+              final localTimeStr = localChat.time;
+              final localTime = DateTime.tryParse(localTimeStr.endsWith('Z') ? localTimeStr : '${localTimeStr}Z');
+              final serverTimeStr = chat.time;
+              final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
+              
+              final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime));
+              
+              if (serverIsNewer) {
+                // Ada pesan baru sungguhan, hapus override dan terima data server
+                _localOverrides.remove(chat.id);
+                _overrideTimestamps.remove(chat.id);
+                _saveLocalOverrides();
+                // Jatuh ke logika generic/label di bawah
+              } else {
+                // Server masih mengembalikan data lama, PERTAHANKAN override lokal
+                chat = chat.copyWith(
+                  lastMessage: oldChat.lastMessage,
+                  lastMessageType: oldChat.lastMessageType,
+                  time: oldChat.time,
+                );
+                _chats[idx] = chat;
+                continue;
+              }
             }
             
             // FIX: Cegah string generik ("File", "Document") menimpa JSON array media yang sudah valid
@@ -986,6 +1041,8 @@ Future<void> fetchMoreChats() async {
   Map<String, String>? getSavedContactLocation(String roomId) {
     return _savedContactLocations[roomId];
   }
+
+
 
 
   // ── Getter Terkomputasi ──

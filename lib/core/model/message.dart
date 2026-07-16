@@ -412,8 +412,8 @@ class Message {
         msgType = MessageType.sticker;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
         content = '🌟 Sticker';
-      } else if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(firstFile)) {
-        // Voice note: cek ekstensi audio ATAU flag Ptt:true — SEBELUM cek document (type 5)
+      } else if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(firstFile) || originalName.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('pesan suara') || filePath.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('voice_') || filePath.toLowerCase().contains('voice_')) {
+        // Voice note: cek ekstensi audio ATAU flag Ptt:true ATAU nama file mengandung voice note — SEBELUM cek document (type 5)
         // Server NoBox kadang mengembalikan Type=5 untuk voice notes
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -479,9 +479,9 @@ class Message {
         msgType = MessageType.sticker;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
         content = '🌟 Sticker';
-      } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File'])) {
-        // Voice note: cek typeVal=='2', ekstensi audio, ATAU flag Ptt:true — sebelum cek document (type 5)
-        if (filePath.isNotEmpty || content.isEmpty || content.startsWith('{') || content.startsWith('[') || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File'])) {
+      } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || originalName.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('pesan suara') || filePath.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('voice_') || filePath.toLowerCase().contains('voice_')) {
+        // Voice note: cek typeVal=='2', ekstensi audio, nama file, ATAU flag Ptt:true — sebelum cek document (type 5)
+        if (filePath.isNotEmpty || content.isEmpty || content.startsWith('{') || content.startsWith('[') || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || originalName.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('pesan suara') || filePath.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('voice_') || filePath.toLowerCase().contains('voice_')) {
           msgType = MessageType.voice;
           audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
           content = '';
