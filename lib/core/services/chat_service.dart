@@ -843,20 +843,19 @@ class ChatService {
     
     try {
       final payload = {
-        'Take': take,
+        'Take': isTelegram ? 9999 : take,
         'Skip': skip,
         'Sort': ['In DESC'],
         'IncludeColumns': [
-          "Id", "IdAlias", "GrpMember", "RoomId", "Ack", "From", "ReplyFrom", "To", "AgentId", "IsNobox",
-          "Type", "Msg", "Files", "File", "ReplyType", "ReplyMsg", "ReplyFiles", "ReplyGrpMember", "ReplyId",
-          "InteractiveMsg", "InteractiveType", "Note", "AiCredit", "In", "InBy", "Up", "UpBy"
+          'Id', 'IdAlias', 'RoomId', 'Ack', 'From', 'ReplyFrom', 'To', 'AgentId',
+          'IsNobox', 'Type', 'Msg', 'File', 'Files', 'Note', 'In'
         ],
         'ColumnSelection': 1,
         'EqualityFilter': {
           'RoomId': roomId
         },
       };
-
+  
       debugPrint('ChatService: ┌── getMessageHistory ──');
       debugPrint('ChatService: │ Endpoint: ${AppConfig.getMessagesEndpoint}');
       debugPrint('ChatService: │ RoomId: $roomId');
@@ -865,7 +864,7 @@ class ChatService {
         AppConfig.getMessagesEndpoint,
         data: payload,
       );
-
+  
       debugPrint('ChatService: │ Status: ${response.statusCode}');
       final respStr = response.data?.toString() ?? 'null';
       debugPrint('ChatService: │ Response (first 300): ${respStr.length > 300 ? respStr.substring(0, 300) : respStr}');
@@ -1449,8 +1448,12 @@ class ChatService {
 
 
 
-      // Do NOT send ExtId as a JSON string here, it causes backend errors when LinkId is present!
+      // Do NOT send ExtId as a JSON string for WA. 
+      // HACK: Tapi untuk Telegram, C# backend mem-parsing ExtId sebagai objek JSON (extra.ExtId).
       String finalExtId = extId;
+      if (extId.isNotEmpty && channelId == 2) {
+        finalExtId = jsonEncode({"ExtId": extId});
+      }
 
       final Map<String, dynamic> payload = {
         'Body': content,
@@ -1539,7 +1542,7 @@ class ChatService {
         return 'audio/aac';
       case 'ogg':
       case 'opus':
-        return 'audio/ogg';
+        return 'audio/ogg; codecs=opus';
       case 'pdf':
         return 'application/pdf';
       case 'doc':
@@ -1583,8 +1586,8 @@ class ChatService {
       }
       
       final bytes = await file.readAsBytes();
-      final fileName = normalizedPath.split(Platform.pathSeparator).last;
-      final extension = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'jpg';
+      String fileName = normalizedPath.split(Platform.pathSeparator).last;
+      String extension = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'jpg';
 
       // Determine BodyType based on file extension
       int bodyType = 3; // Default to Image
@@ -1634,11 +1637,14 @@ class ChatService {
       String? serverFileName;
       String? actualError;
       final bool isTelegram = (channelId == '2' || channelId == 'Telegram');
+      
       // PENTING: Telegram (SignalR) WAJIB menggunakan TemporaryUpload agar file masuk ke folder 'temporary/'
       // Sesuai dengan payload Web NoBox, server backend akan gagal mengirim jika menggunakan Base64.
       // WAJIB: Audio/Voice Note (bodyType 2) untuk WhatsApp HARUS menggunakan Base64 agar ekstensi .ogg 
       // tidak dihapus oleh TemporaryUpload. Tanpa .ogg, WhatsApp akan mengubahnya menjadi Dokumen.
-      final bool useBase64 = (!isTelegram && (bodyType == 5 || bodyType == 2 || forceDocument));
+      // FIX: Jangan gunakan Base64 untuk Document/forceDocument di WhatsApp, karena backend worker 
+      // akan membaca ekstensi .jpg dari URL Base64 dan mengonversinya menjadi Foto secara paksa!
+      final bool useBase64 = (bodyType == 2);
 
       try {
         if (useBase64) {
@@ -1734,12 +1740,9 @@ class ChatService {
         'IsImage': forceDocument ? false : (bodyType == 3),
         'IsDocument': forceDocument ? true : (bodyType == 5),
         'IsVideo': forceDocument ? false : (bodyType == 4),
+        'IsAudio': forceDocument ? false : (bodyType == 2),
+        'Ptt': bodyType == 2,
       };
-      // Add Ptt (push-to-talk) flag for voice notes so WhatsApp shows it
-      // as a voice message bubble instead of a document attachment
-      if (bodyType == 2) {
-        attachmentMap['Ptt'] = true;
-      }
       final attachmentData = jsonEncode([attachmentMap]);
 
     // Mentor instruction: AccountIds must be a single string (comma-separated if multiple), NOT an array.
@@ -1761,141 +1764,56 @@ class ChatService {
       "Attachment": attachmentData,
     };
 
-    // Khusus Telegram: gunakan SignalR KirimPesan karena API Inbox/Send backend bermasalah untuk media Telegram
-    if (isTelegram) {
-      
-      String finalTelegramFilename = serverFileName ?? '';
-      if (!finalTelegramFilename.startsWith('temporary/')) {
-        finalTelegramFilename = 'temporary/$finalTelegramFilename';
-      }
-      
-      final fileJsonObj = <String, dynamic>{
-        "OriginalName": fileName,
-        "Filename": finalTelegramFilename,
-      };
-      
-      if (bodyType == 2) {
-        fileJsonObj['Ptt'] = true;
-      }
-      
-      final idLinkValue = (link != null && link.isNotEmpty) ? link : contactId;
-      debugPrint('ChatService: SignalR Telegram media → idLink=$idLinkValue, idRoom=$conversationId, idAccount=$safeAccountId, type=${bodyType.toString()}, File=$fileJsonObj');
-      final signalRSuccess = await SignalRService().invokeKirimPesan(
-        idLink: idLinkValue,
-        idAccount: safeAccountId,
-        idRoom: conversationId,
-        idGroup: groupId,
-        type: bodyType.toString(), // 3=Image, 4=Video, 5=Document, 2=Voice
-        fileJson: jsonEncode(fileJsonObj),
-      );
-      if (signalRSuccess) {
-        final fullUrl = (serverFileName != null && !serverFileName.startsWith('http'))
-            ? '${AppConfig.uploadUrl}$serverFileName'
-            : serverFileName;
-        return ApiResponse.success(fullUrl ?? filePath, 200);
-      } else {
-        return ApiResponse.failure('SignalR gagal mengirim media Telegram. IdAccount: $safeAccountId', 500);
-      }
-    }
-
-    // Use Inbox/Send for non-Telegram channels
-    // Set ExtId dari _getExtId (phone number untuk WA, dll). Jika kosong (misalnya grup), gunakan 'link' (Group ID eksternal).
-    if ((extId == null || extId.isEmpty) && link != null && link.isNotEmpty) {
-      payload["ExtId"] = link;
-    } else {
-      payload["ExtId"] = extId ?? "";
+    // MENGGUNAKAN SIGNALR KIRIM PESAN UNTUK SEMUA CHANNEL (WA & TELEGRAM)
+    // Ini menyelesaikan masalah di mana Inbox/Send gagal mencatat riwayat ke database nobox.ai
+    
+    String finalFilename = serverFileName ?? '';
+    // Telegram and WA backend via SignalR expects 'temporary/' prefix
+    if (!finalFilename.startsWith('temporary/') && !useBase64) {
+      finalFilename = 'temporary/$finalFilename';
     }
     
-    // Selalu set LinkId sebagai fallback, karena server membutuhkan
-    // setidaknya SATU dari: IdLink atau ExtId terisi.
-    if (contactId != null && contactId.isNotEmpty) {
-      final linkIdInt = int.tryParse(contactId);
-      if (linkIdInt != null) {
-        payload["LinkId"] = linkIdInt;
-      }
+    final fileJsonObj = <String, dynamic>{
+      "OriginalName": fileName,
+      "Filename": finalFilename,
+      "IsImage": forceDocument ? false : (bodyType == 3),
+      "IsDocument": forceDocument ? true : (bodyType == 5),
+      "IsVideo": forceDocument ? false : (bodyType == 4),
+      "IsAudio": forceDocument ? false : (bodyType == 2),
+      "Ptt": bodyType == 2,
+    };
+    
+    final idLinkValue = (link != null && link.isNotEmpty) ? link : contactId;
+    debugPrint('ChatService: SignalR Media (All Channels) → idLink=$idLinkValue, idRoom=$conversationId, idAccount=$safeAccountId, type=${bodyType.toString()}, File=$fileJsonObj');
+
+    // FIX: Pesan Media untuk channel lain tetap lewat SignalR tanpa Teks Caption
+    final signalRMsg = '';
+
+    final signalRError = await SignalRService().invokeKirimPesan(
+      idLink: idLinkValue,
+      idAccount: safeAccountId,
+      idRoom: conversationId,
+      idGroup: groupId,
+      type: bodyType.toString(), // 3=Image, 4=Video, 5=Document, 2=Voice
+      msg: signalRMsg, 
+      fileJson: jsonEncode(fileJsonObj),
+    );
+    
+    if (signalRError == null) {
+      final fullUrl = (serverFileName != null && !serverFileName.startsWith('http'))
+          ? '${AppConfig.uploadUrl}$serverFileName'
+          : serverFileName;
+      return ApiResponse.success(fullUrl ?? filePath, 200);
+    } else {
+      return ApiResponse.failure('SignalR Error: $signalRError', 500);
     }
-
-      debugPrint('ChatService: ┌── sendImageMessage PAYLOAD FINAL ──');
-      debugPrint(jsonEncode(payload));
-      debugPrint('ChatService: └──────────────────────────────');
-
-      // Pengiriman media Telegram (chId == 2) kini juga menggunakan Inbox/Send API
-      // karena API ini terbukti lebih andal dalam mengirimkan payload 'Ptt' untuk Voice Note.
-
-      dynamic sendResponse;
-
-      try {
-        if (chId == 1 && bodyType == 5) {
-          debugPrint('ChatService: Mengirim dokumen WA melalui Inbox/Send');
-        }
-
-        sendResponse = await _apiClient.post(
-          'https://id.nobox.ai/Inbox/Send?Id=$conversationId',
-          data: payload,
-        );
-      } on DioException catch (e) {
-        debugPrint('ChatService: ❌ Send API Error: ${e.response?.statusCode} - ${e.response?.data}');
-        return ApiResponse.failure(
-          'Error ${e.response?.statusCode}: ${e.response?.data?.toString() ?? e.message}', 
-          e.response?.statusCode ?? 500
-        );
-      }
-
-
-      if (sendResponse.statusCode == 200) {
-        final rawData = sendResponse.data;
-        if (rawData is Map && rawData['IsError'] == true) {
-          final errorMsg = rawData['Error']?.toString() ?? 'Send error';
-          
-          // SMART FALLBACK: Jika backend C# memuntahkan error ExtId, ini berarti
-          // chat tersebut adalah Telegram (tapi gagal terdeteksi oleh pengecekan chId).
-          // Kita otomatis alihkan menggunakan SignalR.
-          if (errorMsg.contains('ExtId') || errorMsg.contains('long')) {
-            debugPrint('ChatService: Terdeteksi error ExtId backend! Mengalihkan ke SignalR...');
-            final fileJsonObj = <String, dynamic>{
-              "Filename": serverFileName,
-              "OriginalName": fileName,
-              "FileSize": "${(bytes.length / 1024).toStringAsFixed(1)} KB"
-            };
-            if (bodyType == 2) {
-              fileJsonObj["Ptt"] = true; // Voice note flag
-            }
-            final signalRSuccess = await SignalRService().invokeKirimPesan(
-              idLink: contactId,
-              idAccount: safeAccountId,
-              idRoom: conversationId,
-              idGroup: groupId,
-              type: bodyType.toString(), 
-              fileJson: jsonEncode(fileJsonObj),
-            );
-            
-            if (signalRSuccess) {
-              final fullUrl = (serverFileName != null && !serverFileName.startsWith('http'))
-                  ? '${AppConfig.uploadUrl}$serverFileName'
-                  : serverFileName;
-              return ApiResponse.success(fullUrl ?? filePath, 200);
-            } else {
-              return ApiResponse.failure('Gagal mengirim media Telegram via SignalR (Fallback)', 500);
-            }
-          }
-          
-          debugPrint('ChatService: sendImageMessage error: $errorMsg');
-          return ApiResponse.failure(errorMsg, 200);
-        }
-        // Build the full image URL for display in chat
-        final fullUrl = (serverFileName != null && !serverFileName.startsWith('http'))
-            ? '${AppConfig.uploadUrl}$serverFileName'
-            : serverFileName;
-        return ApiResponse.success(fullUrl ?? filePath, 200);
-      } else {
-        return ApiResponse.failure('Failed: ${sendResponse.statusCode}', sendResponse.statusCode!);
-      }
     } on DioException catch (e) {
       return ApiResponse.failure(e.message ?? 'Connection error', e.response?.statusCode ?? 500);
     } catch (e) {
       return ApiResponse.failure(e.toString(), 500);
     }
   }
+
 
   /// Upload an image file without sending it as a message
   Future<ApiResponse<String>> uploadImage(File file) async {

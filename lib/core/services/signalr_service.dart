@@ -5,6 +5,7 @@ import 'package:signalr_netcore/signalr_client.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../app_config.dart';
 import 'push_notification_service.dart';
+import 'api_client.dart';
 
 // =====================================================================
 // FITUR: Layanan SignalR (Real-time / WebSocket)
@@ -43,6 +44,13 @@ class SignalRService {
   // ── Typed streams for specific events ──
   final _terimaPesanController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get onTerimaPesan => _terimaPesanController.stream;
+
+  // ── Cached Messages (Fix race condition) ──
+  final Map<String, List<Map<String, dynamic>>> _recentTerimaPesan = {};
+
+  List<Map<String, dynamic>> getRecentMessagesForRoom(String roomId) {
+    return _recentTerimaPesan[roomId] ?? [];
+  }
 
   final _terimaSubSpvController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get onTerimaSubSpv => _terimaSubSpvController.stream;
@@ -308,11 +316,18 @@ class SignalRService {
         }
       }
 
-      final parsed = {
+      final Map<String, dynamic> parsed = {
         'roomId': roomId,
         'message': messageData,
         'sender': senderData,
       };
+
+      // Simpan di cache lokal untuk race condition
+      _recentTerimaPesan.putIfAbsent(roomId, () => <Map<String, dynamic>>[]);
+      _recentTerimaPesan[roomId]!.add(parsed);
+      if (_recentTerimaPesan[roomId]!.length > 50) {
+        _recentTerimaPesan[roomId]!.removeAt(0);
+      }
 
       debugPrint('SignalR: 📩 TerimaPesan | room=$roomId | msg=${messageData['Msg']}');
 
@@ -366,7 +381,7 @@ class SignalRService {
 
       // Skip jika user sedang membuka room ini
       final currentRoomId = PushNotificationService.currentRoomId;
-      if (currentRoomId != null && currentRoomId == roomId) {
+      if (currentRoomId != null && (currentRoomId == roomId || currentRoomId.endsWith(roomId))) {
         debugPrint('SignalR: 🔕 Skip notification (user in room) room=$roomId');
         return;
       }
@@ -464,7 +479,7 @@ class SignalRService {
 
       // Skip jika user sedang membuka room ini
       final currentRoomId = PushNotificationService.currentRoomId;
-      if (currentRoomId != null && currentRoomId == roomId) {
+      if (currentRoomId != null && (currentRoomId == roomId || currentRoomId.endsWith(roomId))) {
         debugPrint('SignalR: 🔕 Skip SubSpv notification (user in room) room=$roomId');
         return;
       }
@@ -614,8 +629,7 @@ class SignalRService {
     }
   }
 
-  /// Invoke KirimPesan (Send Message via SignalR)
-  Future<bool> invokeKirimPesan({
+  Future<String?> invokeKirimPesan({
     required dynamic idLink,
     required dynamic idAccount,
     required dynamic idRoom,
@@ -626,28 +640,52 @@ class SignalRService {
     String? replyId,
   }) async {
     try {
+      final now = DateTime.now().toUtc();
+      final timeString = "${now.toIso8601String().substring(0, 19)}.${now.millisecond.toString().padLeft(3, '0')}Z";
+      
+      // MENGAMBIL AGENT ID ASLI DARI JWT TOKEN (Menghindari penolakan dari worker Telegram)
+      int realAgentId = 1905; // Fallback default
+      try {
+        final token = ApiClient().token;
+        if (token != null && token.contains('.')) {
+          final payload = token.split('.')[1];
+          final normalized = base64Url.normalize(payload);
+          final decoded = utf8.decode(base64Url.decode(normalized));
+          final payloadMap = jsonDecode(decoded);
+          
+          final nameIdentifier = payloadMap['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']
+                              ?? payloadMap['nameid']
+                              ?? payloadMap['sub'];
+          if (nameIdentifier != null) {
+            realAgentId = int.tryParse(nameIdentifier.toString()) ?? 1905;
+          }
+        }
+      } catch (e) {
+        debugPrint('SignalR: Gagal membaca JWT untuk AgentId: $e');
+      }
+
       final payload = {
         "Room": {
-          "IdLink": idLink is int ? idLink : (int.tryParse(idLink?.toString() ?? '') ?? idLink),
-          "IdGroup": idGroup is int ? idGroup : (int.tryParse(idGroup?.toString() ?? '') ?? idGroup),
-          "IdAccount": idAccount is int ? idAccount : (int.tryParse(idAccount?.toString() ?? '') ?? idAccount),
-          "IdRoom": idRoom is int ? idRoom : (int.tryParse(idRoom?.toString() ?? '') ?? idRoom)
+          "IdLink": idLink != null ? int.tryParse(idLink.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idLink : null,
+          "IdGroup": idGroup != null ? int.tryParse(idGroup.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idGroup : null,
+          "IdAccount": idAccount != null ? int.tryParse(idAccount.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idAccount : null,
+          "IdRoom": idRoom != null ? int.tryParse(idRoom.toString().split('_').last.replaceAll(RegExp(r'[^0-9]'), '')) ?? idRoom : null
         },
         "Msg": {
           "Type": type,
-          "Msg": msg,
+          "Msg": (msg == null || msg.isEmpty) ? null : msg,
           "File": fileJson,
           "Files": null,
           "ReplyId": replyId != null ? (int.tryParse(replyId) ?? replyId) : null,
-          "Id": DateTime.now().millisecondsSinceEpoch.toString(),
-          "RoomId": idRoom is int ? idRoom : (int.tryParse(idRoom?.toString() ?? '') ?? idRoom),
-          "From": idAccount is int ? idAccount : (int.tryParse(idAccount?.toString() ?? '') ?? idAccount),
-          "To": idLink is int ? idLink : (int.tryParse(idLink?.toString() ?? '') ?? idLink),
-          "AgentId": 1905, // Default/Placeholder, or extract from user profile if available
-          "In": DateTime.now().toUtc().toIso8601String(),
-          "Up": DateTime.now().toUtc().toIso8601String(),
-          "InBy": 1905,
-          "UpBy": 1905,
+          "Id": "${now.millisecondsSinceEpoch}62",
+          "RoomId": idRoom != null ? int.tryParse(idRoom.toString().split('_').last.replaceAll(RegExp(r'[^0-9]'), '')) ?? idRoom : null,
+          "From": idAccount != null ? int.tryParse(idAccount.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idAccount : null,
+          "To": idLink != null ? int.tryParse(idLink.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idLink : null,
+          "AgentId": realAgentId,
+          "In": timeString,
+          "Up": timeString,
+          "InBy": realAgentId,
+          "UpBy": realAgentId,
           "Ack": 1
         }
       };
@@ -655,15 +693,24 @@ class SignalRService {
       // Payload must be sent as a single JSON string argument according to the network log
       final jsonPayload = jsonEncode(payload);
       
+      debugPrint('SignalR: ✉️ Invoking JoinConversation for Room $idRoom');
+      try {
+        await invoke('JoinConversation', args: [idRoom.toString(), ""]);
+        // Beri jeda sedikit agar server sempat memproses Join
+        await Future.delayed(const Duration(milliseconds: 200));
+      } catch (e) {
+        debugPrint('SignalR: ⚠️ JoinConversation failed, but continuing: $e');
+      }
+
       debugPrint('SignalR: ✉️ Invoking KirimPesan: $jsonPayload');
       await invoke(
         'KirimPesan',
         args: [jsonPayload],
       );
-      return true;
+      return null; // Return null on success
     } catch (e) {
       debugPrint('SignalR: ❌ Failed to send KirimPesan: $e');
-      return false;
+      return e.toString();
     }
   }
 

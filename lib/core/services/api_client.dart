@@ -188,6 +188,8 @@ class ApiClient {
     _token = token;
   }
 
+  String? get token => _token;
+
   Dio get dio => _dio;
 
   // GET Request

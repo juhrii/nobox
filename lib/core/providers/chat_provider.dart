@@ -1296,7 +1296,7 @@ Future<void> fetchMoreChats() async {
 
   /// Sends a message via SignalR 'KirimPesan' instead of the REST API.
   /// Used specifically for real-time channels like Telegram.
-  Future<bool> sendMessageViaSignalR({
+  Future<String?> sendMessageViaSignalR({
     required ChatModel chat,
     required String type, // "1" for text, "3" for media
     String? msg,
@@ -1305,8 +1305,10 @@ Future<void> fetchMoreChats() async {
   }) async {
     String resolvedAccountId = chat.accountId;
 
-    // SMART FALLBACK: Jika ini Telegram, gunakan AccountId Telegram yang masih aktif di memori
-    // karena chat.accountId mungkin merujuk pada bot lama yang sudah terputus.
+    // --- TELEGRAM SMART FALLBACK ---
+    // Chatrooms/List API sering mengembalikan AccId yang sudah kedaluwarsa untuk Telegram.
+    // Web Dashboard secara otomatis menggunakan bot Telegram yang aktif.
+    // Oleh karena itu, kita harus menimpa (override) resolvedAccountId dengan bot Telegram aktif dari _cachedAccounts.
     if (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) {
       if (_cachedAccounts != null) {
         try {
@@ -1315,16 +1317,17 @@ Future<void> fetchMoreChats() async {
           );
           if (activeTelegramAcc['Id'] != null) {
             resolvedAccountId = activeTelegramAcc['Id'].toString();
-            debugPrint('ChatProvider: 🔄 Mengganti IdAccount Lama (${chat.accountId}) -> Baru ($resolvedAccountId)');
+            debugPrint('Telegram Smart Fallback: Overriding AccId ${chat.accountId} -> $resolvedAccountId');
           }
         } catch (e) {
-          debugPrint('ChatProvider: Active Telegram account not found in cache.');
+          debugPrint('Telegram Smart Fallback Failed: $e');
         }
       }
     }
+    // --------------------------------
 
-    final success = await SignalRService().invokeKirimPesan(
-      idLink: chat.link.isNotEmpty ? chat.link : chat.contactId, // link or contactId
+    final error = await SignalRService().invokeKirimPesan(
+      idLink: chat.contactId, // Harus contactId (CtId) karena backend menuntut INTEGER!
       idAccount: resolvedAccountId,
       idRoom: chat.id,
       idGroup: null, // As per payload screenshot
@@ -1333,7 +1336,7 @@ Future<void> fetchMoreChats() async {
       fileJson: fileJson,
       replyId: replyId,
     );
-    return success;
+    return error;
   }
 
 

@@ -267,13 +267,15 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                           child: Builder(
                             builder: (context) {
                               final isNoBubble = widget.message.messageType == MessageType.sticker;
+                              final isMedia = widget.message.messageType == MessageType.image || widget.message.messageType == MessageType.video || _hasVideoUrl(widget.message);
                               return Container(
                                 padding: isNoBubble
                                     ? EdgeInsets.zero
-                                    : (widget.message.repliedMessage != null
-                                        ? const EdgeInsets.only(top: 4, bottom: 6) // Padding horizontal hilang saat ada reply
-                                        : const EdgeInsets.symmetric(
-                                            horizontal: 10, vertical: 6)),
+                                    : (isMedia 
+                                        ? const EdgeInsets.all(4) 
+                                        : (widget.message.repliedMessage != null
+                                            ? const EdgeInsets.only(top: 4, bottom: 6) 
+                                            : const EdgeInsets.symmetric(horizontal: 10, vertical: 6))),
                                 decoration: isNoBubble
                                     ? null
                                     : BoxDecoration(
@@ -891,37 +893,40 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                   maxWidth: maxW,
                   maxHeight: maxH,
                 ),
-                child: CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => SizedBox(
-                    width: maxW * 0.6,
-                    height: maxH * 0.6,
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                child: SizedBox(
+                  width: maxW,
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => SizedBox(
+                      width: maxW * 0.6,
+                      height: maxH * 0.6,
+                      child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     ),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    width: 200,
-                    height: 200,
-                    color: isMe
-                        ? Colors.white.withOpacity(0.2)
-                        : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.broken_image,
-                            size: 48,
-                            color: isMe ? Colors.white70 : Colors.grey),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Failed to load image',
-                          style: TextStyle(
-                              color: isMe ? Colors.white70 : Colors.grey,
-                              fontSize: 12),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                    errorWidget: (context, url, error) => Container(
+                      width: 200,
+                      height: 200,
+                      color: isMe
+                          ? Colors.white.withOpacity(0.2)
+                          : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.broken_image,
+                              size: 48,
+                              color: isMe ? Colors.white70 : Colors.grey),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Failed to load image',
+                            style: TextStyle(
+                                color: isMe ? Colors.white70 : Colors.grey,
+                                fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -930,8 +935,9 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
           ),
         ),
         if (hasCaption) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             constraints: BoxConstraints(
               maxWidth: maxW,
             ),
@@ -1092,8 +1098,9 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
         ),
 
         if (hasCaption) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             constraints: BoxConstraints(
               maxWidth: maxWidth,
             ),

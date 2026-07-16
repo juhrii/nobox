@@ -165,7 +165,7 @@ class Conversation {
       channelType: getValue(['ChNm', 'ChannelName', 'chnm'])?.toString() ?? '',
       isPinned: json['IsPin'] == 2 || json['is_pinned'] == true,
       chId: getValue(['ChId', 'ch_id'])?.toString() ?? '',
-      accountId: getValue(['AccId', 'acc_id', 'AccountId', 'accountId'])?.toString() ?? '',
+      accountId: getValue(['IdAccount', 'idAccount', 'AccId', 'acc_id', 'AccountId', 'accountId'])?.toString() ?? '',
       funnel: rawFnName,
       tagsIds: rawTagsIds,
       funnelId: rawFnId,

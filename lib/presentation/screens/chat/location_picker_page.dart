@@ -39,7 +39,12 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (mounted) setState(() => _isLoadingCurrentLocation = false);
+        if (mounted) {
+          setState(() => _isLoadingCurrentLocation = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tolong aktifkan GPS (Location) di HP Anda.')),
+          );
+        }
         return;
       }
 
@@ -47,20 +52,30 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          if (mounted) setState(() => _isLoadingCurrentLocation = false);
+          if (mounted) {
+            setState(() => _isLoadingCurrentLocation = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Izin lokasi ditolak.')),
+            );
+          }
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        if (mounted) setState(() => _isLoadingCurrentLocation = false);
+        if (mounted) {
+          setState(() => _isLoadingCurrentLocation = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Izin lokasi diblokir permanen. Silakan ubah di Pengaturan HP.')),
+          );
+        }
         return;
       }
 
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
+          accuracy: LocationAccuracy.best,
+          timeLimit: Duration(seconds: 15),
         ),
       );
 
@@ -74,7 +89,12 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       }
     } catch (e) {
       debugPrint('Error getting current location: $e');
-      if (mounted) setState(() => _isLoadingCurrentLocation = false);
+      if (mounted) {
+        setState(() => _isLoadingCurrentLocation = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sinyal GPS lemah atau timeout. Coba di luar ruangan.')),
+        );
+      }
     }
   }
 
@@ -131,7 +151,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           // Center pin (fixed in center of map)
           Center(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 36),
+              padding: const EdgeInsets.only(bottom: 44),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 transform: Matrix4.translationValues(

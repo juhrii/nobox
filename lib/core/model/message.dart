@@ -417,7 +417,7 @@ class Message {
         // Server NoBox kadang mengembalikan Type=5 untuk voice notes
         msgType = MessageType.voice;
         audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-        content = '🎵 Voice Note';
+        content = '';
       } else if (typeVal == '5' || _isDocumentFlag(firstFile)) {
         // Jika dari API diset sebagai Dokumen (5) atau ada flag IsDocument: true
         msgType = MessageType.document;
@@ -435,10 +435,10 @@ class Message {
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '2') {
         // Fallback berdasarkan API Type saat ekstensi tidak dikenali
-        if (filePath.isNotEmpty || content.isEmpty || content.startsWith('{') || content.startsWith('[')) {
+        if (filePath.isNotEmpty || content.isEmpty || content.startsWith('{') || content.startsWith('[') || content.contains('Voice Note') || content.contains('🎵')) {
           msgType = MessageType.voice;
-          audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-          content = '🎵 Voice Note';
+          audioPath = filePath.startsWith('http') || filePath.isEmpty ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '';
         } else {
           msgType = MessageType.text; // Ignore buggy Type=2 if it's clearly a text message
         }
@@ -484,6 +484,7 @@ class Message {
         if (filePath.isNotEmpty || content.isEmpty || content.startsWith('{') || content.startsWith('[') || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File'])) {
           msgType = MessageType.voice;
           audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '';
         } else {
           msgType = MessageType.text;
         }
@@ -536,7 +537,11 @@ class Message {
           content = '📄 $docName';
         }
       }
-    } else if (typeVal == '16' || typeVal == '2' || typeVal == '3') {
+    } else if (typeVal == '2' || content.contains('🎵 Voice Note')) {
+      msgType = MessageType.voice;
+      audioPath = '';
+      content = '';
+    } else if (typeVal == '16' || typeVal == '3') {
       // No Files/File data available
       msgType = MessageType.text;
       if (content.isEmpty || content.startsWith('{') || content.startsWith('[')) {
@@ -609,6 +614,7 @@ class Message {
     String? content,
     bool? isMe,
     String? time,
+    String? rawTime,
     MessageStatus? status,
     Message? repliedMessage,
     bool? isSystemMessage,
@@ -627,6 +633,7 @@ class Message {
       content: content ?? this.content,
       isMe: isMe ?? this.isMe,
       time: time ?? this.time,
+      rawTime: rawTime ?? this.rawTime,
       status: status ?? this.status,
       repliedMessage: repliedMessage ?? this.repliedMessage,
       isSystemMessage: isSystemMessage ?? this.isSystemMessage,
