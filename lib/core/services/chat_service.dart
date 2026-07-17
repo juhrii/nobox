@@ -1640,10 +1640,6 @@ class ChatService {
       
       // PENTING: Telegram (SignalR) WAJIB menggunakan TemporaryUpload agar file masuk ke folder 'temporary/'
       // Sesuai dengan payload Web NoBox, server backend akan gagal mengirim jika menggunakan Base64.
-      // WAJIB: Audio/Voice Note (bodyType 2) untuk WhatsApp HARUS menggunakan Base64 agar ekstensi .ogg 
-      // tidak dihapus oleh TemporaryUpload. Tanpa .ogg, WhatsApp akan mengubahnya menjadi Dokumen.
-      // FIX: Jangan gunakan Base64 untuk Document/forceDocument di WhatsApp, karena backend worker 
-      // akan membaca ekstensi .jpg dari URL Base64 dan mengonversinya menjadi Foto secara paksa!
       final bool useBase64 = (bodyType == 2);
 
       try {
@@ -1736,7 +1732,11 @@ class ChatService {
       // Create attachment data in JSON format as required by Pin point
       final attachmentMap = <String, dynamic>{
         'Filename': serverFileName,
+        'FileName': serverFileName,
         'OriginalName': fileName,
+        'originalName': fileName,
+        'Name': fileName,
+        'Title': fileName,
         'IsImage': forceDocument ? false : (bodyType == 3),
         'IsDocument': forceDocument ? true : (bodyType == 5),
         'IsVideo': forceDocument ? false : (bodyType == 4),
@@ -1754,21 +1754,11 @@ class ChatService {
     }
     safeAccountId = safeAccountId.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '').trim();
 
-    final int chId = int.tryParse(channelId ?? '1') ?? 1;
-    final extId = await _getExtId(contactId, channelId: chId);
-    final payload = <String, dynamic>{
-      "Body": "", 
-      "BodyType": bodyType,
-      "ChannelId": chId,
-      "AccountIds": safeAccountId,
-      "Attachment": attachmentData,
-    };
-
     // MENGGUNAKAN SIGNALR KIRIM PESAN UNTUK SEMUA CHANNEL (WA & TELEGRAM)
     // Ini menyelesaikan masalah di mana Inbox/Send gagal mencatat riwayat ke database nobox.ai
     
     String finalFilename = serverFileName ?? '';
-    // Telegram and WA backend via SignalR expects 'temporary/' prefix
+    // SignalR backend expects 'temporary/' prefix
     if (!finalFilename.startsWith('temporary/') && !useBase64) {
       finalFilename = 'temporary/$finalFilename';
     }
@@ -1784,7 +1774,7 @@ class ChatService {
     };
     
     final idLinkValue = (link != null && link.isNotEmpty) ? link : contactId;
-    debugPrint('ChatService: SignalR Media (All Channels) → idLink=$idLinkValue, idRoom=$conversationId, idAccount=$safeAccountId, type=${bodyType.toString()}, File=$fileJsonObj');
+    debugPrint('ChatService: SignalR Media (All Channels) → idLink=$idLinkValue, idRoom=$conversationId, type=${bodyType.toString()}, File=$fileJsonObj');
 
     // FIX: Pesan Media untuk channel lain tetap lewat SignalR tanpa Teks Caption
     final signalRMsg = '';
@@ -1794,8 +1784,8 @@ class ChatService {
       idAccount: safeAccountId,
       idRoom: conversationId,
       idGroup: groupId,
-      type: bodyType.toString(), // 3=Image, 4=Video, 5=Document, 2=Voice
-      msg: signalRMsg, 
+      type: bodyType.toString(),
+      msg: '', 
       fileJson: jsonEncode(fileJsonObj),
     );
     
@@ -1817,7 +1807,7 @@ class ChatService {
 
   /// Upload an image file without sending it as a message
   Future<ApiResponse<String>> uploadImage(File file) async {
-    try {
+    try { 
       final bytes = await file.readAsBytes();
       final base64String = base64Encode(bytes);
       final fileName = file.path.split(Platform.pathSeparator).last;
