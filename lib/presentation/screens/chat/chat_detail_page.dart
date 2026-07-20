@@ -3518,6 +3518,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                             if (resp.isError) {
                               hasError = true;
                             } else {
+                              if (mounted) {
+                                Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, _messages[idx].rawTime);
+                              }
                               setState(() {
                                 _messages.removeAt(idx);
                               });
@@ -3559,7 +3562,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           chat.id,
                           newLastContent,
                           updateTimeAndPosition: false,
-                          overrideTime: lastMsg.time,
+                          overrideTime: lastMsg.rawTime.isNotEmpty ? lastMsg.rawTime : null,
                         );
                       } else {
                         Provider.of<ChatProvider>(

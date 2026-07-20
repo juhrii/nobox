@@ -146,6 +146,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       final senderName = sender?['Name']?.toString() ?? 'Pesan Baru';
 
       debugPrint('Main: TerimaPesan | room=$roomId | sender=$senderName | msg=$msgText');
+      
+      // FIX: Panggil sinkronisasi fallback jika backend lupa mengirim TerimaSubSpv (Sering terjadi pada Grup)
+      try {
+        final chatProvider = context.read<ChatProvider>();
+        chatProvider.handleTerimaPesanSync(roomId);
+      } catch (e) {
+        debugPrint('Main: Could not sync from TerimaPesan: $e');
+      }
     });
 
     // ── TerimaSubSpv: room data update → update chat list directly ──

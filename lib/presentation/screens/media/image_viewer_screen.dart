@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 
 // =====================================================================
 // FITUR: Penampil Gambar Tunggal
@@ -7,7 +8,7 @@ import 'package:flutter/material.dart';
 // FUNGSI: Menampilkan satu gambar secara layar penuh (fullscreen) dengan dukungan zoom dan caption.
 // =====================================================================
 class ImageViewerScreen extends StatelessWidget {
-  final String imageUrl;
+  final String? imageUrl;
   final String? caption;
 
   const ImageViewerScreen({Key? key, required this.imageUrl, this.caption}) : super(key: key);
@@ -27,14 +28,25 @@ class ImageViewerScreen extends StatelessWidget {
           children: [
             Expanded(
               child: InteractiveViewer(
-                child: Image.network(
-                  imageUrl,
-                  errorBuilder: (context, error, stackTrace) => const Icon(
-                    Icons.broken_image,
-                    color: Colors.white,
-                    size: 100,
-                  ),
-                ),
+                child: (imageUrl != null && imageUrl!.startsWith('http'))
+                    ? Image.network(
+                        imageUrl!,
+                        errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.broken_image,
+                          color: Colors.white,
+                          size: 100,
+                        ),
+                      )
+                    : (imageUrl != null && imageUrl!.isNotEmpty) 
+                        ? Image.file(
+                            File(imageUrl!),
+                            errorBuilder: (context, error, stackTrace) => const Icon(
+                              Icons.broken_image,
+                              color: Colors.white,
+                              size: 100,
+                            ),
+                          )
+                        : const Icon(Icons.broken_image, color: Colors.white, size: 100),
               ),
             ),
             if (caption != null && caption!.isNotEmpty)

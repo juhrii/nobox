@@ -1790,10 +1790,10 @@ class ChatService {
     );
     
     if (signalRError == null) {
-      final fullUrl = (serverFileName != null && !serverFileName.startsWith('http'))
-          ? '${AppConfig.uploadUrl}$serverFileName'
-          : serverFileName;
-      return ApiResponse.success(fullUrl ?? filePath, 200);
+      final fullUrl = (finalFilename.isNotEmpty && !finalFilename.startsWith('http'))
+          ? '${AppConfig.uploadUrl}$finalFilename'
+          : finalFilename;
+      return ApiResponse.success(fullUrl.isNotEmpty ? fullUrl : filePath, 200);
     } else {
       return ApiResponse.failure('SignalR Error: $signalRError', 500);
     }

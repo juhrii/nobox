@@ -834,7 +834,37 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     final maxW = MediaQuery.of(context).size.width * 0.65; // 65% lebar layar
     final maxH = 280.0; // tinggi maksimal 280px
 
-    if (imageUrl == null || imageUrl.isEmpty) {
+    Widget _buildErrorImage(bool isMe, bool isDarkMode) {
+      return Container(
+        width: 200,
+        height: 200,
+        color: isMe
+            ? Colors.white.withOpacity(0.2)
+            : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.broken_image,
+                size: 48,
+                color: isMe ? Colors.white70 : Colors.grey),
+            const SizedBox(height: 8),
+            Text(
+              'Failed to load image',
+              style: TextStyle(
+                  color: isMe ? Colors.white70 : Colors.grey,
+                  fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final hasLocalPath = widget.message.imagePath != null && 
+                         widget.message.imagePath!.isNotEmpty && 
+                         File(widget.message.imagePath!).existsSync();
+
+    if ((imageUrl == null || imageUrl.isEmpty) && !hasLocalPath) {
       return Column(
         crossAxisAlignment:
             isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -880,14 +910,16 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => ImageViewerScreen(
-                    imageUrl: imageUrl,
+                    imageUrl: (imageUrl != null && imageUrl.isNotEmpty) 
+                                ? imageUrl 
+                                : widget.message.imagePath,
                     caption: hasCaption ? caption : null,
                   ),
                 ),
               );
             },
             child: Hero(
-              tag: imageUrl,
+              tag: imageUrl ?? widget.message.imagePath ?? 'image_${widget.message.id}',
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxWidth: maxW,
@@ -895,39 +927,33 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                 ),
                 child: SizedBox(
                   width: maxW,
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => SizedBox(
-                      width: maxW * 0.6,
-                      height: maxH * 0.6,
-                      child: const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      width: 200,
-                      height: 200,
-                      color: isMe
-                          ? Colors.white.withOpacity(0.2)
-                          : (isDarkMode ? Colors.grey[800] : Colors.grey.shade200),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.broken_image,
-                              size: 48,
-                              color: isMe ? Colors.white70 : Colors.grey),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Failed to load image',
-                            style: TextStyle(
-                                color: isMe ? Colors.white70 : Colors.grey,
-                                fontSize: 12),
-                            textAlign: TextAlign.center,
+                  child: Builder(
+                    builder: (context) {
+                      final hasLocalPath = widget.message.imagePath != null && 
+                                           widget.message.imagePath!.isNotEmpty && 
+                                           File(widget.message.imagePath!).existsSync();
+                      
+                      if (hasLocalPath) {
+                        return Image.file(
+                          File(widget.message.imagePath!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => _buildErrorImage(isMe, isDarkMode),
+                        );
+                      }
+                      
+                      return CachedNetworkImage(
+                        imageUrl: imageUrl ?? '',
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => SizedBox(
+                          width: maxW * 0.6,
+                          height: maxH * 0.6,
+                          child: const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                        errorWidget: (context, url, error) => _buildErrorImage(isMe, isDarkMode),
+                      );
+                    }
                   ),
                 ),
               ),
@@ -964,10 +990,13 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
   Widget _buildVideoMessage(BuildContext context, bool isMe, bool isDarkMode) {
     // Read from both imageUrl (locally sent) and videoUrl (server received)
     final videoUrl = widget.message.imageUrl ?? widget.message.videoUrl ?? '';
+    final isSticker = videoUrl.toLowerCase().endsWith('.webm') || videoUrl.toLowerCase().endsWith('.tgs') || widget.message.content.contains('Animated Sticker');
+    
     final caption = widget.message.content
         .replaceAll('📹 Video', '')
         .replaceAll('🎥 Video', '')
         .replaceAll('🎬 Video', '')
+        .replaceAll('🌟 Sticker', '')
         .trim();
     final hasCaption = caption.isNotEmpty;
     final maxWidth = MediaQuery.of(context).size.width * 0.7;
@@ -1074,14 +1103,14 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                         color: Colors.black.withOpacity(0.7),
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.videocam, color: Colors.white, size: 14),
-                          SizedBox(width: 4),
+                          Icon(isSticker ? Icons.animation : Icons.videocam, color: Colors.white, size: 14),
+                          const SizedBox(width: 4),
                           Text(
-                            'Video',
-                            style: TextStyle(
+                            isSticker ? 'Sticker' : 'Video',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w500,

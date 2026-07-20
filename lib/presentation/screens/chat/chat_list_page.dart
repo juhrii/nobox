@@ -1412,7 +1412,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     final exactPhotoLabels = ['photo', '📷 photo', 'image', 'foto', '📷 foto'];
     final exactVideoLabels = ['video', '🎥 video', '🎬 video'];
 
-    if (exactAudioLabels.contains(lowerTrimmed)) {
+    if (lowerTrimmed.contains('sticker')) {
+      displayMessage = '🌟 Sticker';
+      parsedAsMedia = true;
+    } else if (exactAudioLabels.contains(lowerTrimmed)) {
       displayMessage = '🎤 Pesan Suara';
       parsedAsMedia = true;
     } else if (exactPhotoLabels.contains(lowerTrimmed)) {
@@ -1477,8 +1480,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
           final isImage = typeVal == '3' || 
                          (!isDocument && ['.jpg', '.jpeg', '.png', '.gif', '.webp'].any((ext) => filename.contains(ext) || originalName.contains(ext)));
                          
-          final isVideo = typeVal == '4' || 
-                         (!isDocument && ['.mp4', '.avi', '.mov', '.3gp'].any((ext) => filename.contains(ext) || originalName.contains(ext)));
+          final isAnimatedSticker = typeVal == '16' || (!isDocument && ['.webm', '.tgs'].any((ext) => filename.contains(ext) || originalName.contains(ext)));
+          
+          final isVideo = (typeVal == '4' && !isAnimatedSticker) || 
+                         (!isDocument && !isAnimatedSticker && ['.mp4', '.avi', '.mov', '.3gp', '.mkv'].any((ext) => filename.contains(ext) || originalName.contains(ext)));
                          
           final isLocation = typeVal == '15' || typeVal == '11' || trimmedMsg.toLowerCase().contains('"lat":');
           final isContact = typeVal == '14' || typeVal == '10';
@@ -1497,6 +1502,9 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             parsedAsMedia = true;
           } else if (isImage) {
             displayMessage = '📷 Foto${caption.isNotEmpty ? ' $caption' : ''}';
+            parsedAsMedia = true;
+          } else if (isAnimatedSticker) {
+            displayMessage = '🌟 Sticker';
             parsedAsMedia = true;
           } else if (isVideo) {
             displayMessage = '🎥 Video${caption.isNotEmpty ? ' $caption' : ''}';
@@ -1562,7 +1570,11 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
         displayMessage = '📷 Foto${cleaned.isNotEmpty ? ' $cleaned' : ''}';
       } else if (overrideType.contains('video') || overrideType == '4') {
         final cleaned = displayMessage.replaceAll('🎥', '').replaceAll('📹', '').replaceAll('Video', '').trim();
-        displayMessage = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+        if (displayMessage.toLowerCase().contains('.webm') || displayMessage.toLowerCase().contains('.tgs') || displayMessage.toLowerCase().contains('sticker')) {
+          displayMessage = '🌟 Sticker';
+        } else {
+          displayMessage = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+        }
       } else if (overrideType.contains('document') || overrideType.contains('file') || overrideType == '5') {
         if (displayMessage.contains('📎') || displayMessage.contains('📁') || displayMessage.contains('📄')) {
           // sudah ada emoji
@@ -1646,8 +1658,13 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
         displayMessage = '📷 Foto';
         parsedAsMedia = true;
       }
+      // Deteksi stiker animasi (.webm, .tgs)
+      else if (['.webm', '.tgs'].any((ext) => lower.endsWith(ext))) {
+        displayMessage = '🌟 Animated Sticker';
+        parsedAsMedia = true;
+      }
       // Deteksi ekstensi video
-      else if (['.mp4', '.avi', '.mov', '.3gp', '.mkv', '.webm'].any((ext) => lower.endsWith(ext)) || 
+      else if (['.mp4', '.avi', '.mov', '.3gp', '.mkv'].any((ext) => lower.endsWith(ext)) || 
                lower.startsWith('vid-') || lower.startsWith('vid_')) {
         displayMessage = '🎥 Video';
         parsedAsMedia = true;

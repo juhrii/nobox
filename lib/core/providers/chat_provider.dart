@@ -68,6 +68,17 @@ class ChatProvider with ChangeNotifier {
   Map<String, String> _savedContactNames = {};
   // Map: roomId → data lokasi kontak {Country, State, City, Address, Postal}
   Map<String, Map<String, String>> _savedContactLocations = {};
+  
+  // Map: roomId → list of ignored server times (used to ignore stale data after deleting a message)
+  Map<String, List<String>> _ignoredServerTimes = {};
+
+  void ignoreServerTime(String roomId, String time) {
+    if (time.isEmpty) return;
+    if (!_ignoredServerTimes.containsKey(roomId)) {
+      _ignoredServerTimes[roomId] = [];
+    }
+    _ignoredServerTimes[roomId]!.add(time);
+  }
 
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
@@ -387,7 +398,9 @@ Future<void> fetchChats() async {
             final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => override.lastMessage.toLowerCase().contains(lbl));
             final tolerance = isOverrideMedia ? -60 : -2;
 
-            if (diff >= tolerance) {
+            final isIgnored = _ignoredServerTimes[chat.id]?.contains(chat.time) ?? false;
+
+            if (diff >= tolerance || isIgnored) {
                chat = chat.copyWith(
                  lastMessage: override.lastMessage,
                  time: override.time,
@@ -529,7 +542,8 @@ Future<void> fetchChats() async {
         final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
         
         // Hanya terima data server jika waktu pesannya BENAR-BENAR lebih baru dari pesan lokal
-        final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime));
+        final isIgnored = _ignoredServerTimes[roomId]?.contains(serverTimeStr) ?? false;
+        final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored);
         
         if (serverIsNewer) {
           // Ada pesan baru yang sungguhan! Hapus override dan terima data server.
@@ -626,6 +640,17 @@ Future<void> fetchChats() async {
     } else {
       // Room not in current list — trigger a full refresh to pick it up
       debugPrint('ChatProvider: Room $roomId not in list, triggering refreshFirstPage');
+      refreshFirstPage();
+    }
+  }
+
+  // FIX: Backend kadang tidak mengirim TerimaSubSpv untuk Group Chat.
+  // Jadi ketika TerimaPesan datang, kita periksa apakah room-nya ada. Jika tidak, paksa refresh!
+  void handleTerimaPesanSync(String roomId) {
+    if (roomId.isEmpty) return;
+    final index = _chats.indexWhere((c) => c.id == roomId);
+    if (index == -1) {
+      debugPrint('ChatProvider: 🚨 Room $roomId missing on TerimaPesan! Triggering fallback refresh.');
       refreshFirstPage();
     }
   }
@@ -748,7 +773,8 @@ Future<void> fetchChats() async {
               final serverTimeStr = chat.time;
               final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
               
-              final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime));
+              final isIgnored = _ignoredServerTimes[chat.id]?.contains(serverTimeStr) ?? false;
+              final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored);
               
               if (serverIsNewer) {
                 // Ada pesan baru sungguhan, hapus override dan terima data server
@@ -824,7 +850,6 @@ Future<void> fetchChats() async {
 
         // Tambahkan kontak baru yang belum ada
         final newChats = freshData
-
             .where((c) => !existingIds.contains(c.toChatModel().id))
             .map((c) {
               var chat = c.toChatModel();
@@ -839,6 +864,39 @@ Future<void> fetchChats() async {
 
               // Apply locally cached mapping for tags and funnel
               chat = _applyTagAndFunnelMapping(chat, c);
+              
+              // Terapkan nama dari persistent storage (prioritas tertinggi)
+              final persistedName = _savedContactNames[chat.id];
+              if (persistedName != null && persistedName.isNotEmpty) {
+                chat = chat.copyWith(sender: persistedName);
+              }
+
+              // FIX: Terapkan local overrides saat app baru load (Hot Restart)
+              if (_localOverrides.containsKey(chat.id)) {
+                final localChat = _localOverrides[chat.id]!;
+                final localTimeStr = localChat.time;
+                final localTime = DateTime.tryParse(localTimeStr.endsWith('Z') ? localTimeStr : '${localTimeStr}Z');
+                final serverTimeStr = chat.time;
+                final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
+                
+                final isIgnored = _ignoredServerTimes[chat.id]?.contains(serverTimeStr) ?? false;
+                final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored);
+                
+                if (serverIsNewer) {
+                  // Ada pesan baru sungguhan dari server
+                  _localOverrides.remove(chat.id);
+                  _overrideTimestamps.remove(chat.id);
+                  _saveLocalOverrides();
+                } else {
+                  // Server masih mengembalikan data lama, PERTAHANKAN override lokal
+                  chat = chat.copyWith(
+                    lastMessage: localChat.lastMessage,
+                    lastMessageType: localChat.lastMessageType ?? chat.lastMessageType,
+                    time: localChat.time,
+                    isLastMessageFromMe: localChat.isLastMessageFromMe,
+                  );
+                }
+              }
 
               return chat.copyWith(
                 isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
@@ -1387,7 +1445,7 @@ Future<void> fetchMoreChats() async {
       idLink: chat.contactId, // Harus contactId (CtId) karena backend menuntut INTEGER!
       idAccount: resolvedAccountId,
       idRoom: chat.id,
-      idGroup: null, // As per payload screenshot
+      idGroup: chat.groupId, // Pass groupId if it is a group
       type: type,
       msg: msg,
       fileJson: fileJson,

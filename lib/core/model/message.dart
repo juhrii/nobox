@@ -429,7 +429,11 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        content = '📹 Video';
+        if (filePath.toLowerCase().endsWith('.webm') || originalName.toLowerCase().endsWith('.webm')) {
+          content = '🌟 Sticker';
+        } else {
+          content = '📹 Video';
+        }
       } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -447,7 +451,11 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        content = '📹 Video';
+        if (filePath.toLowerCase().endsWith('.webm') || originalName.toLowerCase().endsWith('.webm')) {
+          content = '🌟 Sticker';
+        } else {
+          content = '📹 Video';
+        }
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -505,7 +513,11 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        content = '📹 Video';
+        if (filePath.toLowerCase().endsWith('.webm') || originalName.toLowerCase().endsWith('.webm')) {
+          content = '🌟 Sticker';
+        } else {
+          content = '📹 Video';
+        }
       } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -514,7 +526,11 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        content = '📹 Video';
+        if (filePath.toLowerCase().endsWith('.webm') || originalName.toLowerCase().endsWith('.webm')) {
+          content = '🌟 Sticker';
+        } else {
+          content = '📹 Video';
+        }
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';

@@ -664,23 +664,31 @@ class SignalRService {
         debugPrint('SignalR: Gagal membaca JWT untuk AgentId: $e');
       }
 
+      // Helper function to safely parse integer or return null (never return empty string)
+      int? parseIntSafe(dynamic val) {
+        if (val == null) return null;
+        final str = val.toString().replaceAll(RegExp(r'[^0-9]'), '');
+        if (str.isEmpty) return null;
+        return int.tryParse(str);
+      }
+
       final payload = {
         "Room": {
-          "IdLink": idLink != null ? int.tryParse(idLink.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idLink : null,
-          "IdGroup": idGroup != null ? int.tryParse(idGroup.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idGroup : null,
-          "IdAccount": idAccount != null ? int.tryParse(idAccount.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idAccount : null,
-          "IdRoom": idRoom != null ? int.tryParse(idRoom.toString().split('_').last.replaceAll(RegExp(r'[^0-9]'), '')) ?? idRoom : null
+          "IdLink": parseIntSafe(idLink),
+          "IdGroup": parseIntSafe(idGroup),
+          "IdAccount": parseIntSafe(idAccount),
+          "IdRoom": parseIntSafe(idRoom?.toString().split('_').last)
         },
         "Msg": {
           "Type": type,
           "Msg": (msg == null || msg.isEmpty) ? null : msg,
           "File": fileJson,
           "Files": null,
-          "ReplyId": replyId != null ? (int.tryParse(replyId) ?? replyId) : null,
+          "ReplyId": parseIntSafe(replyId),
           "Id": "${now.millisecondsSinceEpoch}62",
-          "RoomId": idRoom != null ? int.tryParse(idRoom.toString().split('_').last.replaceAll(RegExp(r'[^0-9]'), '')) ?? idRoom : null,
-          "From": idAccount != null ? int.tryParse(idAccount.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idAccount : null,
-          "To": idLink != null ? int.tryParse(idLink.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? idLink : null,
+          "RoomId": parseIntSafe(idRoom?.toString().split('_').last),
+          "From": parseIntSafe(idAccount),
+          "To": parseIntSafe(idLink),
           "AgentId": realAgentId,
           "In": timeString,
           "Up": timeString,
