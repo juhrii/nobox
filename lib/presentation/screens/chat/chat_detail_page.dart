@@ -143,6 +143,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       debugPrint('RoomId (id): ${chat.id}');
       debugPrint('ContactId: ${chat.contactId}');
       debugPrint('CtRealId: ${chat.ctRealId}');
+      debugPrint('AccountId: ${chat.accountId}');
       debugPrint('Link: ${chat.link}');
       debugPrint('GroupId: ${chat.groupId}');
       debugPrint('ChannelType: ${chat.channelType}');
@@ -610,6 +611,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       debugPrint('chat.ctRealId : ${chat.ctRealId}');
       debugPrint('chat.groupId  : ${chat.groupId}');
       debugPrint('chat.chId     : ${chat.chId}');
+      debugPrint('chat.accountId: ${chat.accountId}');
       debugPrint('isTelegram    : $isTelegram');
       final response = await _chatService.getMessageHistory(
         chat.id,
@@ -638,8 +640,51 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 _debugApiState =
                     'Berhasil mengambil ${response.data!.length} pesan.';
 
+                // Tampilkan isi JSON mentah dari pesan pertama untuk keperluan debug
+                if (response.data!.isNotEmpty) {
+                  try {
+                    // Karena response.data sudah berisi List<Message>, kita tidak bisa print JSON mentah lagi 
+                    // kecuali kita ubah getMessageHistory. Tapi kita bisa print ID yang ter-parse!
+                    final first = response.data!.first;
+                    debugPrint('===== MSG DEBUG =====');
+                    debugPrint('First Msg ID: ${first.id}');
+                    debugPrint('First Msg FromId: ${first.fromId}');
+                    debugPrint('First Msg ToId: ${first.toId}');
+                    debugPrint('First Msg RoomId: ${first.roomId}');
+                    debugPrint('chat.accountId: ${chat.accountId}');
+                    debugPrint('=====================');
+
+                    // 🚨 REPAIR MECHANISM 🚨
+                    // Jika chat.id terdeteksi KOSONG (misal gagal ter-parse dari JSON API), 
+                    // namun payload pesan memiliki RoomId, kita PERBAIKI secara lokal!
+                    if ((chat.id.isEmpty || chat.id == 'null' || chat.id == '0') && first.roomId.isNotEmpty) {
+                      chat = chat.copyWith(id: first.roomId);
+                      context.read<ChatProvider>().updateLocalChat(chat);
+                      debugPrint('ChatDetail: 🛠️ REPAIRED EMPTY CHAT ID using Message.roomId = ${first.roomId}');
+                    }
+                  } catch (e) {}
+                }
+
+                // FILTER: Strict Account Isolation (Anti-Bleeding)
+                // Jika server mengirimkan pesan gabungan (karena RoomId berupa nomor telepon yang 
+                // terdaftar di beberapa channel WA sekaligus), kita paksa buang pesan yang bukan 
+                // milik channel ini.
+                List<Message> filteredList = List<Message>.from(response.data!);
+                if (chat.accountId.isNotEmpty && !isTelegram) {
+                  filteredList = filteredList.where((m) {
+                    final fromStr = m.fromId?.toString() ?? '';
+                    final toStr = m.toId?.toString() ?? '';
+                    // Pesan harus masuk atau keluar melalui ID Akun (Channel) ini
+                    return fromStr == chat.accountId || toStr == chat.accountId;
+                  }).toList();
+                  
+                  if (filteredList.length != response.data!.length) {
+                    debugPrint('ChatDetail: 🛡️ Blocked ${response.data!.length - filteredList.length} leaked messages from other channels!');
+                  }
+                }
+
                 // Lakukan sorting lokal untuk memastikan urutan sesuai waktu
-                final sortedList = List<Message>.from(response.data!);
+                final sortedList = filteredList;
                 sortedList.sort((a, b) {
                   if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
                   try {
@@ -718,15 +763,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               final currentRoomIdExt = chat.id.contains('_')
                   ? chat.id.split('_').last
                   : chat.id;
-              final numericChatId = chat.id.replaceAll(RegExp(r'[^0-9]'), '');
-              final possibleRoomIds = [
-                chat.id,
-                currentRoomIdExt,
-                chat.contactId,
-                chat.groupId,
-                chat.ctRealId,
-                numericChatId,
-              ].where((id) => id.isNotEmpty).toSet();
+              
+              // ONLY add fallback IDs if it's Telegram, otherwise strict RoomId checking for WhatsApp
+              final possibleRoomIds = <String>{chat.id, currentRoomIdExt};
+              if (currentRoomIdExt.isNotEmpty) possibleRoomIds.add(currentRoomIdExt);
+              
+              if (isTelegram) {
+                final numericChatId = chat.id.replaceAll(RegExp(r'[^0-9]'), '');
+                if (chat.contactId.isNotEmpty) possibleRoomIds.add(chat.contactId);
+                if (chat.groupId.isNotEmpty) possibleRoomIds.add(chat.groupId);
+                if (chat.ctRealId.isNotEmpty) possibleRoomIds.add(chat.ctRealId);
+                if (numericChatId.isNotEmpty) possibleRoomIds.add(numericChatId);
+              }
 
               for (final rId in possibleRoomIds) {
                 final recentMsgs = SignalRService().getRecentMessagesForRoom(
@@ -741,6 +789,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     tenantId: _chatService.currentTenantId,
                   );
                   final newMsg = parsedMsg.copyWith(status: MessageStatus.read);
+                  
+                  // FILTER: Strict Account Isolation untuk Injeksi SignalR
+                  if (chat.accountId.isNotEmpty && !isTelegram) {
+                    final fromStr = newMsg.fromId?.toString() ?? '';
+                    final toStr = newMsg.toId?.toString() ?? '';
+                    if (fromStr != chat.accountId && toStr != chat.accountId) {
+                      debugPrint('ChatDetail: 🛡️ Blocked SignalR cache message ${newMsg.id} from another channel!');
+                      continue; // Skip pesan ini karena milik channel lain
+                    }
+                  }
 
                   // Cek apakah sudah ada di _messages
                   final exists = _messages.any(
@@ -857,9 +915,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       if (!mounted) return;
 
       if (!response.isError && response.data != null) {
-        final newMessages = response.data!;
+        // FILTER: Strict Account Isolation (Anti-Bleeding) untuk sinkronisasi latar belakang
+        List<Message> newMessages = List<Message>.from(response.data!);
+        if (chat.accountId.isNotEmpty && !isTelegram) {
+          newMessages = newMessages.where((m) {
+            final fromStr = m.fromId?.toString() ?? '';
+            final toStr = m.toId?.toString() ?? '';
+            return fromStr == chat.accountId || toStr == chat.accountId;
+          }).toList();
+        }
+        
         debugPrint(
-          'AckPolling: Fetched ${newMessages.length} messages. Matching...',
+          'AckPolling: Fetched ${newMessages.length} filtered messages. Matching...',
         );
         setState(() {
           bool hasNewMessages = false;
@@ -1272,6 +1339,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         // SignalR messages from customers should always be read immediately when on this page
         final newMessage = parsedMessage.copyWith(status: MessageStatus.read);
 
+        // FILTER: Strict Account Isolation untuk Real-Time SignalR (Anti-Bleeding)
+        final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
+        if (chat.accountId.isNotEmpty && !isTelegram) {
+          final fromStr = newMessage.fromId?.toString() ?? '';
+          final toStr = newMessage.toId?.toString() ?? '';
+          if (fromStr != chat.accountId && toStr != chat.accountId) {
+            debugPrint('SignalR: 🛡️ Blocked real-time message ${newMessage.id} from another channel!');
+            return; // Batalkan penambahan ke _messages
+          }
+        }
+
         if (mounted) {
           setState(() {
             _messages.add(newMessage);
@@ -1637,11 +1715,27 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     // WHATSAPP & TELEGRAM: Menggunakan SignalR (KirimPesan)
     // Berdasarkan sejarah, SignalR adalah satu-satunya jalur yang 100% masuk ke NoBox AI.
+    
+    // WA FIX: Jika ini adalah WhatsApp dan user membalas (reply), ID pesannya adalah string/UUID.
+    // SignalR backend memaksa ReplyId menjadi Integer. Memaksa konversi UUID ke Integer 
+    // menyebabkan payload rusak/worker WA gagal kirim. 
+    // Oleh karena itu, untuk non-Telegram, kita beri context balasan berupa teks kutipan,
+    // dan JANGAN kirim replyId ke SignalR.
+    String finalContent = content;
+    String? finalReplyId = _repliedMessage?.id;
+    
+    if (!isTelegram && _repliedMessage != null) {
+      finalReplyId = null; // Cegah backend crash
+      // Sisipkan teks balasan ke dalam badan pesan agar teman di WA mengerti konteksnya
+      final quotedContent = _repliedMessage!.content.replaceAll('\n', '\n> ');
+      finalContent = '> $quotedContent\n\n$content';
+    }
+
     final sendError = await chatProvider.sendMessageViaSignalR(
       chat: chat,
       type: "1", // 1 is for Text
-      msg: content,
-      replyId: _repliedMessage?.id,
+      msg: finalContent,
+      replyId: finalReplyId,
     );
 
     isSuccess = (sendError == null);
@@ -1656,6 +1750,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             m.isMe &&
             m.time == newMessage.time,
       );
+    }
+
+    // Perbarui konten pesan di UI lokal agar tampil sesuai yang dikirimkan (dengan kutipan)
+    if (currentIndex != -1 && finalContent != newMessage.content) {
+      _messages[currentIndex] = _messages[currentIndex].copyWith(content: finalContent);
     }
 
     // CACHE DULU WALAU USER SUDAH KELUAR HALAMAN (mounted = false)

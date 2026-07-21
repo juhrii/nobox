@@ -172,6 +172,9 @@ class Message {
   final String? documentName; // nama file asli untuk pesan dokumen
   final String? documentUrl;  // URL remote untuk unduh dokumen
   final int ack; // 1: pending, 2: terkirim, 3: diterima, 4: gagal, 5: dibaca
+  final String? fromId;
+  final String? toId;
+  final String roomId;
 
   Message({
     this.id = '',
@@ -191,6 +194,9 @@ class Message {
     this.documentName,
     this.documentUrl,
     this.ack = 0,
+    this.fromId,
+    this.toId,
+    this.roomId = '',
   });
 
   /// Format ISO timestamp "2026-03-25T05:42:28.107" → "25 Mar, 05:42"
@@ -622,6 +628,9 @@ class Message {
       documentUrl: docUrl,
       ack: parsedAck,
       repliedMessage: parsedRepliedMsg,
+      fromId: json['From']?.toString() ?? json['FromId']?.toString() ?? json['IdAccount']?.toString(),
+      toId: json['To']?.toString() ?? json['ToId']?.toString() ?? json['ChAccId']?.toString(),
+      roomId: json['RoomId']?.toString() ?? '',
     );
   }
 
@@ -643,6 +652,8 @@ class Message {
     String? documentName,
     String? documentUrl,
     int? ack,
+    String? fromId,
+    String? toId,
   }) {
     return Message(
       id: id ?? this.id,
@@ -662,6 +673,8 @@ class Message {
       documentName: documentName ?? this.documentName,
       documentUrl: documentUrl ?? this.documentUrl,
       ack: ack ?? this.ack,
+      fromId: fromId ?? this.fromId,
+      toId: toId ?? this.toId,
     );
   }
 }

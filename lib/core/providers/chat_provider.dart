@@ -78,6 +78,33 @@ class ChatProvider with ChangeNotifier {
       _ignoredServerTimes[roomId] = [];
     }
     _ignoredServerTimes[roomId]!.add(time);
+    if (!time.endsWith('Z')) {
+      _ignoredServerTimes[roomId]!.add('${time}Z');
+    } else {
+      _ignoredServerTimes[roomId]!.add(time.substring(0, time.length - 1));
+    }
+  }
+
+  bool _isTimeIgnored(String roomId, String serverTimeStr) {
+    if (serverTimeStr.isEmpty) return false;
+    final ignoredTimes = _ignoredServerTimes[roomId];
+    if (ignoredTimes == null || ignoredTimes.isEmpty) return false;
+    
+    if (ignoredTimes.contains(serverTimeStr)) return true;
+    
+    final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
+    if (serverTime == null) return false;
+    
+    for (final ignoredStr in ignoredTimes) {
+      final ignoredTime = DateTime.tryParse(ignoredStr.endsWith('Z') ? ignoredStr : '${ignoredStr}Z');
+      if (ignoredTime != null) {
+        // Toleransi perbedaan milidetik (kurang dari 1 detik)
+        if (serverTime.difference(ignoredTime).inMilliseconds.abs() < 1000) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   bool get isLoading => _isLoading;
@@ -334,10 +361,25 @@ Future<void> fetchChats() async {
           // Apply locally cached mapping for tags and funnel
           chat = _applyTagAndFunnelMapping(chat, c);
 
-          // Cek apakah jumlah pesan belum dibaca meningkat dibanding state sebelumnya
           final oldChat = oldChatsMap[chat.id];
-          if ((oldChat != null && chat.unreadCount > oldChat.unreadCount) || 
-              (oldChat == null && chat.unreadCount > 0)) {
+
+          bool isNewMessage = false;
+          if (oldChat != null) {
+            // Jika chat sudah ada sebelumnya, kita cek apakah waktu pesannya berubah (lebih baru)
+            if (chat.time != oldChat.time && chat.unreadCount > 0) {
+              isNewMessage = true;
+            }
+          } else if (chat.unreadCount > 0) {
+            // Jika ini chat baru/hot restart dan memiliki pesan belum dibaca
+            // Kita percaya penuh pada _readIds TAPI dengan catatan sekarang server juga
+            // sudah sinkron (_chatService.markRoomAsRead).
+            // Jadi kalau server masih bilang > 0 DAN belum ada di _readIds, berarti benar-benar baru.
+            if (!_readIds.contains(chat.id)) {
+              isNewMessage = true;
+            }
+          }
+
+          if (isNewMessage) {
             // Pesan baru tiba! Hapus dari daftar terbaca agar badge muncul
             _readIds.remove(chat.id);
             _saveReadState();
@@ -386,28 +428,27 @@ Future<void> fetchChats() async {
           if (override != null) {
             final serverTime = DateTime.tryParse(chat.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
             
-            // Gunakan waktu PEMBUATAN override untuk membandingkan dengan serverTime,
-            // bukan waktu pesan itu sendiri. Ini krusial saat menghapus pesan (waktu pesan mundur).
+            // Gunakan waktu lokal untuk mengukur seberapa lama override ini sudah hidup
             final overrideCreatedAtStr = _overrideTimestamps[chat.id];
             final overrideCreatedAt = overrideCreatedAtStr != null ? DateTime.tryParse(overrideCreatedAtStr) ?? DateTime.now().toUtc() : (DateTime.tryParse(override.time) ?? DateTime.now().toUtc());
             
-            final diff = overrideCreatedAt.difference(serverTime).inSeconds;
+            final diffNow = DateTime.now().toUtc().difference(overrideCreatedAt).inSeconds;
             
-            // Beri toleransi waktu yang lebih besar (60 detik) untuk override media, 
-            // karena upload ke server bisa lambat dan membuat serverTime lebih baru dari overrideCreatedAt.
+            final isIgnored = _isTimeIgnored(chat.id, chat.time);
+
+            // Jika override sudah lebih dari 15 detik (atau 60 detik untuk media), anggap kadaluarsa.
+            // Pengecualian: Jika waktu server (chat.time) masuk daftar ignored, pertahankan terus.
             final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => override.lastMessage.toLowerCase().contains(lbl));
-            final tolerance = isOverrideMedia ? -60 : -2;
+            final maxAge = isOverrideMedia ? 60 : 15;
 
-            final isIgnored = _ignoredServerTimes[chat.id]?.contains(chat.time) ?? false;
-
-            if (diff >= tolerance || isIgnored) {
+            if (isIgnored || diffNow < maxAge) {
                chat = chat.copyWith(
                  lastMessage: override.lastMessage,
                  time: override.time,
                  isLastMessageFromMe: override.isLastMessageFromMe,
                );
             } else {
-               // Server sudah punya pesan yang lebih baru (melewati batas toleransi), hapus override
+               // Override sudah terlalu lama, kita percaya pada data server saat ini
                _localOverrides.remove(chat.id);
                _overrideTimestamps.remove(chat.id);
             }
@@ -532,30 +573,24 @@ Future<void> fetchChats() async {
       final existing = _chats[index];
       String lastMsg = roomData['LastMsg']?.toString() ?? existing.lastMessage;
       
-      // FIX: Lindungi override lokal agar tidak tertimpa oleh data server yang USANG.
-      // Override bertahan SELAMANYA sampai server mengirim pesan yang BENAR-BENAR lebih baru.
+      // FIX: Lindungi dari data usang (pesan yang baru dihapus).
+      // Karena jam HP pengguna bisa tidak sinkron dengan server, jangan gunakan isAfter(localTime).
+      // SignalR adalah event real-time, jadi kita selalu percaya KECUALI jika ID/waktu ada di ignored list.
       if (_localOverrides.containsKey(roomId)) {
-        final localChat = _localOverrides[roomId]!;
-        final localTimeStr = localChat.time; // Waktu pesan lokal
-        final localTime = DateTime.tryParse(localTimeStr.endsWith('Z') ? localTimeStr : '${localTimeStr}Z');
         final serverTimeStr = roomData['TimeMsg']?.toString() ?? '';
-        final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
+        final isIgnored = _isTimeIgnored(roomId, serverTimeStr);
         
-        // Hanya terima data server jika waktu pesannya BENAR-BENAR lebih baru dari pesan lokal
-        final isIgnored = _ignoredServerTimes[roomId]?.contains(serverTimeStr) ?? false;
-        final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored);
-        
-        if (serverIsNewer) {
-          // Ada pesan baru yang sungguhan! Hapus override dan terima data server.
+        if (isIgnored) {
+          // Server meng-echo data yang baru saja kita hapus. Pertahankan state lokal.
+          lastMsg = existing.lastMessage;
+          roomData['LastMessageType'] = existing.lastMessageType;
+          debugPrint('ChatProvider: 🛡️ Override protected for $roomId — incoming SignalR event is ignored (deleted msg)');
+        } else {
+          // Event SignalR baru yang valid! Hapus override lokal.
           _localOverrides.remove(roomId);
           _overrideTimestamps.remove(roomId);
           _saveLocalOverrides();
-          debugPrint('ChatProvider: ✅ Override cleared for $roomId — server has newer message');
-        } else {
-          // Server masih mengembalikan data lama, PERTAHANKAN override lokal
-          lastMsg = existing.lastMessage;
-          roomData['LastMessageType'] = existing.lastMessageType;
-          debugPrint('ChatProvider: 🛡️ Override protected for $roomId — server data is stale');
+          debugPrint('ChatProvider: ✅ Override cleared for $roomId — valid new SignalR event received');
         }
       }
 
@@ -773,7 +808,7 @@ Future<void> fetchChats() async {
               final serverTimeStr = chat.time;
               final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
               
-              final isIgnored = _ignoredServerTimes[chat.id]?.contains(serverTimeStr) ?? false;
+              final isIgnored = _isTimeIgnored(chat.id, serverTimeStr);
               final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored);
               
               if (serverIsNewer) {
@@ -874,20 +909,17 @@ Future<void> fetchChats() async {
               // FIX: Terapkan local overrides saat app baru load (Hot Restart)
               if (_localOverrides.containsKey(chat.id)) {
                 final localChat = _localOverrides[chat.id]!;
-                final localTimeStr = localChat.time;
-                final localTime = DateTime.tryParse(localTimeStr.endsWith('Z') ? localTimeStr : '${localTimeStr}Z');
-                final serverTimeStr = chat.time;
-                final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
                 
-                final isIgnored = _ignoredServerTimes[chat.id]?.contains(serverTimeStr) ?? false;
-                final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored);
+                final overrideCreatedAtStr = _overrideTimestamps[chat.id];
+                final overrideCreatedAt = overrideCreatedAtStr != null ? DateTime.tryParse(overrideCreatedAtStr) ?? DateTime.now().toUtc() : (DateTime.tryParse(localChat.time) ?? DateTime.now().toUtc());
                 
-                if (serverIsNewer) {
-                  // Ada pesan baru sungguhan dari server
-                  _localOverrides.remove(chat.id);
-                  _overrideTimestamps.remove(chat.id);
-                  _saveLocalOverrides();
-                } else {
+                final diffNow = DateTime.now().toUtc().difference(overrideCreatedAt).inSeconds;
+                final isIgnored = _isTimeIgnored(chat.id, chat.time);
+                
+                final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => localChat.lastMessage.toLowerCase().contains(lbl));
+                final maxAge = isOverrideMedia ? 60 : 15;
+                
+                if (isIgnored || diffNow < maxAge) {
                   // Server masih mengembalikan data lama, PERTAHANKAN override lokal
                   chat = chat.copyWith(
                     lastMessage: localChat.lastMessage,
@@ -895,6 +927,11 @@ Future<void> fetchChats() async {
                     time: localChat.time,
                     isLastMessageFromMe: localChat.isLastMessageFromMe,
                   );
+                } else {
+                  // Override kadaluarsa, terima data server
+                  _localOverrides.remove(chat.id);
+                  _overrideTimestamps.remove(chat.id);
+                  _saveLocalOverrides();
                 }
               }
 
@@ -1346,6 +1383,10 @@ Future<void> fetchMoreChats() async {
       _chats[index] = _chats[index].copyWith(unreadCount: 0);
       _saveReadState();
       notifyListeners();
+
+      // Sinkronisasikan secara diam-diam ke server agar server tidak 
+      // terus-menerus membalas dengan UnreadCount > 0 saat hot restart!
+      _chatService.markRoomAsRead(chatId);
     }
   }
 
@@ -1777,7 +1818,7 @@ Future<void> toggleArchive(String chatId) async {
       // Update local state immediately
       final index = _chats.indexWhere((c) => c.id == contactId);
       if (index != -1) {
-        _chats[index] = _chats[index].copyWith(agentName: agentName);
+        _chats[index] = _chats[index].copyWith(agentName: agentName, status: 'Assigned');
         notifyListeners();
       }
       return true;
@@ -1793,7 +1834,7 @@ Future<void> toggleArchive(String chatId) async {
     if (!response.isError) {
       final index = _chats.indexWhere((c) => c.id == contactId);
       if (index != -1) {
-        _chats[index] = _chats[index].copyWith(agentName: "");
+        _chats[index] = _chats[index].copyWith(agentName: "", status: 'Unassigned');
         notifyListeners();
       }
       return true;
@@ -1803,10 +1844,10 @@ Future<void> toggleArchive(String chatId) async {
     debugPrint("Failed to remove agent via API, simulating success locally...");
     final index = _chats.indexWhere((c) => c.id == contactId);
     if (index != -1) {
-      _chats[index] = _chats[index].copyWith(agentName: "");
+      _chats[index] = _chats[index].copyWith(agentName: "", status: 'Unassigned');
       notifyListeners();
     }
-    return true;
+    return false;
   }
 
   // ===========================================================================
@@ -1982,6 +2023,29 @@ Future<void> toggleArchive(String chatId) async {
   }
 
   // ── ID-to-Name Resolvers (untuk Jalur 2 client-side filtering) ─────────────
+
+  /// Memperbaiki ID dan status chat dummy dengan ID asli dari server
+  void repairChatState(String oldId, String newRoomId, {String? newStatus}) {
+    final index = _chats.indexWhere((c) => c.id == oldId);
+    if (index != -1) {
+      if (newStatus != null) {
+        _chats[index] = _chats[index].copyWith(id: newRoomId, status: newStatus);
+      } else {
+        _chats[index] = _chats[index].copyWith(id: newRoomId);
+      }
+      notifyListeners();
+      debugPrint('ChatProvider: 🛠️ Repaired dummy chat state (ID: $oldId -> $newRoomId, Status: $newStatus)');
+    }
+  }
+
+  /// Memperbarui State Chat di memori agar sinkron dengan yang ada di DetailPage
+  void updateLocalChat(ChatModel updatedChat) {
+    final index = _chats.indexWhere((c) => c.id == updatedChat.id || (c.id.isEmpty && c.contactId == updatedChat.contactId));
+    if (index != -1) {
+      _chats[index] = updatedChat;
+      notifyListeners();
+    }
+  }
 
   /// Resolves Funnel ID → display name menggunakan [_cachedFunnels].
   /// Returns null jika tidak ditemukan (caller harus fallback ke raw value).

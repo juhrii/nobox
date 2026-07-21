@@ -105,7 +105,7 @@ class _QuickReplyOverlayState extends State<QuickReplyOverlay> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.black.shade300,
+              color: Colors.grey.shade500,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

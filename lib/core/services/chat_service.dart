@@ -254,10 +254,7 @@ class ChatService {
   Future<ApiResponse<List<Map<String, dynamic>>>> getAgents() async {
     try {
       final requestData = {
-        'EqualityFilter': {
-          'Roles': [6]
-        },
-        'IncludeColumns': ['DisplayName', 'UserId'],
+        'IncludeColumns': ['DisplayName', 'UserId', 'Username', 'Email', 'Roles'],
         'Take': 100,
         'Skip': 0,
       };
@@ -336,6 +333,31 @@ class ChatService {
       debugPrint(jsonEncode(payload));
       debugPrint('===================================================');
 
+      final isRemoving = agentId.isEmpty || agentId == "0";
+
+      // If we are removing the agent, we just use the Update endpoint to set status to 1
+      if (isRemoving) {
+        try {
+          debugPrint('ChatService: Forcing Chatroom Status to 1 (Unassigned) via Update endpoint.');
+          final response = await _apiClient.post(
+            AppConfig.updateChatroomEndpoint,
+            data: {
+              "EntityId": roomId,
+              "Entity": {
+                "St": 1, // Unassigned
+              }
+            },
+          );
+          if (response.statusCode == 200) {
+            return ApiResponse.success(true, response.statusCode!);
+          }
+          return ApiResponse.failure('Failed to update status', response.statusCode ?? 500);
+        } catch (e) {
+          debugPrint('ChatService: Failed to force update status to 1: $e');
+          return ApiResponse.failure(e.toString(), 500);
+        }
+      }
+
       final response = await _apiClient.post(
         AppConfig.addAgentToConversationEndpoint,
         data: payload,
@@ -350,6 +372,27 @@ class ChatService {
           final errorMsg = rawData['Error']?.toString() ?? 'Server error';
           return ApiResponse.failure(errorMsg, 200);
         }
+
+        // FORCE UPDATE STATUS TO 2 (Assigned) using universal Update endpoint!
+        try {
+          debugPrint('ChatService: Forcing Chatroom Status to 2 via Update endpoint.');
+          
+          final updateData = {
+            "EntityId": roomId,
+            "Entity": {
+              "St": 2, 
+              "ReById": int.tryParse(agentId) ?? 1,
+            }
+          };
+          
+          await _apiClient.post(
+            AppConfig.updateChatroomEndpoint,
+            data: updateData,
+          );
+        } catch (e) {
+          debugPrint('ChatService: Failed to force update status to 2: $e');
+        }
+
         return ApiResponse.success(true, response.statusCode!);
       } else {
         return ApiResponse.failure('Failed to assign agent: ${response.statusCode}', response.statusCode!);
@@ -408,15 +451,40 @@ class ChatService {
 
       debugPrint('✅ [Resolve] Marking room $roomId as resolved by $agentName (ID: $agentId)');
 
+      // If the roomId is a UUID (like WhatsApp 'wa-1234'), the Chatrooms/MarkResolved
+      // API throws 'Input string was not in a correct format' because it expects an INT.
+      // We bypass this backend bug by directly updating the Chatroom via the universal Update endpoint!
+      if (int.tryParse(roomId) == null) {
+        debugPrint('ChatService: RoomId is UUID, attempting generic Chatrooms/Update endpoint.');
+        try {
+          final response = await _apiClient.post(
+            AppConfig.updateChatroomEndpoint,
+            data: {
+              "EntityId": roomId,
+              "Entity": {
+                "St": 3, // Resolved
+                "ReById": int.tryParse(agentId) ?? 1,
+              }
+            },
+          );
+          
+          if (response.statusCode == 200) {
+            final data = response.data;
+            if (data is Map && data['IsError'] == true) {
+              return ApiResponse.failure(data['Error']?.toString() ?? 'Failed', 200);
+            }
+            return ApiResponse.success(true, response.statusCode!);
+          }
+        } catch (e) {
+          debugPrint('ChatService: Chatrooms/Update failed: $e, falling back to MarkResolved');
+        }
+      }
+
       final requestData = {
-        'EntityId': roomId,
+        'EntityId': int.tryParse(roomId) ?? roomId,
         'Entity': {
           'St': 3,       // Status 3 = Resolved
-          'Uc': 0,
-          'IsPin': 1,
-          'Isblock': 1,
-          'ReById': agentId,
-          'ReByNm': agentName,
+          'ReById': int.tryParse(agentId) ?? 1,
         },
       };
 
@@ -562,10 +630,20 @@ class ChatService {
 
         debugPrint('ChatService: Loaded ${dataList.length} conversations with status=$statusCode');
 
-        final conversations = dataList.map((json) {
+          bool hasPrinted = false;
+          final conversations = dataList.map((json) {
           if (json is Map<String, dynamic>) {
             try {
+              if (!hasPrinted) {
+                // debugPrint('===== FIRST CONVERSATION RAW JSON =====');
+                // hasPrinted = true;
+              }
               final conv = Conversation.fromJson(json);
+              if (conv.ctRealId == '804126878257925' || conv.contactId == '804126878257925') {
+                debugPrint('===== RAW CONVERSATION JSON FOR HRTS (BY ID) =====');
+                debugPrint(jsonEncode(json));
+                debugPrint('==================================================');
+              }
               return conv;
             } catch (e) {
               debugPrint('Error parsing conversation: $e\nData: $json');
@@ -848,7 +926,7 @@ class ChatService {
         'Sort': ['In DESC'],
         'IncludeColumns': [
           'Id', 'IdAlias', 'RoomId', 'Ack', 'From', 'ReplyFrom', 'To', 'AgentId',
-          'IsNobox', 'Type', 'Msg', 'File', 'Files', 'Note', 'In'
+          'IsNobox', 'Type', 'Msg', 'File', 'Files', 'Note', 'In', 'IdAccount', 'ChAccId', 'ChId'
         ],
         'ColumnSelection': 1,
         'EqualityFilter': {
@@ -891,13 +969,12 @@ class ChatService {
         }
 
         final messages = dataList.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
-
-        // FALLBACK: Juga fetch menggunakan CtRealId jika berbeda dari RoomId utama.
-        // Ini KRUSIAL untuk WA dan Telegram karena NoBox sering menyimpan pesan baru
-        // di bawah CtRealId (ID asli kontak) bukan RoomId gabungan.
-        debugPrint('===FALLBACK CHECK: roomId=$roomId, ctRealId=$ctRealId, isEmpty=${ctRealId.isEmpty}, sameId=${ctRealId == roomId}===');
-        if (ctRealId.isNotEmpty && ctRealId != roomId) {
-          debugPrint('ChatService: │ [FALLBACK] Fetching CtRealId: $ctRealId (chId=$roomId)');
+        
+        // ONLY FOR TELEGRAM: 
+        // NoBox occasionally stores Telegram messages under the raw CtRealId instead of the RoomId.
+        // We MUST NOT do this for WhatsApp, as it causes severe data bleeding (fetching by generic integer IDs).
+        if (isTelegram && ctRealId.isNotEmpty && ctRealId != roomId) {
+          debugPrint('ChatService: │ [TELEGRAM FALLBACK] Fetching CtRealId: $ctRealId (chId=$roomId)');
           try {
             final payload2 = Map<String, dynamic>.from(payload);
             payload2['EqualityFilter'] = {'RoomId': ctRealId};
@@ -911,7 +988,6 @@ class ChatService {
               if (list2.isNotEmpty) {
                 final msgs2 = list2.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
                 
-                // Merge unique messages by ID
                 final uniqueMsgs = <String, Message>{};
                 for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
                 for (var m in msgs2) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
@@ -919,7 +995,6 @@ class ChatService {
                 messages.clear();
                 messages.addAll(uniqueMsgs.values);
                 
-                // Re-sort DESCENDING (Newest first) because the API normally returns In DESC.
                 messages.sort((a, b) {
                   try {
                     String ta = a.rawTime;
@@ -930,146 +1005,9 @@ class ChatService {
                   } catch (_) { return 0; }
                 });
                 
-                // Take the newest 'take' amount
                 if (messages.length > take) {
                   messages.removeRange(take, messages.length);
                 }
-              }
-            }
-          } catch (_) {}
-        }
-
-        // FALLBACK 3: Coba juga dengan contactId (server kadang simpan di sini)
-        if (contactId.isNotEmpty && contactId != roomId && contactId != ctRealId) {
-          debugPrint('ChatService: │ [FALLBACK-3] Fetching ContactId: $contactId');
-          try {
-            final payload3 = Map<String, dynamic>.from(payload);
-            payload3['EqualityFilter'] = {'RoomId': contactId};
-            final response3 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload3);
-            if (response3.statusCode == 200 && response3.data != null) {
-              final raw3 = response3.data;
-              List<dynamic> list3 = [];
-              if (raw3 is List) list3 = raw3;
-              else if (raw3 is Map && raw3['IsError'] != true) list3 = raw3['Entities'] ?? raw3['Values'] ?? raw3['data'] ?? [];
-              if (list3.isNotEmpty) {
-                final msgs3 = list3.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
-                final uniqueMsgs3 = <String, Message>{};
-                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs3[m.id] = m; }
-                for (var m in msgs3) { if (m.id.isNotEmpty) uniqueMsgs3[m.id] = m; }
-                messages.clear();
-                messages.addAll(uniqueMsgs3.values);
-                messages.sort((a, b) {
-                  try {
-                    String ta = a.rawTime, tb = b.rawTime;
-                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
-                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
-                    return DateTime.parse(tb).compareTo(DateTime.parse(ta));
-                  } catch (_) { return 0; }
-                });
-                if (messages.length > take) messages.removeRange(take, messages.length);
-                debugPrint('ChatService: │ [FALLBACK-3] Found ${msgs3.length} messages from contactId');
-              }
-            }
-          } catch (_) {}
-        }
-        
-        // FALLBACK 4: Coba juga dengan link (untuk Telegram)
-        if (link.isNotEmpty && link != roomId && link != ctRealId && link != contactId) {
-          debugPrint('ChatService: │ [FALLBACK-4] Fetching Link: $link');
-          try {
-            final payload4 = Map<String, dynamic>.from(payload);
-            payload4['EqualityFilter'] = {'RoomId': link};
-            final response4 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload4);
-            if (response4.statusCode == 200 && response4.data != null) {
-              final raw4 = response4.data;
-              List<dynamic> list4 = [];
-              if (raw4 is List) list4 = raw4;
-              else if (raw4 is Map && raw4['IsError'] != true) list4 = raw4['Entities'] ?? raw4['Values'] ?? raw4['data'] ?? [];
-              if (list4.isNotEmpty) {
-                final msgs4 = list4.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
-                final uniqueMsgs = <String, Message>{};
-                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
-                for (var m in msgs4) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
-                messages.clear();
-                messages.addAll(uniqueMsgs.values);
-                messages.sort((a, b) {
-                  try {
-                    String ta = a.rawTime, tb = b.rawTime;
-                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
-                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
-                    return DateTime.parse(tb).compareTo(DateTime.parse(ta));
-                  } catch (_) { return 0; }
-                });
-                if (messages.length > take) messages.removeRange(take, messages.length);
-                debugPrint('ChatService: │ [FALLBACK-4] Found ${msgs4.length} messages from link');
-              }
-            }
-          } catch (_) {}
-        }
-
-        // FALLBACK 5: Coba juga dengan groupId
-        if (groupId.isNotEmpty && groupId != roomId && groupId != ctRealId && groupId != contactId && groupId != link) {
-          debugPrint('ChatService: │ [FALLBACK-5] Fetching GroupId: $groupId');
-          try {
-            final payload5 = Map<String, dynamic>.from(payload);
-            payload5['EqualityFilter'] = {'RoomId': groupId};
-            final response5 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload5);
-            if (response5.statusCode == 200 && response5.data != null) {
-              final raw5 = response5.data;
-              List<dynamic> list5 = [];
-              if (raw5 is List) list5 = raw5;
-              else if (raw5 is Map && raw5['IsError'] != true) list5 = raw5['Entities'] ?? raw5['Values'] ?? raw5['data'] ?? [];
-              if (list5.isNotEmpty) {
-                final msgs5 = list5.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
-                final uniqueMsgs = <String, Message>{};
-                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
-                for (var m in msgs5) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
-                messages.clear();
-                messages.addAll(uniqueMsgs.values);
-                messages.sort((a, b) {
-                  try {
-                    String ta = a.rawTime, tb = b.rawTime;
-                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
-                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
-                    return DateTime.parse(tb).compareTo(DateTime.parse(ta));
-                  } catch (_) { return 0; }
-                });
-                if (messages.length > take) messages.removeRange(take, messages.length);
-                debugPrint('ChatService: │ [FALLBACK-5] Found ${msgs5.length} messages from groupId');
-              }
-            }
-          } catch (_) {}
-        }
-        
-        // FALLBACK 6: Coba juga dengan participantEmail
-        if (participantEmail.isNotEmpty && participantEmail != roomId && participantEmail != ctRealId && participantEmail != contactId && participantEmail != link && participantEmail != groupId) {
-          debugPrint('ChatService: │ [FALLBACK-6] Fetching ParticipantEmail: $participantEmail');
-          try {
-            final payload6 = Map<String, dynamic>.from(payload);
-            payload6['EqualityFilter'] = {'RoomId': participantEmail};
-            final response6 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload6);
-            if (response6.statusCode == 200 && response6.data != null) {
-              final raw6 = response6.data;
-              List<dynamic> list6 = [];
-              if (raw6 is List) list6 = raw6;
-              else if (raw6 is Map && raw6['IsError'] != true) list6 = raw6['Entities'] ?? raw6['Values'] ?? raw6['data'] ?? [];
-              if (list6.isNotEmpty) {
-                final msgs6 = list6.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
-                final uniqueMsgs = <String, Message>{};
-                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
-                for (var m in msgs6) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
-                messages.clear();
-                messages.addAll(uniqueMsgs.values);
-                messages.sort((a, b) {
-                  try {
-                    String ta = a.rawTime, tb = b.rawTime;
-                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
-                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
-                    return DateTime.parse(tb).compareTo(DateTime.parse(ta));
-                  } catch (_) { return 0; }
-                });
-                if (messages.length > take) messages.removeRange(take, messages.length);
-                debugPrint('ChatService: │ [FALLBACK-6] Found ${msgs6.length} messages from participantEmail');
               }
             }
           } catch (_) {}
@@ -1301,10 +1239,10 @@ class ChatService {
       final data = {
         "AccId": accountId,
         "ChId": channelId,
-        "LinkId": linkId,
-        "GrpId": null, // Fill if isGroup = true
+        "LinkId": linkId ?? 0,
+        "GrpId": 0, // Fill properly if isGroup = true later
         "Chat": isGroup ? 1 : 0,
-        "CtId": contactId,
+        "CtId": contactId ?? 0,
         "Manual": manualNumber ?? "",
         "To": toType,
       };
@@ -1638,9 +1576,10 @@ class ChatService {
       String? actualError;
       final bool isTelegram = (channelId == '2' || channelId == 'Telegram');
       
-      // PENTING: Telegram (SignalR) WAJIB menggunakan TemporaryUpload agar file masuk ke folder 'temporary/'
-      // Sesuai dengan payload Web NoBox, server backend akan gagal mengirim jika menggunakan Base64.
-      final bool useBase64 = (bodyType == 2);
+      // PENTING: SignalR WAJIB menggunakan TemporaryUpload agar file masuk ke folder 'temporary/'
+      // Sesuai dengan payload Web NoBox, server backend akan gagal memproses (tidak muncul di web) jika menggunakan Base64 tanpa temporary.
+      // Kita matikan useBase64 secara paksa untuk Voice Note agar lewat jalur TemporaryUpload yang normal.
+      final bool useBase64 = false;
 
       try {
         if (useBase64) {
@@ -2420,15 +2359,38 @@ class ChatService {
 
       debugPrint('✅ [Resolve Chat] Marking room $contactId as resolved by $userName (ID: $userId)');
 
+      // If contactId is a UUID, fallback to universal Update endpoint
+      if (int.tryParse(contactId) == null) {
+        debugPrint('ChatService: RoomId is UUID, attempting generic Chatrooms/Update endpoint.');
+        try {
+          final response = await _apiClient.post(
+            AppConfig.updateChatroomEndpoint,
+            data: {
+              "EntityId": contactId,
+              "Entity": {
+                "St": 3, // Resolved
+                "ReById": int.tryParse(userId) ?? 1,
+              }
+            },
+          );
+          
+          if (response.statusCode == 200) {
+            final data = response.data;
+            if (data is Map && data['IsError'] == true) {
+              return ApiResponse.failure(data['Error']?.toString() ?? 'Failed', 200);
+            }
+            return ApiResponse.success(true, response.statusCode!);
+          }
+        } catch (e) {
+          debugPrint('ChatService: Chatrooms/Update failed: $e, falling back to MarkResolved');
+        }
+      }
+
       final requestData = {
-        'EntityId': contactId,
+        'EntityId': int.tryParse(contactId) ?? contactId,
         'Entity': {
           'St': 3,       // Status 3 = Resolved
-          'Uc': 0,
-          'IsPin': 1,
-          'Isblock': 1,
-          'ReById': userId,
-          'ReByNm': userName,
+          'ReById': int.tryParse(userId) ?? 1,
         },
       };
 
@@ -2841,4 +2803,24 @@ class ChatService {
       return ApiResponse.failure(e.toString(), 500);
     }
   }
+
+  /// Mark room as read on the server by setting Uc (UnreadCount) to 0
+  Future<void> markRoomAsRead(String roomId) async {
+    try {
+      final isUuid = int.tryParse(roomId) == null;
+      await _apiClient.post(
+        AppConfig.updateChatroomEndpoint,
+        data: {
+          "EntityId": isUuid ? roomId : (int.tryParse(roomId) ?? roomId),
+          "Entity": {
+            "Uc": 0
+          }
+        },
+      );
+      debugPrint('ChatService: Successfully updated server UnreadCount to 0 for room $roomId');
+    } catch (e) {
+      debugPrint('ChatService: Failed to update server UnreadCount for room $roomId: $e');
+    }
+  }
 }
+

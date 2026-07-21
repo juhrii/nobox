@@ -950,10 +950,15 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                       try {
                                         newChat = chats.firstWhere(
                                           (c) {
-                                            if (newRoomIdStr != null && c.id == newRoomIdStr) return true;
-                                            if (receiver != null && c.contactId == receiver) return true;
-                                            if (selectedContact != null && selectedContact!.isNotEmpty && c.sender.toLowerCase().contains(selectedContact!.toLowerCase())) return true;
-                                            if (manualInput.isNotEmpty && c.sender.contains(manualInput)) return true;
+                                            if (newRoomIdStr != null && newRoomIdStr.isNotEmpty && c.id == newRoomIdStr) return true;
+                                            
+                                            // Validasi ketat agar tidak salah masuk kamar Telegram/WA
+                                            bool isSameChannel = c.chId == channelIdInt.toString();
+                                            bool isSameAccount = c.accountId == accountIdInt.toString() || c.accountId.isEmpty;
+                                            
+                                            if (receiver != null && c.contactId == receiver && isSameChannel && isSameAccount) return true;
+                                            if (selectedContact != null && selectedContact!.isNotEmpty && c.sender.toLowerCase().contains(selectedContact!.toLowerCase()) && isSameChannel && isSameAccount) return true;
+                                            if (manualInput.isNotEmpty && c.sender.contains(manualInput) && isSameChannel && isSameAccount) return true;
                                             return false;
                                           },
                                         );
@@ -1442,7 +1447,13 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                else if (decodedFile is Map) targetMap = decodedFile;
              } catch (_) {}
           } else if (targetMap['Files'] is List && (targetMap['Files'] as List).isNotEmpty) {
-             targetMap = targetMap['Files'].first;
+             final firstItem = targetMap['Files'].first;
+             if (firstItem is Map) {
+               targetMap = firstItem;
+             } else if (firstItem is String) {
+               // If it's just a string, it might be the filename itself!
+               targetMap = {'File': firstItem, 'Type': targetMap['Type'] ?? targetMap['type'] ?? fileMap['Type']};
+             }
           } else if (targetMap['Files'] is String && (targetMap['Files'].toString().startsWith('{') || targetMap['Files'].toString().startsWith('['))) {
              try { 
                final decodedFiles = jsonDecode(targetMap['Files']);
@@ -1465,6 +1476,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                         
           final filename = targetMap['Filename']?.toString().toLowerCase() ?? 
                            targetMap['filename']?.toString().toLowerCase() ?? 
+                           targetMap['File']?.toString().toLowerCase() ?? 
+                           targetMap['file']?.toString().toLowerCase() ?? 
                            targetMap['url']?.toString().toLowerCase() ?? 
                            targetMap['Url']?.toString().toLowerCase() ?? '';
                            
@@ -1575,6 +1588,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
         } else {
           displayMessage = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
         }
+      } else if (overrideType == '16' || overrideType.contains('sticker')) {
+        displayMessage = '🌟 Sticker';
       } else if (overrideType.contains('document') || overrideType.contains('file') || overrideType == '5') {
         if (displayMessage.contains('📎') || displayMessage.contains('📁') || displayMessage.contains('📄')) {
           // sudah ada emoji

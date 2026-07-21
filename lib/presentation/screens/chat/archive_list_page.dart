@@ -322,7 +322,9 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
       if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].any((ext) => lower.endsWith(ext)) || 
           lower.startsWith('img-') || lower.startsWith('img_') || lower.startsWith('photo')) {
         displayMessage = '📷 Foto';
-      } else if (['.mp4', '.avi', '.mov', '.3gp', '.mkv', '.webm'].any((ext) => lower.endsWith(ext)) || 
+      } else if (['.webm', '.tgs'].any((ext) => lower.endsWith(ext)) || lower.contains('sticker')) {
+        displayMessage = '🌟 Sticker';
+      } else if (['.mp4', '.avi', '.mov', '.3gp', '.mkv'].any((ext) => lower.endsWith(ext)) || 
                  lower.startsWith('vid-') || lower.startsWith('vid_')) {
         displayMessage = '🎥 Video';
       } else if (['.ogg', '.opus', '.mp3', '.wav', '.m4a', '.aac', '.amr', '.weba'].any((ext) => lower.endsWith(ext)) || 
