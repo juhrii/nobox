@@ -45,7 +45,7 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
   Future<void> _fetchAgents() async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     final agents = await chatProvider.getAgents();
-    
+
     if (mounted) {
       setState(() {
         _allAgents = agents ?? [];
@@ -61,7 +61,10 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
         _filteredAgents = List.from(_allAgents);
       } else {
         _filteredAgents = _allAgents.where((agent) {
-          final name = (agent['Name'] ?? agent['FullName'] ?? agent['DisplayName'] ?? '').toString().toLowerCase();
+          final name =
+              (agent['Name'] ?? agent['FullName'] ?? agent['DisplayName'] ?? '')
+                  .toString()
+                  .toLowerCase();
           final email = (agent['Email'] ?? '').toString().toLowerCase();
           final searchLower = query.toLowerCase();
           return name.contains(searchLower) || email.contains(searchLower);
@@ -71,7 +74,11 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
   }
 
   void _assignAgent(Map<String, dynamic> agent) async {
-    final name = agent['Name'] ?? agent['FullName'] ?? agent['DisplayName'] ?? 'Unknown Agent';
+    final name =
+        agent['Name'] ??
+        agent['FullName'] ??
+        agent['DisplayName'] ??
+        'Unknown Agent';
     final id = agent['Id']?.toString() ?? agent['UserId']?.toString() ?? '';
 
     // Show loading
@@ -83,8 +90,8 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
 
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     final success = await chatProvider.assignAgent(
-      widget.chatId, 
-      id, 
+      widget.chatId,
+      id,
       name,
       chId: widget.chId,
       ctId: widget.contactId,
@@ -98,7 +105,11 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Agent "$name" assigned' : 'Failed to assign agent: ${chatProvider.error ?? "Unknown error"} (ID: $id)'),
+          content: Text(
+            success
+                ? 'Agent "$name" assigned'
+                : 'Failed to assign agent: ${chatProvider.error ?? "Unknown error"} (ID: $id)',
+          ),
         ),
       );
     }
@@ -121,7 +132,11 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
             color: const Color(0xFF3B82F6), // Main blue color
             child: Row(
               children: [
-                const Icon(Icons.person_add_alt_1, color: Colors.white, size: 22),
+                const Icon(
+                  Icons.person_add_alt_1,
+                  color: Colors.white,
+                  size: 22,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
@@ -157,7 +172,10 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                   hintText: 'Search agents...',
                   hintStyle: TextStyle(color: Colors.grey[400], fontSize: 15),
                   prefixIcon: Icon(Icons.search, color: Colors.grey[500]),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
@@ -179,14 +197,19 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
             // Agent List
             Flexible(
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.4),
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.4,
+                ),
                 child: _filteredAgents.isEmpty
                     ? Padding(
                         padding: const EdgeInsets.only(bottom: 24.0),
                         child: Center(
                           child: Text(
                             'No agents found',
-                            style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 16,
+                            ),
                           ),
                         ),
                       )
@@ -197,14 +220,24 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final agent = _filteredAgents[index];
-                          final name = (agent['Name'] ?? agent['FullName'] ?? agent['DisplayName'] ?? 'Agent').toString();
+                          final name =
+                              (agent['Name'] ??
+                                      agent['FullName'] ??
+                                      agent['DisplayName'] ??
+                                      'Agent')
+                                  .toString();
                           final email = (agent['Email'] ?? '').toString();
-                          final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+                          final initial = name.isNotEmpty
+                              ? name[0].toUpperCase()
+                              : '?';
 
                           return InkWell(
                             onTap: () => _assignAgent(agent),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
                               child: Row(
                                 children: [
                                   CircleAvatar(
@@ -222,7 +255,8 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           name,
@@ -237,7 +271,11 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                                           const SizedBox(height: 4),
                                           Row(
                                             children: [
-                                              Icon(Icons.mail_outline, size: 14, color: Colors.grey[500]),
+                                              Icon(
+                                                Icons.mail_outline,
+                                                size: 14,
+                                                color: Colors.grey[500],
+                                              ),
                                               const SizedBox(width: 4),
                                               Expanded(
                                                 child: Text(
@@ -247,7 +285,8 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
                                                     fontSize: 13,
                                                   ),
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               ),
                                             ],

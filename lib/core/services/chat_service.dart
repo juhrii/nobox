@@ -244,8 +244,9 @@ class ChatService {
     } else if (rawData is Map) {
       dataList = rawData['Entities'] ?? rawData['Values'] ?? rawData['data'] ?? rawData['list'] ?? [];
     }
-    return dataList.map((item) {
+    return dataList.map<Map<String, dynamic>>((item) {
       if (item is Map<String, dynamic>) return item;
+      if (item is Map) return Map<String, dynamic>.from(item);
       return <String, dynamic>{'Name': item.toString()};
     }).toList();
   }
@@ -270,9 +271,11 @@ class ChatService {
           dataList = rawData['Entities'] ?? rawData['Values'] ?? rawData['data'] ?? rawData['list'] ?? [];
         }
 
-        final agents = dataList.map((item) {
+        final List<Map<String, dynamic>> agents = dataList.map<Map<String, dynamic>>((item) {
           if (item is Map<String, dynamic>) {
             return item;
+          } else if (item is Map) {
+            return Map<String, dynamic>.from(item);
           }
           return <String, dynamic>{'Name': item.toString()};
         }).toList();
@@ -973,44 +976,65 @@ class ChatService {
         // ONLY FOR TELEGRAM: 
         // NoBox occasionally stores Telegram messages under the raw CtRealId instead of the RoomId.
         // We MUST NOT do this for WhatsApp, as it causes severe data bleeding (fetching by generic integer IDs).
-        if (isTelegram && ctRealId.isNotEmpty && ctRealId != roomId) {
-          debugPrint('ChatService: │ [TELEGRAM FALLBACK] Fetching CtRealId: $ctRealId (chId=$roomId)');
-          try {
-            final payload2 = Map<String, dynamic>.from(payload);
-            payload2['EqualityFilter'] = {'RoomId': ctRealId};
-            final response2 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload2);
-            if (response2.statusCode == 200 && response2.data != null) {
-              final raw2 = response2.data;
-              List<dynamic> list2 = [];
-              if (raw2 is List) list2 = raw2;
-              else if (raw2 is Map && raw2['IsError'] != true) list2 = raw2['Entities'] ?? raw2['Values'] ?? raw2['data'] ?? [];
-              
-              if (list2.isNotEmpty) {
-                final msgs2 = list2.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
+        if (isTelegram) {
+          final Set<String> fallbackIds = {};
+          if (ctRealId.isNotEmpty && ctRealId != roomId) fallbackIds.add(ctRealId);
+          if (contactId.isNotEmpty && contactId != roomId) fallbackIds.add(contactId);
+          
+          final numericRoomId = roomId.replaceAll(RegExp(r'[^0-9]'), '');
+          if (numericRoomId.isNotEmpty && numericRoomId != roomId) fallbackIds.add(numericRoomId);
+
+          if (roomId.contains('_')) {
+             final afterUnderscore = roomId.split('_').last;
+             if (afterUnderscore.isNotEmpty && afterUnderscore != roomId) fallbackIds.add(afterUnderscore);
+          }
+
+          bool hasNewMessages = false;
+
+          for (final fId in fallbackIds) {
+            debugPrint('ChatService: │ [TELEGRAM FALLBACK] Fetching fallback ID: $fId (chId=$roomId)');
+            try {
+              final payload2 = Map<String, dynamic>.from(payload);
+              payload2['EqualityFilter'] = {'RoomId': fId};
+              final response2 = await _apiClient.post(AppConfig.getMessagesEndpoint, data: payload2);
+              if (response2.statusCode == 200 && response2.data != null) {
+                final raw2 = response2.data;
+                List<dynamic> list2 = [];
+                if (raw2 is List) list2 = raw2;
+                else if (raw2 is Map && raw2['IsError'] != true) list2 = raw2['Entities'] ?? raw2['Values'] ?? raw2['data'] ?? [];
                 
-                final uniqueMsgs = <String, Message>{};
-                for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
-                for (var m in msgs2) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
-                
-                messages.clear();
-                messages.addAll(uniqueMsgs.values);
-                
-                messages.sort((a, b) {
-                  try {
-                    String ta = a.rawTime;
-                    String tb = b.rawTime;
-                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
-                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
-                    return DateTime.parse(tb).compareTo(DateTime.parse(ta)); // DESC
-                  } catch (_) { return 0; }
-                });
-                
-                if (messages.length > take) {
-                  messages.removeRange(take, messages.length);
+                if (list2.isNotEmpty) {
+                  final msgs2 = list2.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
+                  
+                  final uniqueMsgs = <String, Message>{};
+                  for (var m in messages) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                  for (var m in msgs2) { if (m.id.isNotEmpty) uniqueMsgs[m.id] = m; }
+                  
+                  messages.clear();
+                  messages.addAll(uniqueMsgs.values);
+                  hasNewMessages = true;
                 }
               }
+            } catch (e) {
+              debugPrint('ChatService: │ [TELEGRAM FALLBACK] Error fetching $fId: $e');
             }
-          } catch (_) {}
+          }
+          
+          if (hasNewMessages && messages.isNotEmpty) {
+            messages.sort((a, b) {
+              try {
+                String ta = a.rawTime;
+                String tb = b.rawTime;
+                if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                return DateTime.parse(tb).compareTo(DateTime.parse(ta)); // DESC
+              } catch (_) { return 0; }
+            });
+            
+            if (messages.length > take) {
+              messages.removeRange(take, messages.length);
+            }
+          }
         }
         
         debugPrint('ChatService: │ Total merged messages: ${messages.length}');

@@ -31,21 +31,33 @@ class ChannelIcon extends StatelessWidget {
 
     String? assetName;
 
-    // Determine asset base name
-    if (channelId == 1 || channelId == 1557 || channelId == 1561 || cName.contains('whatsapp') || cName.contains('wa')) {
-      assetName = 'wa';
-    } else if (channelId == 2 || cName.contains('telegram')) {
+    // Prioritize explicit Channel ID first
+    if (channelId == 2) {
       assetName = 'telegram';
-    } else if (channelId == 3 || cName.contains('instagram') || cName.contains('ig')) {
+    } else if (channelId == 1 || channelId == 1557 || channelId == 1561) {
+      assetName = 'wa';
+    } else if (channelId == 3) {
       assetName = 'instagram';
-    } else if (channelId == 4 || cName.contains('facebook') || cName.contains('fb')) {
+    } else if (channelId == 4) {
       assetName = 'facebook';
-    } else if (cName.contains('tiktok')) {
-      assetName = 'tiktok';
-    } else if (cName.contains('shopee')) {
-      assetName = 'shopee';
-    } else if (cName.contains('tokopedia') || cName.contains('toko pedia')) {
-      assetName = 'Tokopedia';
+    } 
+    // Fallback to name checking
+    else {
+      if (cName.contains('telegram')) {
+        assetName = 'telegram';
+      } else if (cName.contains('whatsapp') || cName == 'wa' || cName.startsWith('wa ') || cName.endsWith(' wa')) {
+        assetName = 'wa';
+      } else if (cName.contains('instagram') || cName == 'ig' || cName.startsWith('ig ') || cName.endsWith(' ig')) {
+        assetName = 'instagram';
+      } else if (cName.contains('facebook') || cName == 'fb' || cName.startsWith('fb ') || cName.endsWith(' fb')) {
+        assetName = 'facebook';
+      } else if (cName.contains('tiktok')) {
+        assetName = 'tiktok';
+      } else if (cName.contains('shopee')) {
+        assetName = 'shopee';
+      } else if (cName.contains('tokopedia') || cName.contains('toko pedia')) {
+        assetName = 'Tokopedia';
+      }
     }
 
     if (assetName != null) {

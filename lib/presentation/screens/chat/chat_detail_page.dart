@@ -1488,7 +1488,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FITUR: Inisialisasi State Obrolan
   // FUNGSI: Mengonfigurasi parameter ruangan obrolan saat halaman pertama kali dibuka, serta memicu pemuatan pesan awal dan listener WebSocket.
   void _initializeChat() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
       if (widget.chat != null) {
         chat = widget.chat!;
       } else {
