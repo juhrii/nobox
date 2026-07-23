@@ -1820,16 +1820,9 @@ class ChatService {
       final isNumeric = int.tryParse(msgId) != null;
       final parsedId = isNumeric ? int.parse(msgId) : msgId;
       
-      final payload = <String, dynamic>{
-        'EntityId': parsedId,
-        'Entity': {
-          'Id': parsedId,
-        }
-      };
-      
-      if (isNumeric) {
-        payload['IdList'] = [parsedId];
-      }
+              final payload = <String, dynamic>{
+          'EntityId': parsedId
+        };
 
       final response = await _apiClient.post(
         'Services/Chat/Chatmessages/Delete',
@@ -1847,7 +1840,7 @@ class ChatService {
 
           if (isError || errorMsg != null) {
             debugPrint('❌ [Delete Message] Backend error: $errorMsg');
-            return ApiResponse.failure(errorMsg ?? 'Failed to delete message', response.statusCode!);
+            return ApiResponse.failure(errorMsg?.toString() ?? 'Failed to delete message', response.statusCode!);
           }
         }
         
@@ -1863,7 +1856,7 @@ class ChatService {
       String errorMsg = e.message ?? 'Unknown error';
       if (errorData != null) {
         if (errorData is Map) {
-          errorMsg = errorData['ErrorMsg'] ?? errorData['Message'] ?? errorData['Error'] ?? errorData.toString();
+          errorMsg = (errorData['ErrorMsg'] ?? errorData['Message'] ?? errorData['Error'] ?? errorData).toString();
         } else {
           errorMsg = errorData.toString();
         }
