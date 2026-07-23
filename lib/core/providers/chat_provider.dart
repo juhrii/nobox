@@ -465,10 +465,14 @@ Future<void> fetchChats() async {
 
             // Jika override sudah lebih dari 15 detik (atau 60 detik untuk media), anggap kadaluarsa.
             // Pengecualian: Jika waktu server (chat.time) masuk daftar ignored, pertahankan terus.
-            final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio', 'sticker'].any((lbl) => override.lastMessage.toLowerCase().contains(lbl));
-            final maxAge = isOverrideMedia ? 60 : 15;
+            final serverTimeStr = chat.time;
+            final serverTimeParsed = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : serverTimeStr + 'Z');
+            final localTimeStr = override.time;
+            final localTime = DateTime.tryParse(localTimeStr.endsWith('Z') ? localTimeStr : localTimeStr + 'Z');
+            
+            final serverIsNewer = (localTime != null && serverTimeParsed != null && serverTimeParsed.isAfter(localTime) && !isIgnored && chat.lastMessage != 'Site.Inbox.DeletedMessage');
 
-            if (isIgnored || chat.lastMessage == 'Site.Inbox.DeletedMessage' || diffNow < maxAge) {
+            if (!serverIsNewer) {
                chat = chat.copyWith(
                  lastMessage: override.lastMessage,
                  lastMessageType: override.lastMessageType,
@@ -990,10 +994,14 @@ Future<void> fetchChats() async {
                 final diffNow = DateTime.now().toUtc().difference(overrideCreatedAt).inSeconds;
                 final isIgnored = _isTimeIgnored(chat.id, chat.time);
                 
-                final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio', 'sticker'].any((lbl) => localChat.lastMessage.toLowerCase().contains(lbl));
-                final maxAge = isOverrideMedia ? 60 : 15;
+                final serverTimeStr = chat.time;
+                final serverTimeParsed = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : serverTimeStr + 'Z');
+                final localTimeStr = localChat.time;
+                final localTime = DateTime.tryParse(localTimeStr.endsWith('Z') ? localTimeStr : localTimeStr + 'Z');
                 
-                if (isIgnored || chat.lastMessage == 'Site.Inbox.DeletedMessage' || diffNow < maxAge) {
+                final serverIsNewer = (localTime != null && serverTimeParsed != null && serverTimeParsed.isAfter(localTime) && !isIgnored && chat.lastMessage != 'Site.Inbox.DeletedMessage');
+                
+                if (!serverIsNewer) {
                   // Server masih mengembalikan data lama, PERTAHANKAN override lokal
                   chat = chat.copyWith(
                     lastMessage: localChat.lastMessage,
