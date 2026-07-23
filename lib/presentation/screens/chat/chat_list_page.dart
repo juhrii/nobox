@@ -1403,8 +1403,12 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
         : (isDark ? Colors.grey.shade400 : Colors.black87);
     
     String displayMessage = chat.lastMessage;
+    bool isDeletedMessage = false;
     if (displayMessage.trim().toLowerCase() == 'document(empty)') {
       displayMessage = '';
+    } else if (displayMessage.contains('Site.Inbox.DeletedMessage')) {
+      displayMessage = '';
+      isDeletedMessage = true;
     }
     final trimmedMsg = displayMessage.trim();
     bool parsedAsMedia = false;
@@ -1636,7 +1640,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     }
     
     // 3. Fallback jika string kosong dan bukan media
-    if (!parsedAsMedia && displayMessage.isEmpty) {
+    if (!parsedAsMedia && displayMessage.isEmpty && !isDeletedMessage) {
       final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
       if (isTelegram) {
         displayMessage = '🎤 Pesan Suara'; // ULTIMATE HACK: Any empty unrecognized message from Telegram is a Voice Note
@@ -1668,14 +1672,14 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
         parsedAsMedia = true;
       }
       // Deteksi ekstensi gambar
-      else if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].any((ext) => lower.endsWith(ext)) || 
+      else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp'].any((ext) => lower.endsWith(ext)) || 
           lower.startsWith('img-') || lower.startsWith('img_') || lower.startsWith('photo')) {
         displayMessage = '📷 Foto';
         parsedAsMedia = true;
       }
-      // Deteksi stiker animasi (.webm, .tgs)
-      else if (['.webm', '.tgs'].any((ext) => lower.endsWith(ext))) {
-        displayMessage = '🌟 Animated Sticker';
+      // Deteksi stiker (WhatsApp webp, atau animasi webm/tgs)
+      else if (['.webp', '.webm', '.tgs'].any((ext) => lower.endsWith(ext)) || lower.startsWith('stk-')) {
+        displayMessage = '🌟 Sticker';
         parsedAsMedia = true;
       }
       // Deteksi ekstensi video

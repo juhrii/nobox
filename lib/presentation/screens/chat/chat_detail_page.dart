@@ -848,11 +848,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             final lastMsg = _messages.last;
             String newContent = lastMsg.content;
             if (lastMsg.messageType == MessageType.image) {
-              final cleaned = newContent
-                  .replaceAll('📷', '')
-                  .replaceAll('Photo', '')
-                  .trim();
-              newContent = '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+              final isSticker = (lastMsg.imageUrl ?? '').toLowerCase().endsWith('.webp') || 
+                                (lastMsg.imagePath ?? '').toLowerCase().endsWith('.webp') ||
+                                newContent.toLowerCase().endsWith('.webp');
+              if (isSticker) {
+                newContent = '🌟 Sticker';
+              } else {
+                final cleaned = newContent
+                    .replaceAll('📷', '')
+                    .replaceAll('Photo', '')
+                    .trim();
+                newContent = '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+              }
             } else if (lastMsg.messageType == MessageType.voice) {
               newContent = '🎵 Voice Note';
             } else if (lastMsg.messageType == MessageType.video) {
@@ -3607,6 +3614,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         ..sort((a, b) => b.compareTo(a));
                       bool hasError = false;
 
+                      String errorMessage = '';
                       for (final idx in sortedIndices) {
                         if (idx >= 0 && idx < _messages.length) {
                           final msgId = _messages[idx].id;
@@ -3617,14 +3625,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                             );
                             if (resp.isError) {
                               hasError = true;
-                            } else {
-                              if (mounted) {
-                                Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, _messages[idx].rawTime);
-                              }
-                              setState(() {
-                                _messages.removeAt(idx);
-                              });
+                              errorMessage = resp.error ?? 'Unknown error';
                             }
+                            
+                            // Selalu hapus dari UI lokal agar pesan 'hantu' tidak tersangkut
+                            if (mounted) {
+                              Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, _messages[idx].rawTime);
+                            }
+                            setState(() {
+                              _messages.removeAt(idx);
+                            });
                           } else {
                             // Jika pesan lokal / tidak ada ID
                             setState(() {
@@ -3643,13 +3653,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       if (_messages.isNotEmpty) {
                         final lastMsg = _messages.last;
                         String newLastContent = lastMsg.content;
+                        String typeStr = '1';
+                        if (lastMsg.messageType == MessageType.image) typeStr = '3';
+                        else if (lastMsg.messageType == MessageType.voice) typeStr = '2';
+                        else if (lastMsg.messageType == MessageType.document) typeStr = '5';
+                        else if (lastMsg.messageType == MessageType.video) typeStr = '4';
+
                         if (newLastContent.isEmpty) {
                           if (lastMsg.messageType == MessageType.image) {
-                            newLastContent = '📷 Foto';
+                            final isSticker = (lastMsg.imageUrl ?? '').toLowerCase().endsWith('.webp') || 
+                                              (lastMsg.imagePath ?? '').toLowerCase().endsWith('.webp') ||
+                                              newLastContent.toLowerCase().endsWith('.webp');
+                            newLastContent = isSticker ? '🌟 Sticker' : '📷 Foto';
                           } else if (lastMsg.messageType == MessageType.voice) {
                             newLastContent = '🎤 Pesan Suara';
-                          } else if (lastMsg.messageType ==
-                              MessageType.document) {
+                          } else if (lastMsg.messageType == MessageType.document) {
                             newLastContent = '📄 Dokumen';
                           } else if (lastMsg.messageType == MessageType.video) {
                             newLastContent = '🎥 Video';
@@ -3661,6 +3679,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         ).updateLocalLastMessage(
                           chat.id,
                           newLastContent,
+                          lastMessageType: typeStr,
                           updateTimeAndPosition: false,
                           overrideTime: lastMsg.rawTime.isNotEmpty ? lastMsg.rawTime : null,
                         );
@@ -3678,7 +3697,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         SnackBar(
                           content: Text(
                             hasError
-                                ? 'Beberapa pesan gagal dihapus, pastikan endpoint Nobox tersedia.'
+                                ? 'Gagal dihapus dari server. Error: $errorMessage'
                                 : 'Pesan berhasil dihapus dari server.',
                           ),
                         ),

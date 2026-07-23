@@ -385,6 +385,33 @@ Future<void> fetchChats() async {
             _saveReadState();
           }
 
+          // Cek override lokal (agar override tidak tertimpa kecuali ada pesan yang BENAR-BENAR LEBIH BARU)
+          final localOverride = _localOverrides[chat.id];
+          if (localOverride != null) {
+            // Jika ada override, kita cek timestamp kapan override dibuat vs kapan pesan baru datang
+            final tsStr = _overrideTimestamps[chat.id];
+            if (tsStr != null) {
+              final overrideTs = DateTime.parse(tsStr);
+              final freshTs = DateTime.tryParse(chat.time);
+              if (freshTs != null && freshTs.isAfter(overrideTs) && chat.lastMessage != 'Site.Inbox.DeletedMessage') {
+                // Ada pesan asli dari server yang LEBIH BARU dari waktu override kita dibuat (dan bukan placeholder)!
+                // Hapus override.
+                debugPrint('ChatProvider: 🗑 Override REMOVED for ${chat.id} because server time ($freshTs) is newer than override time ($overrideTs)');
+                _localOverrides.remove(chat.id);
+                _overrideTimestamps.remove(chat.id);
+                _saveLocalOverrides();
+              } else {
+                // Override masih berlaku!
+                chat = chat.copyWith(
+                  lastMessage: localOverride.lastMessage,
+                  lastMessageType: localOverride.lastMessageType,
+                  isLastMessageFromMe: localOverride.isLastMessageFromMe,
+                  time: localOverride.time,
+                );
+              }
+            }
+          }
+
           if (oldChat != null) {
             // FIX: Pertahankan isBlocked untuk Guest/New Contact (tanpa CtRealId)
             if (chat.ctRealId.isEmpty || chat.ctRealId == 'null') {
@@ -438,12 +465,13 @@ Future<void> fetchChats() async {
 
             // Jika override sudah lebih dari 15 detik (atau 60 detik untuk media), anggap kadaluarsa.
             // Pengecualian: Jika waktu server (chat.time) masuk daftar ignored, pertahankan terus.
-            final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => override.lastMessage.toLowerCase().contains(lbl));
+            final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio', 'sticker'].any((lbl) => override.lastMessage.toLowerCase().contains(lbl));
             final maxAge = isOverrideMedia ? 60 : 15;
 
-            if (isIgnored || diffNow < maxAge) {
+            if (isIgnored || chat.lastMessage == 'Site.Inbox.DeletedMessage' || diffNow < maxAge) {
                chat = chat.copyWith(
                  lastMessage: override.lastMessage,
+                 lastMessageType: override.lastMessageType,
                  time: override.time,
                  isLastMessageFromMe: override.isLastMessageFromMe,
                );
@@ -471,7 +499,7 @@ Future<void> fetchChats() async {
                               lowerNew.contains('image') || lowerNew.contains('attachment') || lowerNew.contains('pesan suara') ||
                               RegExp(r'^[\d\.:]+$').hasMatch(lowerNew);
             
-            final oldIsLocalLabel = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => oldMsg.toLowerCase().contains(lbl));
+            final oldIsLocalLabel = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio', 'sticker'].any((lbl) => oldMsg.toLowerCase().contains(lbl));
 
             if (isGeneric) {
               if (oldMsg.startsWith('{') || oldMsg.startsWith('[') || oldIsLocalLabel) {
@@ -580,11 +608,16 @@ Future<void> fetchChats() async {
         final serverTimeStr = roomData['TimeMsg']?.toString() ?? '';
         final isIgnored = _isTimeIgnored(roomId, serverTimeStr);
         
-        if (isIgnored) {
-          // Server meng-echo data yang baru saja kita hapus. Pertahankan state lokal.
+        final overrideCreatedAtStr = _overrideTimestamps[roomId];
+        final overrideCreatedAt = overrideCreatedAtStr != null ? DateTime.tryParse(overrideCreatedAtStr) ?? DateTime.now().toUtc() : DateTime.now().toUtc();
+        final diffNow = DateTime.now().toUtc().difference(overrideCreatedAt).inSeconds;
+        
+        if (isIgnored || lastMsg == 'Site.Inbox.DeletedMessage' || diffNow < 10) {
+          // Server meng-echo data yang baru saja kita hapus/kirim, ATAU mengirim placeholder delete.
+          // Lindungi selama 10 detik agar tidak tertimpa oleh echo usang dari SignalR.
           lastMsg = existing.lastMessage;
           roomData['LastMessageType'] = existing.lastMessageType;
-          debugPrint('ChatProvider: 🛡️ Override protected for $roomId — incoming SignalR event is ignored (deleted msg)');
+          debugPrint('ChatProvider: 🛡️ Override protected for $roomId – incoming SignalR event is ignored (diff=$diffNow s)');
         } else {
           // Event SignalR baru yang valid! Hapus override lokal.
           _localOverrides.remove(roomId);
@@ -603,7 +636,7 @@ Future<void> fetchChats() async {
                         lowerNew.contains('image') || lowerNew.contains('attachment') || lowerNew.contains('pesan suara') ||
                         RegExp(r'^[\d\.:]+$').hasMatch(lowerNew);
       
-      final oldIsLocalLabel = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => oldMsg.toLowerCase().contains(lbl));
+      final oldIsLocalLabel = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio', 'sticker'].any((lbl) => oldMsg.toLowerCase().contains(lbl));
       
       if (isGeneric) {
         if (oldMsg.startsWith('{') || oldMsg.startsWith('[') || oldIsLocalLabel) {
@@ -690,6 +723,43 @@ Future<void> fetchChats() async {
     }
   }
 
+  /// Mengambil pesan asli terakhir untuk ruangan yang pesan terakhirnya dihapus
+  Future<void> _fetchRealLastMessagesForDeletedRooms(List<String> roomIds) async {
+    for (final roomId in roomIds) {
+      try {
+        final response = await _chatService.getMessageHistory(roomId, '');
+        if (!response.isError && response.data != null && response.data!.isNotEmpty) {
+          // Find the most recent message that is NOT a deleted message placeholder
+          final validMessages = response.data!.where((m) => m.content != 'Site.Inbox.DeletedMessage').toList();
+          
+          if (validMessages.isNotEmpty) {
+            final realLastMsg = validMessages.first;
+            String typeStr = '1';
+            if (realLastMsg.messageType == MessageType.voice) typeStr = '2';
+            else if (realLastMsg.messageType == MessageType.image) typeStr = '3';
+            else if (realLastMsg.messageType == MessageType.video) typeStr = '4';
+            else if (realLastMsg.messageType == MessageType.document) typeStr = '5';
+
+            updateLocalLastMessage(
+              roomId, 
+              realLastMsg.content, 
+              lastMessageType: typeStr, 
+              overrideTime: realLastMsg.rawTime
+            );
+          } else {
+            // All messages are deleted placeholders
+            updateLocalLastMessage(roomId, '');
+          }
+        } else {
+          // If room is completely empty
+          updateLocalLastMessage(roomId, '');
+        }
+      } catch (e) {
+        debugPrint('ChatProvider: Error fetching real last message for room $roomId: $e');
+      }
+    }
+  }
+
   /// Menyisipkan obrolan baru secara lokal ke urutan teratas tanpa harus menunggu server.
   /// Ini memperbaiki bug di mana obrolan baru menghilang atau melempar ke chat acak.
   void insertLocalChat(ChatModel chat) {
@@ -727,7 +797,11 @@ Future<void> fetchChats() async {
         // Hanya update di tempat, tapi waktu bisa mundur (misal saat hapus pesan)
         _chats[index] = chat;
         // Opsional: sort _chats jika ingin posisi langsung akurat saat pesan dihapus
-        _chats.sort((a, b) => (b.time).compareTo(a.time));
+        _chats.sort((a, b) {
+          final timeA = DateTime.tryParse(a.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final timeB = DateTime.tryParse(b.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return timeB.compareTo(timeA);
+        });
       }
       
       _saveLocalOverrides();
@@ -803,13 +877,13 @@ Future<void> fetchChats() async {
             // Override bertahan SELAMANYA sampai server mengirim pesan yang BENAR-BENAR lebih baru.
             if (_localOverrides.containsKey(chat.id)) {
               final localChat = _localOverrides[chat.id]!;
-              final localTimeStr = localChat.time;
+              final localTimeStr = _overrideTimestamps[chat.id] ?? localChat.time;
               final localTime = DateTime.tryParse(localTimeStr.endsWith('Z') ? localTimeStr : '${localTimeStr}Z');
               final serverTimeStr = chat.time;
               final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
               
               final isIgnored = _isTimeIgnored(chat.id, serverTimeStr);
-              final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored);
+              final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored && chat.lastMessage != 'Site.Inbox.DeletedMessage');
               
               if (serverIsNewer) {
                 // Ada pesan baru sungguhan, hapus override dan terima data server
@@ -837,7 +911,7 @@ Future<void> fetchChats() async {
                               lowerNew.contains('photo') || lowerNew.contains('video') || lowerNew.contains('audio') || 
                               lowerNew.contains('image') || lowerNew.contains('attachment') || lowerNew.contains('pesan suara');
             
-            final oldIsLocalLabel = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => oldMsg.toLowerCase().contains(lbl));
+            final oldIsLocalLabel = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio', 'sticker'].any((lbl) => oldMsg.toLowerCase().contains(lbl));
 
             if (isGeneric) {
               if (oldMsg.startsWith('{') || oldMsg.startsWith('[') || oldIsLocalLabel) {
@@ -916,10 +990,10 @@ Future<void> fetchChats() async {
                 final diffNow = DateTime.now().toUtc().difference(overrideCreatedAt).inSeconds;
                 final isIgnored = _isTimeIgnored(chat.id, chat.time);
                 
-                final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio'].any((lbl) => localChat.lastMessage.toLowerCase().contains(lbl));
+                final isOverrideMedia = ['voice note', 'pesan suara', 'photo', 'foto', 'video', 'audio', 'sticker'].any((lbl) => localChat.lastMessage.toLowerCase().contains(lbl));
                 final maxAge = isOverrideMedia ? 60 : 15;
                 
-                if (isIgnored || diffNow < maxAge) {
+                if (isIgnored || chat.lastMessage == 'Site.Inbox.DeletedMessage' || diffNow < maxAge) {
                   // Server masih mengembalikan data lama, PERTAHANKAN override lokal
                   chat = chat.copyWith(
                     lastMessage: localChat.lastMessage,
@@ -945,6 +1019,12 @@ Future<void> fetchChats() async {
 
         if (newChats.isNotEmpty) {
           _chats.insertAll(0, newChats);
+        }
+
+        // 1. Check for DeletedMessages and fetch their actual last messages
+        final deletedRooms = _chats.where((c) => c.lastMessage == 'Site.Inbox.DeletedMessage').map((c) => c.id).toList();
+        if (deletedRooms.isNotEmpty) {
+          _fetchRealLastMessagesForDeletedRooms(deletedRooms);
         }
 
         notifyListeners();
@@ -1197,6 +1277,7 @@ Future<void> fetchMoreChats() async {
             id: entry.key,
             sender: '',
             lastMessage: val['lastMessage']?.toString() ?? '',
+            lastMessageType: val['lastMessageType']?.toString(),
             time: val['time']?.toString() ?? '',
             isLastMessageFromMe: val['isLastMessageFromMe'] == true,
           );
@@ -1218,6 +1299,7 @@ Future<void> fetchMoreChats() async {
       final prefs = await SharedPreferences.getInstance();
       final Map<String, dynamic> data = _localOverrides.map((k, v) => MapEntry(k, {
         'lastMessage': v.lastMessage,
+        'lastMessageType': v.lastMessageType,
         'isLastMessageFromMe': v.isLastMessageFromMe,
         'time': v.time,
       }));
@@ -1365,7 +1447,11 @@ Future<void> fetchMoreChats() async {
       });
       
     final unpinned = filtered.where((c) => !c.isPinned).toList()
-      ..sort((a, b) => b.time.compareTo(a.time));
+      ..sort((a, b) {
+        final timeA = DateTime.tryParse(a.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB = DateTime.tryParse(b.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return timeB.compareTo(timeA);
+      });
       
     filtered = [...pinnedInOrder, ...unpinned];
     

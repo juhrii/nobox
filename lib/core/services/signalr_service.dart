@@ -316,6 +316,12 @@ class SignalRService {
         }
       }
 
+      final msgContent = messageData['Msg']?.toString() ?? '';
+      if (msgContent == 'Site.Inbox.DeletedMessage') {
+        debugPrint('SignalR: 🚫 Ignoring Site.Inbox.DeletedMessage to preserve local last message');
+        return;
+      }
+
       final Map<String, dynamic> parsed = {
         'roomId': roomId,
         'message': messageData,
@@ -718,6 +724,27 @@ class SignalRService {
       return null; // Return null on success
     } catch (e) {
       debugPrint('SignalR: ❌ Failed to send KirimPesan: $e');
+      return e.toString();
+    }
+  }
+
+  /// Delete a message via SignalR
+  Future<String?> invokeDelMsg({
+    required dynamic idRoom,
+    required dynamic idMsg,
+  }) async {
+    try {
+      final safeRoomId = int.tryParse(idRoom.toString()) ?? idRoom;
+      final safeMsgId = int.tryParse(idMsg.toString()) ?? idMsg;
+      
+      debugPrint('SignalR: 🗑️ Invoking DelMsg: [$safeRoomId, $safeMsgId]');
+      await invoke(
+        'DelMsg',
+        args: [safeRoomId, safeMsgId],
+      );
+      return null;
+    } catch (e) {
+      debugPrint('SignalR: ❌ Failed to invoke DelMsg: $e');
       return e.toString();
     }
   }
