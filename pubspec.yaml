@@ -19,7 +19,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   intl: ^0.20.2
   emoji_picker_flutter: ^4.4.0
-  record: ^5.0.5
+  record: ^7.1.1
   audioplayers: ^6.1.0
   path_provider: ^2.1.5
   image_picker: ^1.0.7
@@ -41,8 +41,6 @@ dependencies:
   video_player: 2.8.3
   flutter_cache_manager: ^3.4.1
 
-dependency_overrides:
-  record_platform_interface: 1.2.0
 
 dev_dependencies:
   flutter_test:

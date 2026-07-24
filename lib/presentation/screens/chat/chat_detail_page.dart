@@ -5478,14 +5478,30 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       fontSize: 12,
                     ),
                   ),
-                  Text(
-                    _repliedMessage!.content,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
+                  Row(
+                    children: [
+                      if (_repliedMessage!.messageType == MessageType.voice)
+                        Icon(Icons.mic, size: 16, color: isDark ? Colors.white70 : Colors.black87),
+                      if (_repliedMessage!.messageType == MessageType.image)
+                        Icon(Icons.image, size: 16, color: isDark ? Colors.white70 : Colors.black87),
+                      if (_repliedMessage!.messageType == MessageType.document)
+                        Icon(Icons.insert_drive_file, size: 16, color: isDark ? Colors.white70 : Colors.black87),
+                      if (_repliedMessage!.messageType != MessageType.text)
+                        const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          _repliedMessage!.messageType == MessageType.voice
+                              ? 'Voice note'
+                              : (_repliedMessage!.content.isNotEmpty ? _repliedMessage!.content : _repliedMessage!.messageType.toString().split('.').last),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDark ? Colors.white70 : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

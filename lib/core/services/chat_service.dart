@@ -2027,6 +2027,7 @@ class ChatService {
         data: requestData,
       );
 
+      debugPrint('UPDATE FORM RAW RESPONSE: ');
       final data = response.data;
       if (response.statusCode == 200 && (data is Map && data['IsError'] != true)) {
         debugPrint('✅ [Update Funnel] Successfully updated funnel');
@@ -2085,6 +2086,7 @@ class ChatService {
         data: requestData,
       );
 
+      debugPrint('UPDATE FORM RAW RESPONSE: ');
       final data = response.data;
       if (response.statusCode == 200 && (data is Map && data['IsError'] != true)) {
         debugPrint('✅ [Update Deal] Successfully updated deal');
@@ -2239,6 +2241,7 @@ class ChatService {
         data: requestData,
       );
 
+      debugPrint('UPDATE FORM RAW RESPONSE: ');
       final data = response.data;
       if (response.statusCode == 200 && (data is Map && data['IsError'] != true)) {
         debugPrint('✅ [Toggle AI] Successfully updated MuteBot status');
@@ -2271,6 +2274,7 @@ class ChatService {
         data: requestData,
       );
 
+      debugPrint('UPDATE FORM RAW RESPONSE: ');
       final data = response.data;
       if (response.statusCode == 200 && (data is Map && data['IsError'] != true)) {
         debugPrint('✅ [Toggle Need Reply] Successfully updated NeedReply status');
@@ -2504,7 +2508,7 @@ class ChatService {
       debugPrint('📋 [Update FormTemplate] Assigning form template $formTemplateId to room $contactId');
       
       final entity = <String, dynamic>{
-        'FormTemplateId': formTemplateId, // null to remove
+        'FormTemplateId': formTemplateId,
       };
       
       if (formResultId != null) {
@@ -2519,6 +2523,7 @@ class ChatService {
         },
       );
 
+      debugPrint('UPDATE FORM RAW RESPONSE: ');
       final data = response.data;
       if (response.statusCode == 200 && (data is Map && data['IsError'] != true)) {
         debugPrint('✅ [Update FormTemplate] Successfully assigned form template');
@@ -2759,6 +2764,7 @@ class ChatService {
       // Wait for 1s to allow server indexing to finish (so it disappears from Main Tab)
       await Future.delayed(const Duration(seconds: 1));
 
+      debugPrint('UPDATE FORM RAW RESPONSE: ');
       final data = response.data;
       if (response.statusCode == 200 && (data is Map && data['IsError'] != true)) {
         return ApiResponse.success(true, 200);
@@ -2784,6 +2790,7 @@ class ChatService {
       // Wait for 1s to allow server indexing to finish
       await Future.delayed(const Duration(seconds: 1));
 
+      debugPrint('UPDATE FORM RAW RESPONSE: ');
       final data = response.data;
       if (response.statusCode == 200 && (data is Map && data['IsError'] != true)) {
         return ApiResponse.success(true, 200);

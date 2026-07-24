@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/model/message.dart';
@@ -122,10 +123,11 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
       }
 
       if (!mounted) return;
+      
+      // Pull variables outside so they are accessible across multiple setState blocks
+      final room = roomData is Map ? (roomData['Room'] ?? {}) : {};
 
       setState(() {
-        // roomData = data['Data'], room = data['Data']['Room']
-        final room = roomData is Map ? (roomData['Room'] ?? {}) : {};
 
         // Funnel: dari Room → Fn atau FnId
         final fnName = room['Fn']?.toString() ?? room['FnNm']?.toString() ?? '';
@@ -160,7 +162,51 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
         }
 
         // Form Template
-        _currentFormTemplate = data['FormTemplateName']?.toString() ?? _currentFormTemplate;
+        _currentFormTemplate = room['FormTemplateNm']?.toString() ?? 
+                               room['FormTemplateName']?.toString() ?? 
+                               data['FormTemplateNm']?.toString() ?? 
+                               data['FormTemplateName']?.toString() ?? 
+                               _currentFormTemplate;
+                               
+        _currentFormResult = room['FormResultNm']?.toString() ?? 
+                             room['FormResultName']?.toString() ?? 
+                             data['FormResultNm']?.toString() ?? 
+                             data['FormResultName']?.toString() ?? 
+                             _currentFormResult;
+                             
+      });
+
+      // Jika nama template atau result kosong, coba mapping paksa dari ID-nya!
+      final contactData = data['Contact'] ?? {};
+      final formTemplateIdStr = room['FormTemplateId']?.toString() ?? room['FormId']?.toString() ?? data['FormTemplateId']?.toString() ?? data['FormId']?.toString() ?? contactData['FormTemplateId']?.toString() ?? contactData['FormId']?.toString() ?? '';
+      final formResultIdStr = room['FormResultId']?.toString() ?? data['FormResultId']?.toString() ?? contactData['FormResultId']?.toString() ?? '';
+      
+      if (formTemplateIdStr.isNotEmpty && _currentFormTemplate.isEmpty) {
+        final templatesData = await chatProvider.getFormTemplates();
+        if (templatesData != null) {
+          for (final t in templatesData) {
+            if (t['Id']?.toString() == formTemplateIdStr) {
+              if (mounted) setState(() { _currentFormTemplate = t['Name']?.toString() ?? t['Nm']?.toString() ?? t['Title']?.toString() ?? ''; });
+              break;
+            }
+          }
+        }
+      }
+      
+      if (formResultIdStr.isNotEmpty && _currentFormResult.isEmpty) {
+        final resultsData = await chatProvider.getFormResults();
+        if (resultsData != null) {
+          for (final r in resultsData) {
+            if (r['Id']?.toString() == formResultIdStr) {
+              if (mounted) setState(() { _currentFormResult = r['SenderNm']?.toString() ?? r['Phone']?.toString() ?? 'Hasil Form #'; });
+              break;
+            }
+          }
+        }
+      }
+      
+      if (!mounted) return;
+      setState(() {
         
         // Tags: dari Data → Tags (list of tag objects)
         final serverTags = roomData is Map ? roomData['Tags'] : null;
@@ -1248,7 +1294,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
     // Fetch form templates and form results from server
     final templatesData = await chatProvider.getFormTemplates();
     final resultsData = await chatProvider.getFormResults();
-
+    
     if (!mounted) return;
     Navigator.pop(context); // dismiss loading
 
@@ -1268,10 +1314,22 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
     final results = <Map<String, String>>[];
     if (resultsData != null) {
       for (final r in resultsData) {
-        final name = r['Name']?.toString() ?? r['Nm']?.toString() ?? r['Title']?.toString() ?? '';
+        // Pada Form Result (dari backend), nama pengirim ada di field "SenderNm" atau bisa juga "Phone"
+        String name = r['SenderNm']?.toString() ?? r['Phone']?.toString() ?? '';
+        if (name.isEmpty) {
+          name = 'Hasil Form #${r['Id']}'; // Fallback
+        }
+        
         final id = r['Id']?.toString() ?? '';
-        if (name.isNotEmpty && id.isNotEmpty) {
-          results.add({'name': name, 'id': id});
+        
+        // Kita juga bisa memfilter agar hanya menampilkan Form Result untuk Template yang dipilih
+        // Namun karena ini list default, kita ambil semua yang valid dulu.
+        if (id.isNotEmpty) {
+          results.add({
+            'name': name, 
+            'id': id,
+            'formId': r['FormId']?.toString() ?? '', // Simpan FormId untuk keperluan filter jika perlu
+          });
         }
       }
     }
@@ -1287,8 +1345,23 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
 
     String selectedTemplateId = '';
     String selectedTemplateName = _currentFormTemplate;
+    if (_currentFormTemplate.isNotEmpty) {
+      try {
+        selectedTemplateId = templates.firstWhere((t) => t['name'] == _currentFormTemplate)['id'] ?? '';
+      } catch (e) {
+        selectedTemplateId = '';
+      }
+    }
+
     String selectedResultId = '';
     String selectedResultName = _currentFormResult;
+    if (_currentFormResult.isNotEmpty) {
+      try {
+        selectedResultId = results.firstWhere((r) => r['name'] == _currentFormResult)['id'] ?? '';
+      } catch (e) {
+        selectedResultId = '';
+      }
+    }
     
     showDialog(
       context: context,
@@ -1378,16 +1451,25 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                           icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
                           value: selectedResultId.isEmpty ? null : selectedResultId,
                           dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                          items: selectedTemplateId.isEmpty ? [] : results.map((r) {
-                            return DropdownMenuItem<String>(
-                              value: r['id']!,
-                              child: Text(r['name']!, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                            );
-                          }).toList(),
+                          items: selectedTemplateId.isEmpty 
+                              ? [] 
+                              : () {
+                                  final filteredResults = results.where((r) => r['formId'] == selectedTemplateId).toList();
+                                  if (filteredResults.isEmpty) {
+                                    return [DropdownMenuItem<String>(value: 'empty', child: Text('Belum ada data (Kosong)', style: TextStyle(color: Colors.grey)))];
+                                  }
+                                  return filteredResults.map((r) {
+                                    return DropdownMenuItem<String>(
+                                      value: r['id']!,
+                                      child: Text(r['name']!, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                                    );
+                                  }).toList();
+                                }(),
                           onChanged: (newValue) {
+                            if (newValue == 'empty') return;
                             setDialogState(() {
                               selectedResultId = newValue!;
-                              selectedResultName = results.firstWhere((r) => r['id'] == newValue)['name'] ?? '';
+                              selectedResultName = results.firstWhere((r) => r['id'] == newValue, orElse: () => {'name': ''})['name'] ?? '';
                             });
                           },
                         ),

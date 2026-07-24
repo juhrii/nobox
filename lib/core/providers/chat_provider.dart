@@ -1866,27 +1866,52 @@ Future<void> toggleArchive(String chatId) async {
     return false;
   }
 
-  Future<List<Map<String, dynamic>>?> getFormTemplates() async {
+  List<Map<String, dynamic>>? _formTemplatesCache;
+  
+  Future<List<Map<String, dynamic>>?> getFormTemplates({bool forceRefresh = false}) async {
+    if (_formTemplatesCache != null && !forceRefresh) return _formTemplatesCache;
     final response = await _chatService.getFormTemplates();
     if (!response.isError && response.data != null) {
+      _formTemplatesCache = response.data;
       return response.data;
     }
     _error = response.error;
     return null;
   }
 
-  Future<List<Map<String, dynamic>>?> getFormResults() async {
+  List<Map<String, dynamic>>? _formResultsCache;
+  
+  Future<List<Map<String, dynamic>>?> getFormResults({bool forceRefresh = false}) async {
+    if (_formResultsCache != null && !forceRefresh) return _formResultsCache;
     final response = await _chatService.getFormResults();
     if (!response.isError && response.data != null) {
+      _formResultsCache = response.data;
       return response.data;
     }
     _error = response.error;
     return null;
   }
 
-  Future<Map<String, dynamic>?> getDetailRoom(String roomId) async {
+  final Map<String, Map<String, dynamic>> _detailRoomCache = {};
+
+  Future<Map<String, dynamic>?> getDetailRoom(String roomId, {bool forceRefresh = false}) async {
+    // 1. Cek cache memori (agar langsung instan)
+    if (!forceRefresh && _detailRoomCache.containsKey(roomId)) {
+      // 2. Tarik diam-diam di background agar data selalu up-to-date
+      _chatService.getDetailRoom(roomId).then((response) {
+        if (!response.isError && response.data != null) {
+          _detailRoomCache[roomId] = response.data!;
+          // Kita tidak perlu panggil notifyListeners karena UI (ContactInfoPage) akan me-refresh sendiri 
+          // setelah memanggil fungsi ini lagi nanti jika di-refresh manual.
+        }
+      });
+      return _detailRoomCache[roomId];
+    }
+    
+    // 3. Jika belum ada di cache, tunggu dari server
     final response = await _chatService.getDetailRoom(roomId);
     if (!response.isError && response.data != null) {
+      _detailRoomCache[roomId] = response.data!;
       return response.data;
     }
     _error = response.error;
