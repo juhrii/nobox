@@ -1098,24 +1098,54 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
     );
   }
 
-  void _showDealDialog() {
+  void _showDealDialog() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    String localPipeline = _currentPipeline;
-    String localStage = _currentStage;
-    String localDeal = _currentDeal;
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+
+    bool isLoading = true;
+    String? loadError;
     
+    List<Map<String, dynamic>> pipelines = [];
+    List<Map<String, dynamic>> stages = [];
+    List<Map<String, dynamic>> deals = [];
+
+    String? selectedPipelineId;
+    String? selectedStageId;
+    String? selectedDealId;
+
+    // We will show dialog first, then load pipelines.
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final isSaveEnabled = localPipeline.isNotEmpty && localStage.isNotEmpty && localDeal.isNotEmpty;
+            
+            // Initial load of pipelines
+            if (isLoading && pipelines.isEmpty && loadError == null) {
+              Future.microtask(() async {
+                try {
+                  final pipeResp = await chatProvider.getPipelinesResponse();
+                  setDialogState(() {
+                    isLoading = false;
+                    if (!pipeResp.isError && pipeResp.data != null) {
+                      pipelines = pipeResp.data!;
+                    } else {
+                      loadError = 'Failed to load pipelines: ${pipeResp.error}';
+                    }
+                  });
+                } catch (e) {
+                  setDialogState(() {
+                    isLoading = false;
+                    loadError = e.toString();
+                  });
+                }
+              });
+            }
+
             return AlertDialog(
-              backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+              backgroundColor: isDark ? const Color(0xFF0B141A) : Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-              actionsPadding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1144,96 +1174,148 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Pipeline', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          hint: Text('--select--', style: TextStyle(color: Colors.grey.shade500)),
-                          icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
-                          value: localPipeline.isEmpty ? null : localPipeline,
-                          dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                          items: ['Sales', 'Marketing'].map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                            );
-                          }).toList(),
-                          onChanged: (newValue) {
-                            setDialogState(() {
-                              localPipeline = newValue!;
-                              localStage = '';
-                              localDeal = '';
-                            });
-                          },
+                    if (isLoading && pipelines.isEmpty)
+                      const Center(child: CircularProgressIndicator())
+                    else if (loadError != null)
+                      Text(loadError!, style: const TextStyle(color: Colors.red))
+                    else ...[
+                      Text('Pipeline', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            hint: Text('--select pipeline--', style: TextStyle(color: Colors.grey.shade500)),
+                            icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
+                            value: selectedPipelineId,
+                            dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+                            items: [
+                              const DropdownMenuItem<String>(value: null, child: Text('-- None --')),
+                              ...pipelines.map((Map<String, dynamic> p) {
+                                final id = p['Id']?.toString();
+                                final name = p['Nm']?.toString() ?? p['Name']?.toString() ?? p['Title']?.toString() ?? '';
+                                return DropdownMenuItem<String>(
+                                  value: id,
+                                  child: Text(name, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                                );
+                              }).toList()
+                            ],
+                            onChanged: (newValue) {
+                              setDialogState(() {
+                                selectedPipelineId = newValue;
+                                selectedStageId = null;
+                                selectedDealId = null;
+                                stages = [];
+                                deals = [];
+                                
+                                if (newValue != null) {
+                                  isLoading = true;
+                                  Future.microtask(() async {
+                                    try {
+                                      final kanbanResp = await chatProvider.getKanbanData(newValue, widget.chat.contactId);
+                                      setDialogState(() {
+                                        isLoading = false;
+                                        if (!kanbanResp.isError && kanbanResp.data != null) {
+                                          final data = kanbanResp.data!;
+                                          final List<dynamic> headers = data['ArrHeader'] ?? [];
+                                          final List<dynamic> items = data['ArrItem'] ?? [];
+                                          
+                                          stages = headers.map((e) => Map<String, dynamic>.from(e)).toList();
+                                          deals = items.map((e) => Map<String, dynamic>.from(e)).toList();
+                                        } else {
+                                          loadError = 'Kanban Err: ${kanbanResp.error}';
+                                        }
+                                      });
+                                    } catch (e) {
+                                      setDialogState(() {
+                                        isLoading = false;
+                                        loadError = e.toString();
+                                      });
+                                    }
+                                  });
+                                }
+                              });
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Stage', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          hint: Text('--select pipeline first--', style: TextStyle(color: Colors.grey.shade500)),
-                          icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
-                          value: localStage.isEmpty ? null : localStage,
-                          dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                          items: localPipeline.isEmpty ? [] : ['Stage 1', 'Stage 2'].map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                            );
-                          }).toList(),
-                          onChanged: (newValue) {
-                            setDialogState(() {
-                              localStage = newValue!;
-                              localDeal = '';
-                            });
-                          },
+                      const SizedBox(height: 16),
+                      Text('Stage', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            hint: Text('--select stage--', style: TextStyle(color: Colors.grey.shade500)),
+                            icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
+                            value: selectedStageId,
+                            dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+                            items: [
+                              const DropdownMenuItem<String>(value: null, child: Text('-- All Stages --')),
+                              ...stages.map((Map<String, dynamic> item) {
+                                final id = item['Id']?.toString();
+                                final name = item['Name']?.toString() ?? item['Nm']?.toString() ?? item['Title']?.toString() ?? '';
+                                return DropdownMenuItem<String>(
+                                  value: id,
+                                  child: Text(name, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                                );
+                              }).toList()
+                            ],
+                            onChanged: (newValue) {
+                              setDialogState(() {
+                                selectedStageId = newValue;
+                                selectedDealId = null;
+                              });
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Deal', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          hint: Text('--select pipeline & stage first--', style: TextStyle(color: Colors.grey.shade500)),
-                          icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
-                          value: localDeal.isEmpty ? null : localDeal,
-                          dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                          items: localStage.isEmpty ? [] : ['Deal A', 'Deal B'].map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                            );
-                          }).toList(),
-                          onChanged: (newValue) {
-                            setDialogState(() => localDeal = newValue!);
-                          },
+                      const SizedBox(height: 16),
+                      Text('Deal', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            hint: Text('--select deal--', style: TextStyle(color: Colors.grey.shade500)),
+                            icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
+                            value: selectedDealId,
+                            dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+                            items: [
+                              const DropdownMenuItem<String>(value: null, child: Text('-- No Deal --')),
+                              ...deals.where((d) => selectedStageId == null || d['piplinetypes']?.toString() == selectedStageId).map((Map<String, dynamic> item) {
+                                final id = item['Id']?.toString();
+                                final name = item['Name']?.toString() ?? item['Nm']?.toString() ?? item['Title']?.toString() ?? '';
+                                return DropdownMenuItem<String>(
+                                  value: id,
+                                  child: Text(name, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                                );
+                              }).toList()
+                            ],
+                            onChanged: (newValue) {
+                              setDialogState(() {
+                                selectedDealId = newValue;
+                              });
+                            },
+                          ),
                         ),
                       ),
-                    ),
+                    ]
                   ],
                 ),
               ),
@@ -1248,26 +1330,40 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: isSaveEnabled ? Colors.blue : Colors.grey.shade300,
-                        foregroundColor: isSaveEnabled ? Colors.white : Colors.grey.shade500,
+                        backgroundColor: (!isLoading) ? Colors.blue : Colors.grey.shade300,
+                        foregroundColor: (!isLoading) ? Colors.white : Colors.grey.shade500,
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
-                      onPressed: isSaveEnabled ? () async {
-                        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                        final success = await chatProvider.updateContactDeal(widget.chat.id, localPipeline, localStage, localDeal);
+                      onPressed: isLoading ? null : () async {
+                        final success = await chatProvider.updateContactDeal(widget.chat.id, selectedPipelineId ?? '', selectedStageId ?? '', selectedDealId ?? '');
                         if (success) {
                           setState(() {
-                            _currentPipeline = localPipeline;
-                            _currentStage = localStage;
-                            _currentDeal = localDeal;
+                            // Find the names
+                            if (selectedPipelineId != null) {
+                              final p = pipelines.firstWhere((e) => e['Id']?.toString() == selectedPipelineId, orElse: () => {});
+                              _currentPipeline = p['Nm']?.toString() ?? p['Name']?.toString() ?? p['Title']?.toString() ?? selectedPipelineId!;
+                            }
+                            if (selectedStageId != null) {
+                              final s = stages.firstWhere((e) => e['Id']?.toString() == selectedStageId, orElse: () => {});
+                              _currentStage = s['Name']?.toString() ?? s['Nm']?.toString() ?? s['Title']?.toString() ?? selectedStageId!;
+                            } else {
+                              _currentStage = '';
+                            }
+                            if (selectedDealId != null) {
+                              final d = deals.firstWhere((e) => e['Id']?.toString() == selectedDealId, orElse: () => {});
+                              _currentDeal = d['Name']?.toString() ?? d['Nm']?.toString() ?? d['Title']?.toString() ?? selectedDealId!;
+                            } else {
+                              _currentDeal = '';
+                            }
                           });
+                          _loadDetailRoom();
                         } else {
-                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save deal')));
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save deal')));
                         }
                         if (mounted) Navigator.pop(context);
-                      } : null,
+                      },
                       child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                     ),
                   ],
@@ -1279,7 +1375,6 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
       },
     );
   }
-
   void _showFormTemplateDialog() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);

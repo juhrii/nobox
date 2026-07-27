@@ -59,6 +59,8 @@ class AppConfig {
   // Additional Filter Options
   static const String campaignsListEndpoint = 'Services/Nobox/Campaign/ListActive';
   static const String dealsListEndpoint = 'Services/Nobox/Deals/List';
+  static const String pipelinesListEndpoint = 'Services/Nobox/Dealpipelines/List';
+  static const String stagesListEndpoint = 'Services/Nobox/DealStages/List';
   static const String groupsListEndpoint = 'Services/Nobox/Group/List';
   static const String linksListEndpoint = 'Services/Chat/Chatlinkcontacts/List';
 

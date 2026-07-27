@@ -1988,6 +1988,8 @@ Future<void> toggleArchive(String chatId) async {
   ApiResponse<List<Map<String, dynamic>>>? _cachedContactsResponse;
   ApiResponse<List<Map<String, dynamic>>>? _cachedGroupsResponse;
   ApiResponse<List<Map<String, dynamic>>>? _cachedCampaignsResponse;
+  ApiResponse<List<Map<String, dynamic>>>? _cachedPipelinesResponse;
+  ApiResponse<List<Map<String, dynamic>>>? _cachedStagesResponse;
   ApiResponse<List<Map<String, dynamic>>>? _cachedDealsResponse;
   ApiResponse<List<Map<String, dynamic>>>? _cachedAccountsResponse;
   ApiResponse<List<Map<String, dynamic>>>? _cachedLinksResponse;
@@ -2010,14 +2012,30 @@ Future<void> toggleArchive(String chatId) async {
     return _cachedGroupsResponse!;
   }
 
-  Future<ApiResponse<List<Map<String, dynamic>>>> getCampaignsResponse() async {
-    if (_cachedCampaignsResponse != null) return _cachedCampaignsResponse!;
+  Future<ApiResponse<List<Map<String, dynamic>>>> getCampaignsResponse({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedCampaignsResponse != null) return _cachedCampaignsResponse!;
     _cachedCampaignsResponse = await _chatService.getCampaigns();
     return _cachedCampaignsResponse!;
   }
 
-  Future<ApiResponse<List<Map<String, dynamic>>>> getDealsResponse() async {
-    if (_cachedDealsResponse != null) return _cachedDealsResponse!;
+  Future<ApiResponse<Map<String, dynamic>>> getKanbanData(String pipelineId, String contactId) async {
+    return await _chatService.getKanbanData(pipelineId, contactId);
+  }
+
+  Future<ApiResponse<List<Map<String, dynamic>>>> getPipelinesResponse({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedPipelinesResponse != null) return _cachedPipelinesResponse!;
+    _cachedPipelinesResponse = await _chatService.getPipelines();
+    return _cachedPipelinesResponse!;
+  }
+
+  Future<ApiResponse<List<Map<String, dynamic>>>> getStagesResponse({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedStagesResponse != null) return _cachedStagesResponse!;
+    _cachedStagesResponse = await _chatService.getStages();
+    return _cachedStagesResponse!;
+  }
+
+  Future<ApiResponse<List<Map<String, dynamic>>>> getDealsResponse({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedDealsResponse != null) return _cachedDealsResponse!;
     _cachedDealsResponse = await _chatService.getDeals();
     return _cachedDealsResponse!;
   }
