@@ -285,14 +285,19 @@ class Message {
 
     // Tentukan apakah pesan berasal dari "saya" (agen/pengguna)
     // ChatMessages/List: jika AgentId ada, itu adalah pesan agen (isMe = true)
-    // Cek juga nama field lama untuk kompatibilitas mundur
     bool isMe = false;
     if (!isSystem) {
       final agentIdVal = json['AgentId'];
+      final dirVal = json['Dir'] ?? json['Direction'] ?? json['dir'];
+      
       if (agentIdVal != null && agentIdVal != 0 && agentIdVal.toString() != '0') {
-        // AgentId ada dan bukan 0 → pesan dikirim oleh agen (kita)
+        // AgentId ada dan bukan 0 -> pesan dikirim oleh agen (kita)
         isMe = true;
-      } else if (json['IsMe'] == true) {
+      } else if (json['IsMe'] == true || json['IsOutbound'] == true || json['Outbound'] == true) {
+        isMe = true;
+      } else if (dirVal != null && (dirVal == 1 || dirVal == '1' || dirVal == 'out' || dirVal == 'outbound')) {
+        isMe = true;
+      } else if (json['FromId'] != null && json['ChAccId'] != null && json['FromId'] == json['ChAccId']) {
         isMe = true;
       } else {
         // Fallback: cek kecocokan email

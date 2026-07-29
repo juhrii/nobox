@@ -1,4 +1,4 @@
-// =====================================================================
+ // =====================================================================
 // FITUR 4: Detail Ruang Obrolan (Message Bubble Widget)
 // TUJUAN: Mengelola antarmuka visual satu gelembung pesan, termasuk teks, media, jam pengiriman, dan indikator centang baca.
 // CARA KERJA: Centang dipetakan berdasarkan status ack: 1 (Abu 1), 2 (Abu 2), 3 (Biru 2).
@@ -450,13 +450,13 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                 ? Colors.black.withOpacity(0.2)
                 : Colors.grey.shade100),
         borderRadius: BorderRadius.circular(8),
-        border: Border(
-          left: BorderSide(
-              color: isMe
-                  ? Colors.white.withOpacity(0.8)
-                  : AppTheme.primaryColor,
-              width: 4),
-        ),
+        border: isMe 
+            ? null
+            : const Border(
+                left: BorderSide(
+                    color: AppTheme.primaryColor,
+                    width: 4),
+              ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -94,6 +95,11 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
   Future<void> _loadDetailRoom() async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     final data = await chatProvider.getDetailRoom(widget.chat.id);
+      try {
+        File('d:/UBIG/Proyek/NoBox_Chat/nobox/room_data_dump.txt').writeAsStringSync(data.toString());
+      } catch(e) {
+        print("Error dump: $e");
+      }
     debugPrint('ContactInfo: DetailRoom response keys: ${data?.keys.toList()}');
     if (data != null && mounted) {
       // Debug: print semua data untuk lihat field yang tersedia
@@ -137,6 +143,8 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
         final notesData = roomData is Map ? roomData['Notes'] : null;
         if (notesData is List && notesData.isNotEmpty) {
           // Ambil note terakhir
+          
+          
           final lastNote = notesData.last;
           _currentNotes = lastNote['Cnt']?.toString() ?? lastNote['Content']?.toString() ?? _currentNotes;
         } else if (notesData is String && notesData.isNotEmpty) {
@@ -153,7 +161,9 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
         }
 
         // Deal: dari Data -> Deal atau Room
-          final dealData = roomData is Map ? roomData['Deal'] : null;
+          final contactNode = (roomData is Map) ? (roomData['ContactReal'] ?? roomData['Contact']) : null;
+          final dealData = roomData is Map ? (roomData['Deal'] ?? (contactNode is Map ? contactNode['Deal'] : null)) : null;
+          
           if (dealData is Map) {
             _currentDeal = dealData['Name']?.toString() ?? dealData['Nm']?.toString() ?? _currentDeal;
             final pipelineData = dealData['Pipeline']?.toString() ?? dealData['PipelineName']?.toString() ?? '';
@@ -161,11 +171,11 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             final stageData = dealData['Stage']?.toString() ?? dealData['StageName']?.toString() ?? '';
             if (stageData.isNotEmpty) _currentStage = stageData;
           } else {
-            final roomDeal = room['Deal']?.toString() ?? '';
+            final roomDeal = room['Deal']?.toString() ?? (contactNode is Map ? contactNode['Deal']?.toString() : null) ?? '';
             if (roomDeal.isNotEmpty) _currentDeal = roomDeal;
-            final roomPipeline = room['Pipeline']?.toString() ?? '';
+            final roomPipeline = room['Pipeline']?.toString() ?? (contactNode is Map ? contactNode['Pipeline']?.toString() : null) ?? '';
             if (roomPipeline.isNotEmpty) _currentPipeline = roomPipeline;
-            final roomStage = room['Stage']?.toString() ?? '';
+            final roomStage = room['Stage']?.toString() ?? (contactNode is Map ? contactNode['Stage']?.toString() : null) ?? '';
             if (roomStage.isNotEmpty) _currentStage = roomStage;
           }
 
@@ -210,6 +220,27 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
               break;
             }
           }
+        }
+      }
+      
+      final contactNode2 = (roomData is Map) ? (roomData['ContactReal'] ?? roomData['Contact']) : null;
+      final dealIdStr = room['DealId']?.toString() ?? (contactNode2 is Map ? contactNode2['DealId']?.toString() : null) ?? '';
+      
+      if (dealIdStr.isNotEmpty && _currentDeal.isEmpty) {
+        try {
+          final dealsResp = await chatProvider.getDealsResponse();
+          if (!dealsResp.isError && dealsResp.data != null) {
+            for (final d in dealsResp.data!) {
+              if (d['Id']?.toString() == dealIdStr) {
+                if (mounted) setState(() { 
+                  _currentDeal = d['Name']?.toString() ?? d['Nm']?.toString() ?? d['Title']?.toString() ?? dealIdStr; 
+                });
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Failed to fetch deal name: $e');
         }
       }
       
@@ -1121,24 +1152,33 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
     String? selectedStageId;
     String? selectedDealId;
 
-    // We will show dialog first, then load pipelines.
+    // We will show dialog first, then load pipelines, stages, and deals.
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             
-            // Initial load of pipelines
+            // Initial load of all data
             if (isLoading && pipelines.isEmpty && loadError == null) {
               Future.microtask(() async {
                 try {
                   final pipeResp = await chatProvider.getPipelinesResponse();
+                  final stageResp = await chatProvider.getStagesResponse();
+                  final dealResp = await chatProvider.getDealsResponse();
+                  
                   setDialogState(() {
                     isLoading = false;
                     if (!pipeResp.isError && pipeResp.data != null) {
                       pipelines = pipeResp.data!;
                     } else {
                       loadError = 'Failed to load pipelines: ${pipeResp.error}';
+                    }
+                    if (!stageResp.isError && stageResp.data != null) {
+                      stages = stageResp.data!;
+                    }
+                    if (!dealResp.isError && dealResp.data != null) {
+                      deals = dealResp.data!;
                     }
                   });
                 } catch (e) {
@@ -1218,35 +1258,6 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                                 selectedPipelineId = newValue;
                                 selectedStageId = null;
                                 selectedDealId = null;
-                                stages = [];
-                                deals = [];
-                                
-                                if (newValue != null) {
-                                  isLoading = true;
-                                  Future.microtask(() async {
-                                    try {
-                                      final kanbanResp = await chatProvider.getKanbanData(newValue, widget.chat.contactId);
-                                      setDialogState(() {
-                                        isLoading = false;
-                                        if (!kanbanResp.isError && kanbanResp.data != null) {
-                                          final data = kanbanResp.data!;
-                                          final List<dynamic> headers = data['ArrHeader'] ?? [];
-                                          final List<dynamic> items = data['ArrItem'] ?? [];
-                                          
-                                          stages = headers.map((e) => Map<String, dynamic>.from(e)).toList();
-                                          deals = items.map((e) => Map<String, dynamic>.from(e)).toList();
-                                        } else {
-                                          loadError = 'Kanban Err: ${kanbanResp.error}';
-                                        }
-                                      });
-                                    } catch (e) {
-                                      setDialogState(() {
-                                        isLoading = false;
-                                        loadError = e.toString();
-                                      });
-                                    }
-                                  });
-                                }
                               });
                             },
                           ),
@@ -1270,7 +1281,13 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                             dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
                             items: [
                               const DropdownMenuItem<String>(value: null, child: Text('-- All Stages --')),
-                              ...stages.map((Map<String, dynamic> item) {
+                              ...stages.where((s) => selectedPipelineId == null || 
+                                s['DealpipelinesId']?.toString() == selectedPipelineId || 
+                                s['DealPipelinesId']?.toString() == selectedPipelineId || 
+                                s['PipelineId']?.toString() == selectedPipelineId ||
+                                s['project_id']?.toString() == selectedPipelineId ||
+                                s['ProjectId']?.toString() == selectedPipelineId
+                              ).map((Map<String, dynamic> item) {
                                 final id = item['Id']?.toString();
                                 final name = item['Name']?.toString() ?? item['Nm']?.toString() ?? item['Title']?.toString() ?? '';
                                 return DropdownMenuItem<String>(
@@ -1306,7 +1323,24 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                             dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
                             items: [
                               const DropdownMenuItem<String>(value: null, child: Text('-- No Deal --')),
-                              ...deals.where((d) => selectedStageId == null || d['piplinetypes']?.toString() == selectedStageId).map((Map<String, dynamic> item) {
+                              ...deals.where((d) {
+                                bool matchStage = selectedStageId == null || 
+                                  d['piplinetypes']?.toString() == selectedStageId || 
+                                  d['DealpipelinetypesId']?.toString() == selectedStageId ||
+                                  d['DealPipelineTypesId']?.toString() == selectedStageId ||
+                                  d['StageId']?.toString() == selectedStageId;
+                                  
+                                bool matchPipeline = selectedPipelineId == null ||
+                                  d['DealpipelinesId']?.toString() == selectedPipelineId ||
+                                  d['DealPipelinesId']?.toString() == selectedPipelineId ||
+                                  d['PipelineId']?.toString() == selectedPipelineId ||
+                                  d['project_id']?.toString() == selectedPipelineId ||
+                                  d['ProjectId']?.toString() == selectedPipelineId;
+
+                                if (selectedStageId != null) return matchStage;
+                                if (selectedPipelineId != null) return matchPipeline;
+                                return true;
+                              }).map((Map<String, dynamic> item) {
                                 final id = item['Id']?.toString();
                                 final name = item['Name']?.toString() ?? item['Nm']?.toString() ?? item['Title']?.toString() ?? '';
                                 return DropdownMenuItem<String>(

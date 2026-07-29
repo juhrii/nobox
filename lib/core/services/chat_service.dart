@@ -182,20 +182,18 @@ class ChatService {
 
   /// Fetch list of deals from API
 
-
   Future<ApiResponse<List<Map<String, dynamic>>>> getPipelines() async {
     try {
       final requestData = {
-        'IncludeColumns': ['Id', 'Name', 'Nm', 'Title'],
-        'ColumnSelection': 1,
-        'Take': 100,
-        'Skip': 0,
+        "EqualityFilter": {},
       };
       final response = await _apiClient.post(AppConfig.pipelinesListEndpoint, data: requestData);
       if (response.statusCode == 200) {
         return ApiResponse.success(_parseGenericList(response.data), response.statusCode!);
       }
       return ApiResponse.failure('Failed to load pipelines: ${response.statusCode}', response.statusCode!);
+    } on DioException catch (e) {
+      return ApiResponse.failure(e.message ?? 'Connection error', e.response?.statusCode ?? 500);
     } catch (e) {
       return ApiResponse.failure(e.toString(), 500);
     }
@@ -204,10 +202,7 @@ class ChatService {
   Future<ApiResponse<List<Map<String, dynamic>>>> getStages() async {
     try {
       final requestData = {
-        'IncludeColumns': ['Id', 'Name', 'Nm', 'Title'],
-        'ColumnSelection': 1,
-        'Take': 100,
-        'Skip': 0,
+        "EqualityFilter": {},
       };
       final response = await _apiClient.post(AppConfig.stagesListEndpoint, data: requestData);
       if (response.statusCode == 200) {
@@ -221,17 +216,19 @@ class ChatService {
 
   Future<ApiResponse<Map<String, dynamic>>> getKanbanData(String pipelineId, String contactId) async {
     try {
+      final Map<String, dynamic> equalityFilter = {
+        "project_id": int.tryParse(pipelineId) ?? pipelineId,
+        "KontakId": int.tryParse(contactId) ?? contactId,
+      };
+      
       final payload = {
-        "EqualityFilter": {
-            "project_id": int.tryParse(pipelineId) ?? pipelineId,
-            "KontakId": int.tryParse(contactId) ?? contactId
-        },
+        "EqualityFilter": equalityFilter,
         "Sort": [
           "Urutan ASC"
         ]
       };
       
-      final response = await _apiClient.post('Services/Nobox/Deals/KanbanData', data: payload);
+      final response = await _apiClient.post(AppConfig.getKanbanEndpoint, data: payload);
       
       if (response.statusCode == 200) {
         return ApiResponse.success(response.data is Map ? Map<String, dynamic>.from(response.data) : {}, response.statusCode!);
@@ -249,8 +246,6 @@ class ChatService {
   Future<ApiResponse<List<Map<String, dynamic>>>> getDeals() async {
     try {
       final requestData = {
-        'IncludeColumns': ['Id', 'Name', 'DisplayName', 'Title', 'Nm'],
-        'ColumnSelection': 1,
         'Take': 100,
         'Skip': 0,
       };

@@ -3610,77 +3610,78 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         const SnackBar(content: Text('Menghapus pesan...')),
                       );
 
-                      final sortedIndices = _selectedMessageIndices.toList()
-                        ..sort((a, b) => b.compareTo(a));
-                      bool hasError = false;
+                      final selectedMsgs = _selectedMessageIndices
+                          .where((idx) => idx >= 0 && idx < _messages.length)
+                          .map((idx) => _messages[idx])
+                          .toList();
 
+                      bool hasError = false;
                       String errorMessage = '';
-                      for (final idx in sortedIndices) {
-                        if (idx >= 0 && idx < _messages.length) {
-                          final msgId = _messages[idx].id;
-                          if (msgId.isNotEmpty) {
-                            try {
-                              // Panggil API penghapusan
-                              final resp = await _chatService.deleteMessage(
-                                msgId,
-                              );
-                              if (resp.isError) {
-                                hasError = true;
-                                errorMessage = resp.error ?? 'Unknown error';
-                                if (mounted) {
-                                  showDialog(
-                                    context: context,
-                                    builder: (ctxErr) => AlertDialog(
-                                      title: const Text('Gagal Menghapus di Server'),
-                                      content: Text('Error asli: $errorMessage'),
-                                      actions: [
-                                        TextButton(onPressed: () => Navigator.pop(ctxErr), child: const Text('OK'))
-                                      ],
-                                    ),
-                                  );
-                                }
-                              } else {
-                                if (mounted) {
-                                  Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, _messages[idx].rawTime);
-                                }
-                                setState(() {
-                                  _messages.removeAt(idx);
-                                });
-                              }
-                            } catch (e) {
+
+                      for (final msg in selectedMsgs) {
+                        final msgId = msg.id;
+                        if (msgId.isNotEmpty) {
+                          try {
+                            // Panggil API penghapusan
+                            final resp = await _chatService.deleteMessage(
+                              msgId,
+                            );
+                            if (resp.isError) {
                               hasError = true;
+                              errorMessage = resp.error ?? 'Unknown error';
                               if (mounted) {
                                 showDialog(
                                   context: context,
                                   builder: (ctxErr) => AlertDialog(
-                                    title: const Text('Exception saat menghapus'),
-                                    content: Text('Error: $e'),
+                                    title: const Text('Gagal Menghapus di Server'),
+                                    content: Text('Error asli: $errorMessage'),
                                     actions: [
                                       TextButton(onPressed: () => Navigator.pop(ctxErr), child: const Text('OK'))
                                     ],
                                   ),
                                 );
                               }
+                            } else {
+                              if (mounted) {
+                                Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
+                              }
+                              setState(() {
+                                _messages.removeWhere((m) => m.id == msgId);
+                              });
                             }
-                          } else {
-                            // Jika pesan lokal / tidak ada ID
+                          } catch (e) {
+                            hasError = true;
                             if (mounted) {
                               showDialog(
                                 context: context,
                                 builder: (ctxErr) => AlertDialog(
-                                  title: const Text('Pesan Belum Sinkron'),
-                                  content: const Text('Pesan ini belum mendapatkan ID resmi dari server. Silakan keluar dan masuk lagi ke ruang obrolan ini untuk sinkronisasi ID.'),
+                                  title: const Text('Exception saat menghapus'),
+                                  content: Text('Error: $e'),
                                   actions: [
                                     TextButton(onPressed: () => Navigator.pop(ctxErr), child: const Text('OK'))
                                   ],
                                 ),
                               );
                             }
-                            // Kita tetap hapus dari UI lokal agar tidak mengganggu
-                            setState(() {
-                              _messages.removeAt(idx);
-                            });
                           }
+                        } else {
+                          // Jika pesan lokal / tidak ada ID
+                          if (mounted) {
+                            showDialog(
+                              context: context,
+                              builder: (ctxErr) => AlertDialog(
+                                title: const Text('Pesan Belum Sinkron'),
+                                content: const Text('Pesan ini belum mendapatkan ID resmi dari server. Silakan keluar dan masuk lagi ke ruang obrolan ini untuk sinkronisasi ID.'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctxErr), child: const Text('OK'))
+                                ],
+                              ),
+                            );
+                          }
+                          // Kita tetap hapus dari UI lokal agar tidak mengganggu
+                          setState(() {
+                            _messages.removeWhere((m) => identical(m, msg));
+                          });
                         }
                       }
 
