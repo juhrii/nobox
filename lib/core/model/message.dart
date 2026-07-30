@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 // =====================================================================
@@ -284,25 +285,32 @@ class Message {
     }
 
     // Tentukan apakah pesan berasal dari "saya" (agen/pengguna)
-    // ChatMessages/List: jika AgentId ada, itu adalah pesan agen (isMe = true)
     bool isMe = false;
     if (!isSystem) {
       final agentIdVal = json['AgentId'];
       final dirVal = json['Dir'] ?? json['Direction'] ?? json['dir'];
+      final dirStr = dirVal?.toString().toLowerCase() ?? '';
       
       if (agentIdVal != null && agentIdVal != 0 && agentIdVal.toString() != '0') {
         // AgentId ada dan bukan 0 -> pesan dikirim oleh agen (kita)
         isMe = true;
-      } else if (json['IsMe'] == true || json['IsOutbound'] == true || json['Outbound'] == true) {
+      } else if (json['IsMe'] == true || json['IsOutbound'] == true || json['IsOutBound'] == true || json['Outbound'] == true || json['isOutbound'] == true) {
         isMe = true;
-      } else if (dirVal != null && (dirVal == 1 || dirVal == '1' || dirVal == 'out' || dirVal == 'outbound')) {
+      } else if (json['IsNobox'] == 1 || json['IsNobox'] == true || json['IsNobox']?.toString() == '1') {
+        // Dari log aktual, NoBox menandai pesan outbound channel dengan IsNobox: 1
         isMe = true;
-      } else if (json['FromId'] != null && json['ChAccId'] != null && json['FromId'] == json['ChAccId']) {
+      } else if (dirStr == '1' || dirStr == '2' || dirStr == 'out' || dirStr == 'outbound' || dirStr == 'true') {
+        isMe = true;
+      } else if (json['FromId'] != null && json['ChAccId'] != null && json['FromId'].toString() == json['ChAccId'].toString()) {
+        isMe = true;
+      } else if (json['SenderId'] != null && json['ChAccId'] != null && json['SenderId'].toString() == json['ChAccId'].toString()) {
+        isMe = true;
+      } else if (json['SenderId'] != null && json['FromId'] != null && json['SenderId'].toString() == json['FromId'].toString() && dirStr != 'in' && dirStr != '0') {
         isMe = true;
       } else {
         // Fallback: cek kecocokan email
         final senderId = json['SenderId']?.toString() ?? json['FromId']?.toString() ?? json['sender_email'] ?? '';
-        isMe = senderId == currentUserEmail;
+        isMe = senderId.isNotEmpty && senderId == currentUserEmail;
       }
     }
 
@@ -565,9 +573,14 @@ class Message {
         }
       }
     } else if (typeVal == '2' || content.contains('🎵 Voice Note')) {
-      msgType = MessageType.voice;
-      audioPath = '';
-      content = '';
+      // FIX BUG: Backend sering melabeli pesan berisi Link URL sebagai Type 2 (Voice Note)
+      if (typeVal == '2' && !content.contains('🎵 Voice Note') && content.trim().isNotEmpty) {
+        msgType = MessageType.text;
+      } else {
+        msgType = MessageType.voice;
+        audioPath = '';
+        content = '';
+      }
     } else if (typeVal == '16' || typeVal == '3') {
       // No Files/File data available
       msgType = MessageType.text;

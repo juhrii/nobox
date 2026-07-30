@@ -11,6 +11,8 @@ import '../../widgets/add_funnel_dialog.dart';
 import '../../../core/services/filter_api_service.dart';
 import '../../../core/model/filter_data_item.dart';
 import '../../../core/model/api_response.dart';
+import '../../widgets/searchable_dropdown.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // =====================================================================
 // FITUR: Halaman Detail Kontak (Info)
@@ -337,6 +339,27 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
           debugPrint('ContactInfo: Error extracting data: $e');
         }
       });
+      
+      // --- WORKAROUND LOCAL CACHE OVERRIDE ---
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cachedPipeline = prefs.getString('deal_pipeline_${widget.chat.id}');
+        final cachedStage = prefs.getString('deal_stage_${widget.chat.id}');
+        final cachedDeal = prefs.getString('deal_deal_${widget.chat.id}');
+        
+        if (cachedDeal != null && cachedDeal.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _currentPipeline = cachedPipeline ?? _currentPipeline;
+              _currentStage = cachedStage ?? _currentStage;
+              _currentDeal = cachedDeal;
+            });
+            debugPrint('ContactInfo: Overrode Deal with local cache: $_currentDeal');
+          }
+        }
+      } catch(e) {
+        debugPrint('Failed to load local deal cache: $e');
+      }
     }
   }
 
@@ -1229,133 +1252,105 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                     else ...[
                       Text('Pipeline', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                       const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            hint: Text('--select pipeline--', style: TextStyle(color: Colors.grey.shade500)),
-                            icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
-                            value: selectedPipelineId,
-                            dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                            items: [
-                              const DropdownMenuItem<String>(value: null, child: Text('-- None --')),
-                              ...pipelines.map((Map<String, dynamic> p) {
-                                final id = p['Id']?.toString();
-                                final name = p['Nm']?.toString() ?? p['Name']?.toString() ?? p['Title']?.toString() ?? '';
-                                return DropdownMenuItem<String>(
-                                  value: id,
-                                  child: Text(name, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                                );
-                              }).toList()
-                            ],
-                            onChanged: (newValue) {
-                              setDialogState(() {
-                                selectedPipelineId = newValue;
-                                selectedStageId = null;
-                                selectedDealId = null;
-                              });
-                            },
-                          ),
-                        ),
+                      SearchableDropdown<String>(
+                        hint: '--select pipeline--',
+                        value: selectedPipelineId,
+                        options: pipelines.map((p) => p['Id']?.toString() ?? '').toList(),
+                        itemAsString: (id) {
+                          final p = pipelines.firstWhere((p) => p['Id']?.toString() == id, orElse: () => {});
+                          return p['Nm']?.toString() ?? p['Name']?.toString() ?? p['Title']?.toString() ?? '';
+                        },
+                        onChanged: (newValue) {
+                          setDialogState(() {
+                            selectedPipelineId = newValue;
+                            selectedStageId = null;
+                            selectedDealId = null;
+                          });
+                        },
                       ),
                       const SizedBox(height: 16),
                       Text('Stage', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                       const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            hint: Text('--select stage--', style: TextStyle(color: Colors.grey.shade500)),
-                            icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
-                            value: selectedStageId,
-                            dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                            items: [
-                              const DropdownMenuItem<String>(value: null, child: Text('-- All Stages --')),
-                              ...stages.where((s) => selectedPipelineId == null || 
-                                s['DealpipelinesId']?.toString() == selectedPipelineId || 
-                                s['DealPipelinesId']?.toString() == selectedPipelineId || 
-                                s['PipelineId']?.toString() == selectedPipelineId ||
-                                s['project_id']?.toString() == selectedPipelineId ||
-                                s['ProjectId']?.toString() == selectedPipelineId
-                              ).map((Map<String, dynamic> item) {
-                                final id = item['Id']?.toString();
-                                final name = item['Name']?.toString() ?? item['Nm']?.toString() ?? item['Title']?.toString() ?? '';
-                                return DropdownMenuItem<String>(
-                                  value: id,
-                                  child: Text(name, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                                );
-                              }).toList()
-                            ],
-                            onChanged: (newValue) {
-                              setDialogState(() {
-                                selectedStageId = newValue;
-                                selectedDealId = null;
-                              });
-                            },
-                          ),
-                        ),
+                      SearchableDropdown<String>(
+                        hint: '--select stage--',
+                        value: selectedStageId,
+                        options: () {
+                          if (selectedPipelineId == null) {
+                            return ['empty_not_found'];
+                          }
+                          final filteredStages = stages.where((s) => selectedPipelineId == null || 
+                            s['DealpipelinesId']?.toString() == selectedPipelineId || 
+                            s['DealPipelinesId']?.toString() == selectedPipelineId || 
+                            s['PipelineId']?.toString() == selectedPipelineId ||
+                            s['project_id']?.toString() == selectedPipelineId ||
+                            s['ProjectId']?.toString() == selectedPipelineId
+                          ).map((s) => s['Id']?.toString() ?? '').toList();
+
+                          if (filteredStages.isEmpty) {
+                            return ['empty_not_found'];
+                          }
+                          return filteredStages;
+                        }(),
+                        itemAsString: (id) {
+                          if (id == 'empty_not_found') return 'Not found';
+                          final s = stages.firstWhere((s) => s['Id']?.toString() == id, orElse: () => {});
+                          return s['Name']?.toString() ?? s['Nm']?.toString() ?? s['Title']?.toString() ?? '';
+                        },
+                        onChanged: (newValue) {
+                          if (newValue == 'empty_not_found') return;
+                          setDialogState(() {
+                            selectedStageId = newValue;
+                            selectedDealId = null;
+                          });
+                        },
                       ),
                       const SizedBox(height: 16),
                       Text('Deal', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                       const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            hint: Text('--select deal--', style: TextStyle(color: Colors.grey.shade500)),
-                            icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
-                            value: selectedDealId,
-                            dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                            items: [
-                              const DropdownMenuItem<String>(value: null, child: Text('-- No Deal --')),
-                              ...deals.where((d) {
-                                bool matchStage = selectedStageId == null || 
-                                  d['piplinetypes']?.toString() == selectedStageId || 
-                                  d['DealpipelinetypesId']?.toString() == selectedStageId ||
-                                  d['DealPipelineTypesId']?.toString() == selectedStageId ||
-                                  d['StageId']?.toString() == selectedStageId;
-                                  
-                                bool matchPipeline = selectedPipelineId == null ||
-                                  d['DealpipelinesId']?.toString() == selectedPipelineId ||
-                                  d['DealPipelinesId']?.toString() == selectedPipelineId ||
-                                  d['PipelineId']?.toString() == selectedPipelineId ||
-                                  d['project_id']?.toString() == selectedPipelineId ||
-                                  d['ProjectId']?.toString() == selectedPipelineId;
+                      SearchableDropdown<String>(
+                        hint: '--select deal--',
+                        value: selectedDealId,
+                        options: () {
+                          if (selectedPipelineId == null) {
+                            return ['empty_not_found'];
+                          }
+                          
+                          final filteredDeals = deals.where((d) {
+                            bool matchStage = selectedStageId == null || 
+                              d['piplinetypes']?.toString() == selectedStageId || 
+                              d['DealpipelinetypesId']?.toString() == selectedStageId ||
+                              d['DealPipelineTypesId']?.toString() == selectedStageId ||
+                              d['StageId']?.toString() == selectedStageId;
+                              
+                            bool matchPipeline = selectedPipelineId == null ||
+                              d['DealpipelinesId']?.toString() == selectedPipelineId ||
+                              d['DealPipelinesId']?.toString() == selectedPipelineId ||
+                              d['PipelineId']?.toString() == selectedPipelineId ||
+                              d['project_id']?.toString() == selectedPipelineId ||
+                              d['ProjectId']?.toString() == selectedPipelineId;
 
-                                if (selectedStageId != null) return matchStage;
-                                if (selectedPipelineId != null) return matchPipeline;
-                                return true;
-                              }).map((Map<String, dynamic> item) {
-                                final id = item['Id']?.toString();
-                                final name = item['Name']?.toString() ?? item['Nm']?.toString() ?? item['Title']?.toString() ?? '';
-                                return DropdownMenuItem<String>(
-                                  value: id,
-                                  child: Text(name, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-                                );
-                              }).toList()
-                            ],
-                            onChanged: (newValue) {
-                              setDialogState(() {
-                                selectedDealId = newValue;
-                              });
-                            },
-                          ),
-                        ),
+                            if (selectedStageId != null) return matchStage;
+                            if (selectedPipelineId != null) return matchPipeline;
+                            return true;
+                          }).map((d) => d['Id']?.toString() ?? '').toList();
+
+                          if (filteredDeals.isEmpty && (selectedStageId != null || selectedPipelineId != null)) {
+                            return ['empty_not_found'];
+                          }
+
+                          return filteredDeals;
+                        }(),
+                        itemAsString: (id) {
+                          if (id == 'empty_not_found') return 'Not found';
+                          final item = deals.firstWhere((d) => d['Id']?.toString() == id, orElse: () => {});
+                          return item['Name']?.toString() ?? item['Nm']?.toString() ?? item['Title']?.toString() ?? '';
+                        },
+                        onChanged: (newValue) {
+                          if (newValue == 'empty_not_found') return;
+                          setDialogState(() {
+                            selectedDealId = newValue;
+                          });
+                        },
                       ),
                     ]
                   ],
@@ -1379,6 +1374,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
                       onPressed: isLoading ? null : () async {
+                        setDialogState(() => isLoading = true);
                         final success = await chatProvider.updateContactDeal(widget.chat.id, selectedPipelineId ?? '', selectedStageId ?? '', selectedDealId ?? '');
                         if (success) {
                           setState(() {
@@ -1400,13 +1396,28 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                               _currentDeal = '';
                             }
                           });
-                          _loadDetailRoom();
+                          
+                          // --- WORKAROUND LOCAL CACHE ---
+                          SharedPreferences.getInstance().then((prefs) {
+                            prefs.setString('deal_pipeline_${widget.chat.id}', _currentPipeline);
+                            prefs.setString('deal_stage_${widget.chat.id}', _currentStage);
+                            prefs.setString('deal_deal_${widget.chat.id}', _currentDeal);
+                          }).catchError((_) {});
+                          // ------------------------------
+                          
+                          // Dihapus _loadDetailRoom() di sini agar UI Deal tidak ter-reset 
+                          // (karena seringkali server terlambat sinkronisasi / cache)
                         } else {
                           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save deal')));
                         }
-                        if (mounted) Navigator.pop(context);
+                        if (mounted) {
+                          setDialogState(() => isLoading = false);
+                          Navigator.pop(context);
+                        }
                       },
-                      child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                      child: isLoading 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text('Save', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
                     ),
                   ],
                 ),

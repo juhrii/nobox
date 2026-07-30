@@ -1262,9 +1262,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       // Pesan pantulan (echo-back) dari pesan yang kita kirim sendiri (AgentId ada = dikirim oleh agen/kita)
       // Daripada mengabaikannya secara langsung, kita periksa apakah nilai Ack diperbarui oleh server
-      // sehingga kita bisa memperbarui status centang pesan (✓ → ✓✓) secara real-time.
+      // sehingga kita bisa memperbarui status centang pesan secara real-time.
       final agentId = messageData['AgentId'];
-      if (agentId != null && agentId != 0 && agentId.toString() != '0') {
+      final isNobox = messageData['IsNobox'];
+      final dirVal = messageData['Dir'] ?? messageData['Direction'] ?? messageData['dir'];
+      final dirStr = dirVal?.toString().toLowerCase() ?? '';
+      final isOutbound = messageData['IsOutbound'] ?? messageData['IsOutBound'] ?? messageData['Outbound'] ?? messageData['isOutbound'];
+      
+      bool isEchoBack = (agentId != null && agentId != 0 && agentId.toString() != '0') ||
+                        (isNobox == 1 || isNobox == '1' || isNobox == true) ||
+                        (dirStr == '1' || dirStr == '2' || dirStr == 'out' || dirStr == 'outbound' || dirStr == 'true') ||
+                        (isOutbound == true || isOutbound == 'true' || isOutbound == 1);
+      
+      bool messageFoundLocally = false;
+      if (isEchoBack) {
         final echoAck = messageData['Ack'] ?? messageData['ack'];
         final echoId = messageData['Id']?.toString() ?? '';
         final echoMsg = messageData['Msg']?.toString() ?? '';
@@ -1276,7 +1287,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         }
 
         debugPrint(
-          'SignalR: 🔁 Own echo-back | id=$echoId | ack=$newAck | msg=$echoMsg',
+          'SignalR: 💬 Own echo-back | id=$echoId | ack=$newAck | msg=$echoMsg',
         );
 
         if (mounted && newAck > 1) {
@@ -1290,31 +1301,49 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             if (matchIdx == -1 && echoMsg.isNotEmpty) {
               // Find the last sent message with matching content that has ack < newAck
               for (int i = _messages.length - 1; i >= 0; i--) {
-                if (_messages[i].isMe &&
-                    _messages[i].id.isEmpty &&
-                    _messages[i].content == echoMsg &&
-                    _messages[i].ack < newAck) {
-                  matchIdx = i;
-                  break;
+                if (_messages[i].isMe && _messages[i].id.isEmpty && _messages[i].ack < newAck) {
+                  // Cek apakah konten sama (abaikan spasi berlebih)
+                  if (_messages[i].content.trim() == echoMsg.trim()) {
+                    matchIdx = i;
+                    break;
+                  }
+                }
+              }
+              // Super Fallback: Jika masih tidak ketemu, tapi ada pesan yang baru saja dikirim (ID kosong), anggap itu pesannya
+              if (matchIdx == -1) {
+                for (int i = _messages.length - 1; i >= 0; i--) {
+                  if (_messages[i].isMe && _messages[i].id.isEmpty && _messages[i].ack < newAck) {
+                    matchIdx = i;
+                    break;
+                  }
                 }
               }
             }
 
-            if (matchIdx != -1 && _messages[matchIdx].ack < newAck) {
-              debugPrint(
-                'SignalR: ✅ Updating ack ${_messages[matchIdx].ack} → $newAck for message at index $matchIdx',
-              );
-              _messages[matchIdx] = _messages[matchIdx].copyWith(
-                id: echoId.isNotEmpty ? echoId : null,
-                ack: newAck,
-                status: newAck >= 3
-                    ? MessageStatus.delivered
-                    : MessageStatus.sent,
-              );
+            if (matchIdx != -1) {
+              messageFoundLocally = true;
+              if (_messages[matchIdx].ack < newAck) {
+                debugPrint(
+                  'SignalR: 🔄 Updating ack ${_messages[matchIdx].ack} -> $newAck for message at index $matchIdx',
+                );
+                _messages[matchIdx] = _messages[matchIdx].copyWith(
+                  id: echoId.isNotEmpty ? echoId : null,
+                  ack: newAck,
+                  status: newAck >= 3
+                      ? MessageStatus.delivered
+                      : MessageStatus.sent,
+                );
+              }
             }
           });
         }
-        return; // Don't add as a new message
+        
+        // FIX: Jika pesan ditemukan secara lokal, hentikan agar tidak duplikat.
+        // TAPI jika TIDAK ditemukan (misal: dikirim dari Web Dashboard/Platform lain), jangan di-return! 
+        // Biarkan proses lanjut ke bawah agar pesan ini ditambahkan ke antarmuka aplikasi.
+        if (messageFoundLocally) {
+          return; // Don't add as a new message
+        }
       }
 
       // Extract ID and check duplicate
@@ -1709,10 +1738,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
 
     _scrollToBottom();
+    
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    // FIX: Optimistic update for Chat List preview so it appears instantly when returning to list
+    chatProvider.updateLocalLastMessage(chat.id, content);
 
     final messageIndex = _messages.indexOf(newMessage);
 
-    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     final isTelegram =
         chat.chId == '2' ||
         chat.channelType.toLowerCase().contains('telegram') ||

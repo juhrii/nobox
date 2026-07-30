@@ -2133,62 +2133,100 @@ class ChatService {
     try {
       debugPrint('dY ? [Update Deal] Updating deal for room $contactId to $deal');
       final int? dealId = int.tryParse(deal);
+      bool anySuccess = false;
+      String errorMsg = '';
 
-      // 1. Coba update di Chatrooms
-      final requestData = {
-        'EntityId': int.tryParse(contactId) ?? contactId,
-        'Entity': {
-          'DealId': dealId,
-        },
-      };
+      // 1. Fetch current Room Detail to prevent overwriting AssigneeId (Unassigned) with partial update
+      Map<String, dynamic>? fullRoomEntity;
+      String? trueContactId;
       
-      try {
-        await _apiClient.post(
-          AppConfig.updateChatroomEndpoint,
-          data: requestData,
-        );
-      } catch (e) {
-        debugPrint('dY ? [Update Deal] Chatrooms/Update failed, moving on: $e');
-      }
-
-      // 2. Coba update di Contact (Karena Deal seringkali menempel di Kontak/ContactReal)
       try {
         final detailResponse = await _apiClient.post(
           AppConfig.detailRoomEndpoint,
           data: {"EntityId": int.tryParse(contactId) ?? contactId},
-        );
-        String? ctRealId;
+        ).timeout(const Duration(seconds: 10));
+        
         if (detailResponse.statusCode == 200 && detailResponse.data != null) {
           final data = detailResponse.data;
-          ctRealId = data['Data']?['Room']?['CtRealId']?.toString();
-          if (ctRealId == null || ctRealId.isEmpty || ctRealId == '0') {
-            ctRealId = data['Data']?['Room']?['CtId']?.toString();
+          if (data['Data']?['Room'] != null) {
+             fullRoomEntity = Map<String, dynamic>.from(data['Data']['Room']);
           }
-          if (ctRealId == null || ctRealId.isEmpty || ctRealId == '0') {
-            ctRealId = data['Data']?['Room']?['ContactId']?.toString();
-          }
-          if (ctRealId == null || ctRealId.isEmpty || ctRealId == '0') {
-            ctRealId = data['Data']?['ContactReal']?['Id']?.toString();
-          }
+          
+          // Dapatkan ContactId asli (bukan CtRealId) untuk mengupdate profil kontak
+          trueContactId = data['Data']?['Room']?['ContactId']?.toString() 
+                       ?? data['Data']?['ContactReal']?['ContactId']?.toString();
         }
+      } catch (e) {
+        debugPrint('dY ? [Update Deal] DetailRoom fetch failed: $e');
+      }
+
+      // 2. Update Chatrooms with a safe partial entity
+      final Map<String, dynamic> entityToUpdate = {
+        'DealId': dealId,
+      };
+      
+      // Preserve critical fields so they don't get wiped out by the partial update
+      if (fullRoomEntity != null) {
+         final keysToPreserve = ['AssigneeId', 'Status', 'ChId', 'AccId', 'AgentId', 'TagsIds', 'IsBlock', 'IsPin', 'FnId', 'CampaignId'];
+         for (var key in keysToPreserve) {
+           if (fullRoomEntity.containsKey(key)) {
+             entityToUpdate[key] = fullRoomEntity[key];
+           }
+         }
+      }
+
+      final requestData = {
+        'EntityId': int.tryParse(contactId) ?? contactId,
+        'Entity': entityToUpdate,
+      };
+      
+      try {
+        final roomRes = await _apiClient.post(
+          AppConfig.updateChatroomEndpoint,
+          data: requestData,
+        ).timeout(const Duration(seconds: 10));
         
-        if (ctRealId != null && ctRealId.isNotEmpty && ctRealId != '0') {
-          await _apiClient.post(
+        if (roomRes.statusCode == 200 || roomRes.statusCode == 204) {
+          anySuccess = true;
+          debugPrint('dY ? [Update Deal] Chatrooms/Update success!');
+        } else {
+          errorMsg += 'Room update failed (${roomRes.statusCode}). ';
+        }
+      } catch (e) {
+        debugPrint('dY ? [Update Deal] Chatrooms/Update failed, moving on: $e');
+        errorMsg += 'Room update error. ';
+      }
+
+      // 3. Update Deal via Contact API (Using True ContactId)
+      try {
+        if (trueContactId != null && trueContactId.isNotEmpty && trueContactId != '0') {
+          final ctRes = await _apiClient.post(
             AppConfig.contactUpdateEndpoint,
             data: {
-              "EntityId": int.tryParse(ctRealId) ?? ctRealId,
+              "EntityId": int.tryParse(trueContactId) ?? trueContactId,
               "Entity": {
                 "DealId": dealId
               }
             }
-          );
-          debugPrint('dY ? [Update Deal] Successfully updated deal on Contact $ctRealId');
+          ).timeout(const Duration(seconds: 10));
+          
+          if (ctRes.statusCode == 200 || ctRes.statusCode == 204) {
+            anySuccess = true;
+            debugPrint('dY ? [Update Deal] Successfully updated deal on Contact $trueContactId');
+          } else {
+            errorMsg += 'Contact update failed (${ctRes.statusCode}). ';
+          }
         }
       } catch (e) {
         debugPrint('dY ? [Update Deal] Failed to update on Contact, moving on: $e');
+        errorMsg += 'Contact update error. ';
       }
 
-      return ApiResponse.success(true, 200);
+      if (anySuccess) {
+        return ApiResponse.success(true, 200);
+      } else {
+        return ApiResponse.failure(errorMsg.isNotEmpty ? errorMsg : 'Failed to update deal', 500);
+      }
     } catch (e) {
       debugPrint('?O [Update Deal] Exception: $e');
       return ApiResponse.failure(e.toString(), 500);
