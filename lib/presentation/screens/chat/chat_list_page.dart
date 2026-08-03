@@ -1291,38 +1291,52 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                     _buildLastMessageRow(chat, isDark),
 
                     // Row 3: Tags & Funnel (inline)
-                    if (chat.tags.isNotEmpty || chat.funnel.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          if (chat.tags.isNotEmpty) ...[
-                            Icon(Icons.local_offer, size: 13, color: Colors.grey.shade500),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Text(
-                                chat.tags.join(', '),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                              ),
-                            ),
-                          ],
-                          if (chat.tags.isNotEmpty && chat.funnel.isNotEmpty) ...[
-                            const SizedBox(width: 6),
-                            Text('|', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
-                            const SizedBox(width: 6),
-                          ],
-                          if (chat.funnel.isNotEmpty) ...[
-                            Icon(Icons.filter_alt, size: 13, color: Colors.grey.shade500),
-                            const SizedBox(width: 3),
-                            Text(
-                              chat.funnel,
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
+                    Builder(
+                      builder: (context) {
+                        final validTags = chat.tags.map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+                        final hasFunnel = chat.funnel.trim().isNotEmpty;
+                        
+                        if (validTags.isEmpty && !hasFunnel) return const SizedBox.shrink();
+                        
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            children: [
+                              if (validTags.isNotEmpty) ...[
+                                Icon(Icons.local_offer, size: 13, color: Colors.grey.shade500),
+                                const SizedBox(width: 3),
+                                Flexible(
+                                  child: Text(
+                                    validTags.join(', '),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                  ),
+                                ),
+                              ],
+                              if (validTags.isNotEmpty && hasFunnel) ...[
+                                const SizedBox(width: 6),
+                                Text('|', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+                                const SizedBox(width: 6),
+                              ],
+                              if (hasFunnel) ...[
+                                Icon(Icons.filter_alt, size: 13, color: Colors.grey.shade500),
+                                const SizedBox(width: 3),
+                                Flexible(
+                                  flex: validTags.isNotEmpty ? 2 : 1,
+                                  child: Text(
+                                    chat.funnel.trim(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    ),
 
                     // Row 4: Channel Icon and Name
                     if (chat.channelName.isNotEmpty && chat.channelName != 'Not Found') ...[

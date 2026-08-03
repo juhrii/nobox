@@ -217,6 +217,7 @@ class _AddFunnelDialogState extends State<AddFunnelDialog> {
 
     return DropdownButtonFormField<String>(
       value: _selectedFunnelId,
+      isExpanded: true,
       dropdownColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
       style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15),
       decoration: InputDecoration(
@@ -239,7 +240,11 @@ class _AddFunnelDialogState extends State<AddFunnelDialog> {
       items: _funnelOptions.map((funnel) {
         return DropdownMenuItem(
           value: funnel['id'],
-          child: Text(funnel['name']!),
+          child: Text(
+            funnel['name']!,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
         );
       }).toList(),
       onChanged: _isSaving

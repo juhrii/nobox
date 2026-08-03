@@ -370,13 +370,9 @@ Future<void> fetchChats() async {
               isNewMessage = true;
             }
           } else if (chat.unreadCount > 0) {
-            // Jika ini chat baru/hot restart dan memiliki pesan belum dibaca
-            // Kita percaya penuh pada _readIds TAPI dengan catatan sekarang server juga
-            // sudah sinkron (_chatService.markRoomAsRead).
-            // Jadi kalau server masih bilang > 0 DAN belum ada di _readIds, berarti benar-benar baru.
-            if (!_readIds.contains(chat.id)) {
-              isNewMessage = true;
-            }
+            // Jika ini chat baru/hot restart dan server merespons unreadCount > 0,
+            // hormati status dari server agar badge nomor tidak tertutup oleh cache lokal kuno!
+            isNewMessage = true;
           }
 
           if (isNewMessage) {
@@ -665,10 +661,16 @@ Future<void> fetchChats() async {
         }
       }
 
-      final uc = roomData['Uc'] is int ? roomData['Uc'] as int : existing.unreadCount;
+      final uc = int.tryParse(roomData['Uc']?.toString() ?? '') ?? existing.unreadCount;
       final timeMsg = roomData['TimeMsg']?.toString() ?? existing.time;
       final isNeedReply = roomData['IsNeedReply'] == 1 || roomData['IsNeedReply'] == true;
       final sdrMsg = roomData['SdrMsg']?.toString() ?? '';
+
+      // Jika ada pesan baru yang masuk (unreadCount > 0 dan bukan dari kita), hapus blokir readIds!
+      if (uc > 0 && sdrMsg.toLowerCase() != 'you' && _readIds.contains(roomId)) {
+        _readIds.remove(roomId);
+        _saveReadState();
+      }
 
       // FIX Bug #3: Also update isBlocked from CtIsBlock if present
       final bool resolvedIsBlocked;
@@ -720,10 +722,17 @@ Future<void> fetchChats() async {
   // Jadi ketika TerimaPesan datang, kita periksa apakah room-nya ada. Jika tidak, paksa refresh!
   void handleTerimaPesanSync(String roomId) {
     if (roomId.isEmpty) return;
+    if (_readIds.contains(roomId)) {
+      _readIds.remove(roomId);
+      _saveReadState();
+    }
     final index = _chats.indexWhere((c) => c.id == roomId);
     if (index == -1) {
       debugPrint('ChatProvider: 🚨 Room $roomId missing on TerimaPesan! Triggering fallback refresh.');
       refreshFirstPage();
+    } else {
+      // Jika ada pesan baru masuk via TerimaPesan, picu pembaruan UI agar badge unread/posisi teratas ter-render
+      notifyListeners();
     }
   }
 
@@ -1017,6 +1026,14 @@ Future<void> fetchChats() async {
                 }
               }
 
+              final oldIdx = _chats.indexWhere((c) => c.id == chat.id);
+              if (oldIdx != -1) {
+                if (chat.time != _chats[oldIdx].time && chat.unreadCount > 0) {
+                  _readIds.remove(chat.id);
+                }
+              } else if (chat.unreadCount > 0) {
+                _readIds.remove(chat.id);
+              }
               return chat.copyWith(
                 isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
                 isArchived: _archivedIds.contains(chat.id),
@@ -1653,6 +1670,7 @@ Future<void> toggleArchive(String chatId) async {
   // ===========================================================================
 
   Future<bool> updateContactTags(String contactId, List<String> tagIds, {List<String>? tagNames}) async {
+    _detailRoomCache.remove(contactId);
     final response = await _chatService.updateContactTags(contactId, tagIds);
     if (!response.isError) {
       final index = _chats.indexWhere((c) => c.id == contactId);
@@ -1668,6 +1686,7 @@ Future<void> toggleArchive(String chatId) async {
   }
 
   void updateLocalContactTags(String contactId, List<String> tagIds, List<String> tagNames) {
+    _detailRoomCache.remove(contactId);
     final index = _chats.indexWhere((c) => c.id == contactId);
     if (index != -1) {
       _chats[index] = _chats[index].copyWith(tags: tagNames);
@@ -1677,6 +1696,7 @@ Future<void> toggleArchive(String chatId) async {
 
 
   Future<bool> updateContactFunnel(String contactId, String funnelId, {String? funnelName}) async {
+    _detailRoomCache.remove(contactId);
     final response = await _chatService.updateContactFunnel(contactId, funnelId);
     if (!response.isError) {
       final index = _chats.indexWhere((c) => c.id == contactId);
@@ -1693,6 +1713,7 @@ Future<void> toggleArchive(String chatId) async {
   }
   
   Future<bool> updateContactNotes(String contactId, String notes) async {
+    _detailRoomCache.remove(contactId);
     final response = await _chatService.updateContactNotes(contactId, notes);
     if (!response.isError) {
       final index = _chats.indexWhere((c) => c.id == contactId);
@@ -1708,6 +1729,7 @@ Future<void> toggleArchive(String chatId) async {
   }
 
   Future<bool> updateContactDeal(String contactId, String pipeline, String stage, String deal) async {
+    _detailRoomCache.remove(contactId);
     final response = await _chatService.updateContactDeal(contactId, pipeline, stage, deal);
     if (!response.isError) {
       // Just returning true. For a full implementation, you'd add pipeline/stage/deal to ChatModel
@@ -1894,27 +1916,29 @@ Future<void> toggleArchive(String chatId) async {
 
   final Map<String, Map<String, dynamic>> _detailRoomCache = {};
 
-  Future<Map<String, dynamic>?> getDetailRoom(String roomId, {bool forceRefresh = false}) async {
-    // 1. Cek cache memori (agar langsung instan)
+  Future<Map<String, dynamic>?> getDetailRoom(String roomId, {bool forceRefresh = true}) async {
+    // 1. Cek cache memori (jika forceRefresh false)
     if (!forceRefresh && _detailRoomCache.containsKey(roomId)) {
-      // 2. Tarik diam-diam di background agar data selalu up-to-date
+      // Tarik diam-diam di background agar data selalu up-to-date
       _chatService.getDetailRoom(roomId).then((response) {
         if (!response.isError && response.data != null) {
           _detailRoomCache[roomId] = response.data!;
-          // Kita tidak perlu panggil notifyListeners karena UI (ContactInfoPage) akan me-refresh sendiri 
-          // setelah memanggil fungsi ini lagi nanti jika di-refresh manual.
         }
       });
       return _detailRoomCache[roomId];
     }
     
-    // 3. Jika belum ada di cache, tunggu dari server
+    // 2. Selalu utamakan dari server agar sinkron dengan perubahan terbaru
     final response = await _chatService.getDetailRoom(roomId);
     if (!response.isError && response.data != null) {
       _detailRoomCache[roomId] = response.data!;
       return response.data;
     }
     _error = response.error;
+    // Fallback ke cache jika koneksi bermasalah
+    if (_detailRoomCache.containsKey(roomId)) {
+      return _detailRoomCache[roomId];
+    }
     return null;
   }
 

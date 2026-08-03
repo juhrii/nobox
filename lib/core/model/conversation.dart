@@ -153,7 +153,7 @@ class Conversation {
       participantEmail: getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Grp', 'Name', 'participant_email', 'GroupNm', 'GroupName', 'group_name', 'Title', 'pushName'])?.toString() ?? 'Unknown',
       lastMessage: finalLastMessage,
       lastMessageTime: getValue(['TimeMsg', 'In', 'last_message_time']) ?? '',
-      unreadCount: getValue(['Uc', 'unread_count', 'UnreadCount']) ?? 0,
+      unreadCount: int.tryParse(getValue(['Uc', 'uc', 'UC', 'unread_count', 'UnreadCount', 'Unread', 'unread', 'UnreadMsg', 'UnreadMsgs'])?.toString() ?? '') ?? 0,
       status: json['St'] != null
           ? resolveStatus(json['St'])
           : (getValue(['Status', 'status']) ?? 'Unassigned'),

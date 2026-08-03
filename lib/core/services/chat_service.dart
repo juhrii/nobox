@@ -2028,11 +2028,54 @@ class ChatService {
       debugPrint('🏷️ [Update Tags] Updating room tags for room $contactId with tag IDs: $tags');
       debugPrint('🏷️ [Update Tags] Converted to comma-separated string: $tagsIdsString');
 
+      // 1. Fetch current Room Detail to prevent overwriting or server rejecting partial update
+      Map<String, dynamic>? fullRoomEntity;
+      String? ctId;
+      try {
+        final detailRes = await getDetailRoom(contactId);
+        if (!detailRes.isError && detailRes.data != null) {
+          final raw = detailRes.data!;
+          final roomData = raw['Data'] ?? raw;
+          if (roomData is Map && roomData['Room'] is Map) {
+            fullRoomEntity = Map<String, dynamic>.from(roomData['Room'] as Map);
+          }
+          final room = roomData is Map ? (roomData['Room'] ?? {}) : {};
+          final ctReal = roomData is Map ? (roomData['ContactReal'] ?? {}) : {};
+
+          ctId = room['ContactId']?.toString();
+          if (ctId == null || ctId.isEmpty || ctId == '0' || ctId == 'null') {
+            ctId = ctReal['ContactId']?.toString();
+          }
+          if (ctId == null || ctId.isEmpty || ctId == '0' || ctId == 'null') {
+            ctId = ctReal['Id']?.toString();
+          }
+          if (ctId == null || ctId.isEmpty || ctId == '0' || ctId == 'null') {
+            ctId = room['CtRealId']?.toString();
+          }
+          if (ctId == null || ctId.isEmpty || ctId == '0' || ctId == 'null') {
+            ctId = room['CtId']?.toString();
+          }
+        }
+      } catch (e) {
+        debugPrint('🏷️ [Update Tags] DetailRoom fetch failed: $e');
+      }
+
+      // 2. Build entity preserving existing critical fields
+      final Map<String, dynamic> entityToUpdate = {
+        'TagsIds': tagsIdsString,
+      };
+      if (fullRoomEntity != null) {
+        final keysToPreserve = ['AssigneeId', 'Status', 'ChId', 'AccId', 'AgentId', 'IsBlock', 'IsPin', 'FnId', 'CampaignId', 'DealId'];
+        for (var key in keysToPreserve) {
+          if (fullRoomEntity.containsKey(key)) {
+            entityToUpdate[key] = fullRoomEntity[key];
+          }
+        }
+      }
+
       final requestData = {
-        'EntityId': contactId,
-        'Entity': {
-          'TagsIds': tagsIdsString, // Send as comma-separated string
-        },
+        'EntityId': int.tryParse(contactId) ?? contactId,
+        'Entity': entityToUpdate,
       };
 
       debugPrint('🏷️ [Update Tags] Request data: $requestData');
@@ -2044,8 +2087,28 @@ class ChatService {
 
       debugPrint('🏷️ [Update Tags] Response: ${response.data}');
 
-      if (response.statusCode == 200 && response.data['IsError'] != true) {
+      if (response.statusCode == 200 && (response.data is! Map || response.data['IsError'] != true)) {
         debugPrint('✅ [Update Tags] Room tags updated successfully');
+
+        // 3. KASUS KHUSUS NOBOX API: Update Tag juga ke tabel Contact (Contact/Update)
+        try {
+          if (ctId != null && ctId.isNotEmpty && ctId != '0' && ctId != 'null') {
+            debugPrint('🏷️ [Update Tags] Updating also to Contact table with ID: $ctId');
+            await _apiClient.post(
+              AppConfig.contactUpdateEndpoint,
+              data: {
+                'EntityId': int.tryParse(ctId) ?? ctId,
+                'Entity': {
+                  'TagsIds': tagsIdsString,
+                },
+              },
+            );
+            debugPrint('✅ [Update Tags] Contact table tags updated successfully');
+          }
+        } catch (e) {
+          debugPrint('⚠️ [Update Tags] Non-critical error updating Contact table: $e');
+        }
+
         return ApiResponse.success(true, response.statusCode!);
       }
 

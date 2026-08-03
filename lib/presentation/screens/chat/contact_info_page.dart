@@ -57,10 +57,11 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
   List<Map<String, dynamic>> _availableTagsFromServer = [];
   List<Map<String, dynamic>> _availableFunnelsFromServer = [];
 
-  // Funnel overlay
-  final GlobalKey _funnelRowKey = GlobalKey();
-  OverlayEntry? _funnelOverlayEntry;
+  // Funnel inline dropdown state
+  bool _isFunnelExpanded = false;
+  final TextEditingController _funnelSearchController = TextEditingController();
   List<Map<String, String>> _cachedFunnelItems = [];
+  bool _isLoadingFunnels = false;
 
   @override
   void initState() {
@@ -88,7 +89,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
 
   @override
   void dispose() {
-    _dismissFunnelOverlay(updateState: false);
+    _funnelSearchController.dispose();
     super.dispose();
   }
 
@@ -96,7 +97,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
   // FUNGSI: Menarik data terbaru dari server mengenai obrolan ini, termasuk tag, funnel, notes, status bot, dsb.
   Future<void> _loadDetailRoom() async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-    final data = await chatProvider.getDetailRoom(widget.chat.id);
+    final data = await chatProvider.getDetailRoom(widget.chat.id, forceRefresh: true);
       try {
         File('d:/UBIG/Proyek/NoBox_Chat/nobox/room_data_dump.txt').writeAsStringSync(data.toString());
       } catch(e) {
@@ -263,16 +264,30 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
           debugPrint('ContactInfo: Saved ${_availableTagsFromServer.length} tags from serverTags');
         }
         
-        // Set current tags (yang sudah di-assign ke chat ini) dari Room.TagsIds
-        final roomTagsIds = room['TagsIds']?.toString() ?? '';
-        if (roomTagsIds.isNotEmpty) {
-          // TagsIds bisa berupa comma-separated IDs
+        // Set current tags (yang sudah di-assign ke chat ini) dari Room atau ContactReal
+        final ctReal = roomData is Map ? (roomData['ContactReal'] ?? {}) : {};
+        dynamic rawTagsIdsData = room['TagsIds'] ?? room['tags_ids'] ?? room['tagsIds'];
+        if (rawTagsIdsData == null || rawTagsIdsData == '' || rawTagsIdsData == 'null' || rawTagsIdsData == '0') {
+          if (ctReal is Map) {
+            rawTagsIdsData = ctReal['TagsIds'] ?? ctReal['tags_ids'] ?? ctReal['tagsIds'];
+          }
+        }
+        String roomTagsIds = '';
+        if (rawTagsIdsData is List) {
+          roomTagsIds = rawTagsIdsData.map((e) => e.toString().replaceAll('[', '').replaceAll(']', '').trim()).join(',');
+        } else if (rawTagsIdsData != null) {
+          roomTagsIds = rawTagsIdsData.toString().replaceAll('[', '').replaceAll(']', '').trim();
+        }
+
+        if (roomTagsIds.isNotEmpty && roomTagsIds != 'null' && roomTagsIds != '0') {
           final assignedIds = roomTagsIds.split(',').map((t) => t.trim()).toSet();
           _currentTags = _availableTagsFromServer
-              .where((t) => assignedIds.contains(t['Id']?.toString()))
+              .where((t) => assignedIds.contains(t['Id']?.toString()) || assignedIds.contains(t['id']?.toString()))
               .map((t) => t['Name']?.toString() ?? t['Nm']?.toString() ?? '')
               .where((t) => t.isNotEmpty)
               .toList();
+        } else {
+          _currentTags = [];
         }
         
         // Update toggles dari Room
@@ -457,28 +472,22 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
     );
   }
 
-  void _dismissFunnelOverlay({bool updateState = true}) {
-    try {
-      if (_funnelOverlayEntry != null && _funnelOverlayEntry!.mounted) {
-        _funnelOverlayEntry?.remove();
-      }
-    } catch (e) {
-      debugPrint('Error removing funnel overlay: $e');
-    }
-    _funnelOverlayEntry = null;
-    if (updateState && mounted) setState(() {});
-  }
-
-  void _showFunnelOverlay() async {
-    // If overlay is already showing, dismiss it
-    if (_funnelOverlayEntry != null) {
-      _dismissFunnelOverlay();
+  Future<void> _toggleFunnelDropdown() async {
+    if (_isFunnelExpanded) {
+      setState(() {
+        _isFunnelExpanded = false;
+        _funnelSearchController.clear();
+      });
       return;
     }
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    setState(() {
+      _isFunnelExpanded = true;
+      if (_cachedFunnelItems.isEmpty) {
+        _isLoadingFunnels = true;
+      }
+    });
 
-    // Load funnels if not cached
     if (_cachedFunnelItems.isEmpty) {
       final chatProvider = Provider.of<ChatProvider>(context, listen: false);
       final funnelData = await chatProvider.getFunnels();
@@ -490,126 +499,20 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
           return {'name': name, 'id': id};
         }).where((f) => f['name']!.isNotEmpty).toList();
       }
+      if (mounted) {
+        setState(() {
+          _isLoadingFunnels = false;
+        });
+      }
     }
+  }
 
-    if (_cachedFunnelItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tidak ada funnel tersedia')),
-      );
-      return;
-    }
-
-    // Get position of the funnel row
-    final renderBox = _funnelRowKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-    final offset = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
-
-    _funnelOverlayEntry = OverlayEntry(
-      builder: (overlayContext) {
-        return Stack(
-          children: [
-            // Tap anywhere to dismiss
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _dismissFunnelOverlay,
-                behavior: HitTestBehavior.opaque,
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-            // The dropdown menu — connected directly below the funnel container
-            Positioned(
-              left: offset.dx,
-              top: offset.dy + size.height,
-              width: size.width,
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 280),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(10),
-                    bottomRight: Radius.circular(10),
-                  ),
-                  border: Border(
-                    left: BorderSide(color: Colors.grey.shade300, width: 1),
-                    right: BorderSide(color: Colors.grey.shade300, width: 1),
-                    bottom: BorderSide(color: Colors.grey.shade300, width: 1),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(10),
-                    bottomRight: Radius.circular(10),
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      itemCount: _cachedFunnelItems.length,
-                      separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade200),
-                      itemBuilder: (_, index) {
-                        final funnel = _cachedFunnelItems[index];
-                        final isSelected = _currentFunnel == funnel['name'];
-                        return InkWell(
-                          onTap: () async {
-                            _dismissFunnelOverlay();
-                            final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-                            final success = await chatProvider.updateContactFunnel(
-                              widget.chat.id, funnel['id']!, funnelName: funnel['name']!,
-                            );
-                            if (success && mounted) {
-                              setState(() => _currentFunnel = funnel['name']!);
-                            }
-                          },
-                          child: Container(
-                            color: isSelected
-                                ? (isDark ? Colors.blue.shade900.withOpacity(0.3) : const Color(0xFFE8F4FD))
-                                : Colors.transparent,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    funnel['name']!,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: isSelected
-                                          ? Colors.blue
-                                          : (isDark ? Colors.white : Colors.black87),
-                                    ),
-                                  ),
-                                ),
-                                if (isSelected)
-                                  const Icon(Icons.check, size: 20, color: Colors.blue),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    Overlay.of(context).insert(_funnelOverlayEntry!);
-    setState(() {}); // Rebuild container to flatten bottom corners
+  void _showFunnelOverlay() {
+    _toggleFunnelDropdown();
   }
 
   void _showFunnelList() {
-    _showFunnelOverlay();
+    _toggleFunnelDropdown();
   }
 
   void _showRemoveFunnelConfirmation() {
@@ -666,7 +569,9 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                   ),
                   onPressed: () async {
                     Navigator.pop(context);
-                    _dismissFunnelOverlay();
+                    if (mounted && _isFunnelExpanded) {
+                      setState(() => _isFunnelExpanded = false);
+                    }
                     
                     // Call API to remove funnel
                     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
@@ -1837,7 +1742,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
               isDark: isDark,
               children: [
                 InkWell(
-                  onTap: _showFunnelList,
+                  onTap: _toggleFunnelDropdown,
                   child: _buildSectionHeader(
                     isDark: isDark,
                     title: 'Funnel',
@@ -1849,73 +1754,159 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                     ],
                   ),
                 ),
-                if (_currentFunnel.isNotEmpty)
-                  Padding(
-                    key: _funnelRowKey,
-                    padding: EdgeInsets.fromLTRB(16, 0, 16, _funnelOverlayEntry != null ? 0 : 12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.blue.shade900.withOpacity(0.15) : Colors.blue.shade50.withOpacity(0.4),
-                        borderRadius: _funnelOverlayEntry != null
-                            ? const BorderRadius.only(
-                                topLeft: Radius.circular(10),
-                                topRight: Radius.circular(10),
-                              )
-                            : BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade300, width: 1),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _currentFunnel,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: _showRemoveFunnelConfirmation,
-                            child: Icon(Icons.close, size: 20, color: Colors.grey.shade500),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: _showFunnelOverlay,
-                            child: Icon(Icons.arrow_drop_down, size: 24, color: Colors.grey.shade600),
-                          ),
-                        ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1F2C34) : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _isFunnelExpanded ? Colors.blue.shade300 : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                        width: 1,
                       ),
                     ),
-                  )
-                else
-                  Padding(
-                    key: _funnelRowKey,
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: InkWell(
-                      onTap: _showFunnelOverlay,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.grey.shade300, width: 1),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        InkWell(
+                          onTap: _toggleFunnelDropdown,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _currentFunnel.isNotEmpty ? _currentFunnel : 'No funnel assigned',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: _currentFunnel.isNotEmpty ? FontWeight.w500 : FontWeight.normal,
+                                      color: _currentFunnel.isNotEmpty ? (isDark ? Colors.white : Colors.black87) : Colors.grey.shade400,
+                                    ),
+                                  ),
+                                ),
+                                if (_currentFunnel.isNotEmpty)
+                                  GestureDetector(
+                                    onTap: _showRemoveFunnelConfirmation,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(2),
+                                      child: Icon(Icons.close, size: 18, color: Colors.grey.shade600),
+                                    ),
+                                  ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  _isFunnelExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                  size: 22,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'No funnel assigned',
-                                style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
+                        if (_isFunnelExpanded) ...[
+                          Divider(height: 1, thickness: 1, color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                            child: SizedBox(
+                              height: 38,
+                              child: TextField(
+                                controller: _funnelSearchController,
+                                onChanged: (_) => setState(() {}),
+                                style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.blue.shade200, width: 1.5),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(color: isDark ? Colors.grey.shade600 : Colors.blue.shade200, width: 1.5),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                                  ),
+                                  hintText: 'Search...',
+                                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                                ),
                               ),
                             ),
-                            Icon(Icons.arrow_drop_down, size: 24, color: Colors.grey.shade500),
-                          ],
-                        ),
-                      ),
+                          ),
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 220),
+                            child: _isLoadingFunnels
+                                ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
+                                : _cachedFunnelItems.isEmpty
+                                    ? const Center(child: Padding(padding: EdgeInsets.all(16), child: Text('Tidak ada funnel', style: TextStyle(color: Colors.grey))))
+                                    : Builder(
+                                        builder: (context) {
+                                          final query = _funnelSearchController.text.toLowerCase();
+                                          final filtered = _cachedFunnelItems.where((f) {
+                                            return f['name']!.toLowerCase().contains(query);
+                                          }).toList();
+
+                                          if (filtered.isEmpty) {
+                                            return const Padding(
+                                              padding: EdgeInsets.all(16),
+                                              child: Center(child: Text('Funnel tidak ditemukan', style: TextStyle(color: Colors.grey, fontSize: 13))),
+                                            );
+                                          }
+
+                                          return ListView.builder(
+                                            shrinkWrap: true,
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            itemCount: filtered.length,
+                                            itemBuilder: (context, index) {
+                                              final funnel = filtered[index];
+                                              final isSelected = _currentFunnel == funnel['name'];
+                                              return InkWell(
+                                                onTap: () async {
+                                                  setState(() {
+                                                    _isFunnelExpanded = false;
+                                                    _funnelSearchController.clear();
+                                                  });
+                                                  final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+                                                  final success = await chatProvider.updateContactFunnel(
+                                                    widget.chat.id, funnel['id']!, funnelName: funnel['name']!,
+                                                  );
+                                                  if (success && mounted) {
+                                                    setState(() => _currentFunnel = funnel['name']!);
+                                                  }
+                                                },
+                                                borderRadius: BorderRadius.circular(6),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                  decoration: BoxDecoration(
+                                                    color: isSelected
+                                                        ? (isDark ? Colors.blue.shade900.withOpacity(0.3) : const Color(0xFFF0F3F6))
+                                                        : Colors.transparent,
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    funnel['name']!,
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      color: isDark ? Colors.white : Colors.black87,
+                                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          );
+                                        },
+                                      ),
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                      ],
                     ),
                   ),
+                ),
               ],
             ),
 
