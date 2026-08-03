@@ -582,7 +582,19 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                 String name = 'Unknown';
                 for (final key in keys) {
                   final val = item[key]?.toString();
-                  if (val != null && val.isNotEmpty) { name = val; break; }
+                  if (val != null && val.isNotEmpty && val != 'null') { name = val; break; }
+                }
+                if (name == 'Unknown' || name.isEmpty) {
+                  for (final entry in item.entries) {
+                    final k = entry.key.toLowerCase();
+                    if (k != 'id' && k != 'tenantid' && k != 'chid' && k != 'type' && k != 'kt') {
+                      final val = entry.value?.toString();
+                      if (val != null && val.isNotEmpty && val != 'null' && val != '0' && val != '1' && !val.startsWith('{')) {
+                        name = val;
+                        break;
+                      }
+                    }
+                  }
                 }
                 // Hilangkan duplikasi: tambahkan (2), (3), dst. untuk nama yang sama
                 if (seen.containsKey(name)) {
@@ -623,10 +635,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
               );
             }
 
-            // Ekstrak nama unik dari data API untuk menu dropdown
+            // Ekstrak nama unik dari data API untuk menu dropdown (dengan fallback key lengkap agar akun Telegram/platform lain terbaca)
             final channelNames = toUniqueNames(channels, ['Nm', 'Name', 'ChannelName']);
-            final accountNames = toUniqueNames(accounts, ['Name', 'AccountName']);
-            final contactNames = toUniqueNames(contacts, ['Name']);
+            final accountNames = toUniqueNames(accounts, ['Name', 'AccountName', 'Nm', 'nm', 'Title', 'DisplayName', 'Username', 'AccNm', 'Email', 'Phone']);
+            final contactNames = toUniqueNames(contacts, ['Name', 'CtNm', 'CtRealNm', 'Nm', 'nm', 'DisplayName']);
 
             return Dialog(
               backgroundColor: Colors.white,
@@ -856,38 +868,6 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () async {
-                                // Temukan ID penerima berdasarkan opsi yang dipilih
-                                String? receiver;
-                                int? contactId;
-                                int? linkId;
-                                bool isGroup = selectedChat == 'Group';
-                                
-                                if (selectedTo == 'Contact' && selectedContact != null) {
-                                  final contact = contacts.firstWhere(
-                                    (c) => (c['Name']?.toString() ?? '') == selectedContact,
-                                    orElse: () => <String, dynamic>{},
-                                  );
-                                  // Gunakan Id dari LeadLinks (penghubung antara kontak dan channel) sebagai cadangan pencarian
-                                  final leadLinks = contact['LeadLinks'];
-                                  if (leadLinks is List && leadLinks.isNotEmpty) {
-                                    receiver = leadLinks[0]['Id']?.toString();
-                                  }
-                                  receiver ??= contact['Id']?.toString();
-                                  contactId = int.tryParse(contact['Id']?.toString() ?? '');
-                                } else if (selectedTo == 'Manual' || selectedTo == 'Link') {
-                                  receiver = manualInput;
-                                  if (selectedTo == 'Link') {
-                                    linkId = int.tryParse(manualInput);
-                                  }
-                                }
-
-                                if (!isGroup && (receiver == null || receiver.isEmpty)) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Silakan pilih penerima')),
-                                  );
-                                  return;
-                                }
-
                                 // Dapatkan Id akun yang dipilih dalam format integer
                                 int accountIdInt = 0;
                                 if (selectedAccount != null) {
@@ -904,6 +884,59 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                   if (idx >= 0 && idx < channels.length) {
                                     channelIdInt = int.tryParse(channels[idx]['Id']?.toString() ?? '') ?? 1;
                                   }
+                                }
+
+                                // Temukan ID penerima berdasarkan opsi yang dipilih
+                                String? receiver;
+                                int? contactId;
+                                int? linkId;
+                                bool isGroup = selectedChat == 'Group';
+                                
+                                if (selectedTo == 'Contact' && selectedContact != null) {
+                                  final idx = contactNames.indexOf(selectedContact!);
+                                  if (idx >= 0 && idx < contacts.length) {
+                                    final contact = contacts[idx];
+                                    receiver = contact['Id']?.toString();
+                                    contactId = int.tryParse(receiver ?? '');
+                                    
+                                    // CARI LeadLink yang 100% cocok dengan Channel (misal 2 = Telegram) & Akun
+                                    // agar obrolan yang dibuka memiliki riwayat pesan yang benar (tidak salah WA / tidak 0 pesan)!
+                                    final leadLinks = contact['LeadLinks'];
+                                    if (leadLinks is List && leadLinks.isNotEmpty) {
+                                      Map? targetLink;
+                                      for (final l in leadLinks) {
+                                        if (l is Map) {
+                                          final lChId = l['ChId']?.toString() ?? l['Ch']?.toString() ?? l['ChannelId']?.toString() ?? l['chId']?.toString() ?? '';
+                                          final lAccId = l['AccId']?.toString() ?? l['AccountId']?.toString() ?? l['IdAccount']?.toString() ?? l['accId']?.toString() ?? '';
+                                          
+                                          if (lChId == channelIdInt.toString()) {
+                                            if (accountIdInt > 0 && lAccId == accountIdInt.toString()) {
+                                              targetLink = l;
+                                              break;
+                                            } else if (targetLink == null) {
+                                              targetLink = l;
+                                            }
+                                          }
+                                        }
+                                      }
+                                      targetLink ??= (leadLinks[0] is Map ? leadLinks[0] : null);
+                                      if (targetLink != null) {
+                                        linkId = int.tryParse(targetLink['Id']?.toString() ?? targetLink['id']?.toString() ?? '');
+                                      }
+                                    }
+                                  }
+                                } else if (selectedTo == 'Manual' || selectedTo == 'Link') {
+                                  receiver = manualInput;
+                                  if (selectedTo == 'Link') {
+                                    linkId = int.tryParse(manualInput);
+                                  }
+                                }
+
+                                if (!isGroup && (receiver == null || receiver!.isEmpty)) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Silakan pilih penerima')),
+                                  );
+                                  return;
                                 }
 
                                 Navigator.pop(dialogContext);
@@ -952,13 +985,17 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                           (c) {
                                             if (newRoomIdStr != null && newRoomIdStr.isNotEmpty && c.id == newRoomIdStr) return true;
                                             
-                                            // Validasi ketat agar tidak salah masuk kamar Telegram/WA
+                                            // Validasi agar tepat sasaran ke kamar channel yang dipilih
                                             bool isSameChannel = c.chId == channelIdInt.toString();
-                                            bool isSameAccount = c.accountId == accountIdInt.toString() || c.accountId.isEmpty;
+                                            if (!isSameChannel) return false;
                                             
-                                            if (receiver != null && c.contactId == receiver && isSameChannel && isSameAccount) return true;
-                                            if (selectedContact != null && selectedContact!.isNotEmpty && c.sender.toLowerCase().contains(selectedContact!.toLowerCase()) && isSameChannel && isSameAccount) return true;
-                                            if (manualInput.isNotEmpty && c.sender.contains(manualInput) && isSameChannel && isSameAccount) return true;
+                                            if (linkId != null && linkId! > 0 && c.link == linkId.toString()) return true;
+                                            if (receiver != null && receiver!.isNotEmpty && (c.contactId == receiver || c.ctRealId == receiver)) return true;
+                                            if (selectedContact != null && selectedContact!.isNotEmpty) {
+                                              final rawTarget = selectedContact!.replaceAll(RegExp(r'\s*\(\d+\)$'), '').trim().toLowerCase();
+                                              if (rawTarget.isNotEmpty && c.sender.trim().toLowerCase() == rawTarget) return true;
+                                            }
+                                            if (manualInput.isNotEmpty && c.sender.trim().toLowerCase() == manualInput.trim().toLowerCase()) return true;
                                             return false;
                                           },
                                         );
@@ -976,7 +1013,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                           tags: [],
                                           avatarUrl: null,
                                           lastMessageType: null,
-                                          channelName: selectedChannel ?? '',
+                                          channelName: selectedAccount?.isNotEmpty == true ? selectedAccount! : (selectedChannel ?? ''),
                                           channelType: selectedChannel ?? '',
                                           isPinned: false,
                                           chId: channelIdInt.toString(),
@@ -987,7 +1024,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                           needReply: false,
                                           accountId: accountIdInt.toString(),
                                           ctRealId: receiver ?? '',
-                                          link: '',
+                                          link: linkId?.toString() ?? '',
                                           campaign: '',
                                           deal: '',
                                           groupName: isGroup ? (manualInput.isNotEmpty ? manualInput : 'Group') : '',

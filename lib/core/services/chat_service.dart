@@ -581,6 +581,31 @@ class ChatService {
     }
   }
 
+  String _extractAccountName(Map<String, dynamic> acc) {
+    final keys = ['Name', 'Nm', 'Username', 'Title', 'DisplayName', 'AccountName', 'Val', 'Value', 'Label', 'Text'];
+    String name = '';
+    for (final key in keys) {
+      final val = acc[key]?.toString();
+      if (val != null && val.isNotEmpty && val != 'null' && val != '0' && val != '1') {
+        name = val;
+        break;
+      }
+    }
+    if (name.isEmpty) {
+      for (final entry in acc.entries) {
+        final k = entry.key.toLowerCase();
+        if (k != 'id' && k != 'tenantid' && k != 'chid' && k != 'type' && k != 'channel' && k != 'kt') {
+          final val = entry.value?.toString();
+          if (val != null && val.isNotEmpty && val != 'null' && val != '0' && val != '1' && !val.startsWith('{')) {
+            name = val;
+            break;
+          }
+        }
+      }
+    }
+    return name;
+  }
+
   /// Fetch list of chat rooms filtered by status.
   /// [statusCode] → 1: Unassigned, 2: Assigned, 3: Resolved, null: All
   /// [skip] and [take] control pagination (defaults: skip=0, take=20)
@@ -738,7 +763,7 @@ class ChatService {
             final accountIdByChannel = <int, String>{}; // Channel number → AccountId
             
             for (final acc in accounts) {
-              final name = acc['Name']?.toString() ?? acc['Nm']?.toString() ?? '';
+              final name = _extractAccountName(acc);
               final id = acc['Id']?.toString() ?? '';
               final channel = acc['Channel'];
               final tId = acc['TenantId']?.toString();
@@ -894,7 +919,7 @@ class ChatService {
             final accountIdByChannel = <int, String>{};
             
             for (final acc in accounts) {
-              final name = acc['Name']?.toString() ?? acc['Nm']?.toString() ?? '';
+              final name = _extractAccountName(acc);
               final channel = acc['Channel'];
               
               final id = acc['Id']?.toString() ?? '';
@@ -977,6 +1002,19 @@ class ChatService {
   // Endpoint ini memanggil rute `/Chatmessages/List` untuk menyedot jutaan baris data obrolan
   // dari database server ke layar HP. Ini bertugas melayani fitur pagination / tarik layar ke bawah.
   Future<ApiResponse<List<Message>>> getMessageHistory(String roomId, String currentUserEmail, {int skip = 0, int take = 50, String contactId = '', String groupId = '', String ctRealId = '', String link = '', String participantEmail = '', bool isTelegram = false}) async {
+    if (roomId.isEmpty) {
+      if (ctRealId.isNotEmpty && ctRealId != '0') {
+        roomId = ctRealId;
+      } else if (link.isNotEmpty && link != '0') {
+        roomId = link;
+      } else if (contactId.isNotEmpty && contactId != '0') {
+        roomId = contactId;
+      } else {
+        debugPrint('ChatService: 🛑 getMessageHistory called with ALL IDs empty! Returning empty list to prevent global message dump.');
+        return ApiResponse.success([], 200);
+      }
+      debugPrint('ChatService: ⚠️ Promoted alternative ID to RoomId: $roomId');
+    }
     if (currentTenantId == null) {
       // Ensure we have TenantId before fetching messages to construct WhatsApp image URLs
       await getAccounts();
@@ -1350,17 +1388,34 @@ class ChatService {
         if (responseData is Map) {
           final result = Map<String, dynamic>.from(responseData);
 
-          if (result['IsError'] == true) {
+          if (result['IsError'] == true || result['isError'] == true) {
             return {
               'success': false,
               'error': result['ErrorMessage'] ?? result['Error'] ?? 'API error',
             };
           }
 
+          final dataObj = result['Data'] ?? result['Value'] ?? result['Entity'] ?? result['data'] ?? result['value'];
+          String? extractedRoomId;
+          if (dataObj is Map) {
+            extractedRoomId = dataObj['Id']?.toString() ?? dataObj['RoomId']?.toString() ?? dataObj['id']?.toString() ?? dataObj['roomId']?.toString();
+          } else if (dataObj != null && dataObj is! List) {
+            extractedRoomId = dataObj.toString();
+          }
+          extractedRoomId ??= result['Id']?.toString() ?? result['RoomId']?.toString() ?? result['id']?.toString() ?? result['roomId']?.toString();
+
+          debugPrint('ChatService: ✅ Extracted RoomId from createNewRoom: $extractedRoomId');
           return {
             'success': true,
-            'roomId': result['Data']?['Id'] ?? result['Data']?['RoomId'] ?? result['Id'],
-            'data': result['Data'],
+            'roomId': extractedRoomId,
+            'data': result['Data'] ?? responseData,
+          };
+        } else if (responseData != null) {
+          debugPrint('ChatService: ✅ Raw Response as RoomId from createNewRoom: $responseData');
+          return {
+            'success': true,
+            'roomId': responseData.toString(),
+            'data': responseData,
           };
         }
         return {'success': true, 'data': responseData};

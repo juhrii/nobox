@@ -1279,40 +1279,30 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         final echoAck = messageData['Ack'] ?? messageData['ack'];
         final echoId = messageData['Id']?.toString() ?? '';
         final echoMsg = messageData['Msg']?.toString() ?? '';
-        int newAck = 2;
+        int newAck = 1;
         if (echoAck is int) {
           newAck = echoAck;
         } else if (echoAck is String) {
-          newAck = int.tryParse(echoAck) ?? 2;
+          newAck = int.tryParse(echoAck) ?? 1;
         }
 
         debugPrint(
           'SignalR: 💬 Own echo-back | id=$echoId | ack=$newAck | msg=$echoMsg',
         );
 
-        if (mounted && newAck > 1) {
+        if (mounted) {
           setState(() {
-            // Coba cocokkan pesan berdasarkan ID pesannya terlebih dahulu
+            // 1. Coba cocokkan pesan berdasarkan ID pesannya terlebih dahulu
             int matchIdx = -1;
             if (echoId.isNotEmpty) {
               matchIdx = _messages.indexWhere((m) => m.id == echoId && m.isMe);
             }
-            // Cadangan (Fallback): cocokkan berdasarkan isi konten untuk pesan yang belum punya ID (baru saja dikirim)
+            // 2. Cadangan (Fallback): cocokkan berdasarkan isi konten untuk pesan yang belum punya ID (baru saja dikirim)
             if (matchIdx == -1 && echoMsg.isNotEmpty) {
-              // Find the last sent message with matching content that has ack < newAck
               for (int i = _messages.length - 1; i >= 0; i--) {
-                if (_messages[i].isMe && _messages[i].id.isEmpty && _messages[i].ack < newAck) {
-                  // Cek apakah konten sama (abaikan spasi berlebih)
-                  if (_messages[i].content.trim() == echoMsg.trim()) {
-                    matchIdx = i;
-                    break;
-                  }
-                }
-              }
-              // Super Fallback: Jika masih tidak ketemu, tapi ada pesan yang baru saja dikirim (ID kosong), anggap itu pesannya
-              if (matchIdx == -1) {
-                for (int i = _messages.length - 1; i >= 0; i--) {
-                  if (_messages[i].isMe && _messages[i].id.isEmpty && _messages[i].ack < newAck) {
+                if (_messages[i].isMe && _messages[i].id.isEmpty) {
+                  // Cek apakah konten sama (abaikan spasi/trim)
+                  if (_messages[i].content.trim() == echoMsg.trim() || _messages[i].content == echoMsg) {
                     matchIdx = i;
                     break;
                   }
@@ -1322,18 +1312,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
             if (matchIdx != -1) {
               messageFoundLocally = true;
-              if (_messages[matchIdx].ack < newAck) {
-                debugPrint(
-                  'SignalR: 🔄 Updating ack ${_messages[matchIdx].ack} -> $newAck for message at index $matchIdx',
-                );
-                _messages[matchIdx] = _messages[matchIdx].copyWith(
-                  id: echoId.isNotEmpty ? echoId : null,
-                  ack: newAck,
-                  status: newAck >= 3
-                      ? MessageStatus.delivered
-                      : MessageStatus.sent,
-                );
-              }
+              final existingMsg = _messages[matchIdx];
+              final updatedId = echoId.isNotEmpty ? echoId : existingMsg.id;
+              final updatedAck = newAck > existingMsg.ack ? newAck : existingMsg.ack;
+
+              debugPrint(
+                'SignalR: 🔄 Updating echo message at index $matchIdx | ID: $updatedId | Ack: ${existingMsg.ack} -> $updatedAck',
+              );
+              _messages[matchIdx] = existingMsg.copyWith(
+                id: updatedId.isNotEmpty ? updatedId : null,
+                ack: updatedAck,
+                status: updatedAck >= 3
+                    ? MessageStatus.delivered
+                    : MessageStatus.sent,
+              );
             }
           });
         }
@@ -1388,6 +1380,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
         if (mounted) {
           setState(() {
+            // GUARD AKHIR ANTI-DUPLIKAT (Khusus pesan kita/keluar yang lolos dari pengecekan di atas)
+            if (newMessage.isMe) {
+              final isDup = _messages.any((m) {
+                if (newMessage.id.isNotEmpty && m.id == newMessage.id) return true;
+                if (m.isMe && m.id.isEmpty && m.content.trim() == newMessage.content.trim()) return true;
+                return false;
+              });
+              if (isDup) {
+                debugPrint('SignalR: 🛑 Prevented duplicate isMe message at final add guard.');
+                return;
+              }
+            }
+
             _messages.add(newMessage);
             _messages.sort((a, b) {
               if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
@@ -3649,29 +3654,40 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
                       bool hasError = false;
                       String errorMessage = '';
+                      final Set<String> processedIds = {};
 
                       for (final msg in selectedMsgs) {
                         final msgId = msg.id;
                         if (msgId.isNotEmpty) {
+                          if (processedIds.contains(msgId)) {
+                            // Jika pesan dengan ID ini sudah diproses/dihapus (duplikat di UI), cukup hapus dari UI
+                            setState(() {
+                              _messages.removeWhere((m) => m.id == msgId);
+                            });
+                            continue;
+                          }
+                          processedIds.add(msgId);
+
                           try {
                             // Panggil API penghapusan
                             final resp = await _chatService.deleteMessage(
                               msgId,
                             );
                             if (resp.isError) {
-                              hasError = true;
-                              errorMessage = resp.error ?? 'Unknown error';
-                              if (mounted) {
-                                showDialog(
-                                  context: context,
-                                  builder: (ctxErr) => AlertDialog(
-                                    title: const Text('Gagal Menghapus di Server'),
-                                    content: Text('Error asli: $errorMessage'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.pop(ctxErr), child: const Text('OK'))
-                                    ],
-                                  ),
-                                );
+                              final errText = resp.error ?? 'Unknown error';
+                              // Jika error adalah EntityNotFound / Record not found, berarti pesan sudah terhapus di server.
+                              // Jangan panik atau munculkan error, anggap sukses dan hapus dari antarmuka layar!
+                              if (errText.contains('EntityNotFound') || errText.contains('Record not found')) {
+                                debugPrint('Pesan $msgId sudah tidak ada di server. Dihapus dari UI.');
+                                if (mounted) {
+                                  Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
+                                }
+                                setState(() {
+                                  _messages.removeWhere((m) => m.id == msgId);
+                                });
+                              } else {
+                                hasError = true;
+                                errorMessage = errText;
                               }
                             } else {
                               if (mounted) {
@@ -3683,38 +3699,28 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                             }
                           } catch (e) {
                             hasError = true;
-                            if (mounted) {
-                              showDialog(
-                                context: context,
-                                builder: (ctxErr) => AlertDialog(
-                                  title: const Text('Exception saat menghapus'),
-                                  content: Text('Error: $e'),
-                                  actions: [
-                                    TextButton(onPressed: () => Navigator.pop(ctxErr), child: const Text('OK'))
-                                  ],
-                                ),
-                              );
-                            }
+                            errorMessage = 'Error: $e';
                           }
                         } else {
-                          // Jika pesan lokal / tidak ada ID
-                          if (mounted) {
-                            showDialog(
-                              context: context,
-                              builder: (ctxErr) => AlertDialog(
-                                title: const Text('Pesan Belum Sinkron'),
-                                content: const Text('Pesan ini belum mendapatkan ID resmi dari server. Silakan keluar dan masuk lagi ke ruang obrolan ini untuk sinkronisasi ID.'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctxErr), child: const Text('OK'))
-                                ],
-                              ),
-                            );
-                          }
-                          // Kita tetap hapus dari UI lokal agar tidak mengganggu
+                          // Jika pesan lokal / tidak ada ID dari server, hapus dari UI lokal
                           setState(() {
                             _messages.removeWhere((m) => identical(m, msg));
                           });
                         }
+                      }
+
+                      // Tampilkan popup error HANYA SEKALI setelah loop selesai jika ada error nyata
+                      if (hasError && mounted) {
+                        showDialog(
+                          context: context,
+                          builder: (ctxErr) => AlertDialog(
+                            title: const Text('Gagal Menghapus Beberapa Pesan'),
+                            content: Text('Terjadi kendala saat menghapus sebagian pesan di server: $errorMessage'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctxErr), child: const Text('OK'))
+                            ],
+                          ),
+                        );
                       }
 
                       setState(() {
