@@ -640,68 +640,51 @@ class SignalRService {
     required dynamic idAccount,
     required dynamic idRoom,
     dynamic idGroup,
-    required String type, // "1" for text, "3" for media
+    required String type, // "0" or "1" for text, "3" for media
     String? msg,
     String? fileJson,
     String? replyId,
+    String? replyMsg,
+    String? replyFrom,
+    String? replyType,
+    String? replyFiles,
   }) async {
     try {
-      final now = DateTime.now().toUtc();
-      final timeString = "${now.toIso8601String().substring(0, 19)}.${now.millisecond.toString().padLeft(3, '0')}Z";
-      
-      // MENGAMBIL AGENT ID ASLI DARI JWT TOKEN (Menghindari penolakan dari worker Telegram)
-      int realAgentId = 1905; // Fallback default
-      try {
-        final token = ApiClient().token;
-        if (token != null && token.contains('.')) {
-          final payload = token.split('.')[1];
-          final normalized = base64Url.normalize(payload);
-          final decoded = utf8.decode(base64Url.decode(normalized));
-          final payloadMap = jsonDecode(decoded);
-          
-          final nameIdentifier = payloadMap['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']
-                              ?? payloadMap['nameid']
-                              ?? payloadMap['sub'];
-          if (nameIdentifier != null) {
-            realAgentId = int.tryParse(nameIdentifier.toString()) ?? 1905;
-          }
-        }
-      } catch (e) {
-        debugPrint('SignalR: Gagal membaca JWT untuk AgentId: $e');
-      }
-
-      // Helper function to safely parse integer or return null (never return empty string)
+      // Helper function to safely parse integer or return null (never return empty string or zero for ID)
       int? parseIntSafe(dynamic val) {
         if (val == null) return null;
         final str = val.toString().replaceAll(RegExp(r'[^0-9]'), '');
         if (str.isEmpty) return null;
-        return int.tryParse(str);
+        final valInt = int.tryParse(str);
+        if (valInt == 0) return null;
+        return valInt;
+      }
+
+      final msgMap = <String, dynamic>{
+        "Msg": (msg == null || msg.isEmpty) ? null : msg,
+        "Type": type,
+      };
+      if (fileJson != null && fileJson.isNotEmpty) {
+        msgMap["File"] = fileJson;
+      }
+      msgMap["Files"] = null;
+
+      if (replyId != null && replyId.toString().trim().isNotEmpty) {
+        msgMap["ReplyId"] = replyId.toString().trim();
+        msgMap["ReplyMsg"] = replyMsg ?? "";
+        msgMap["ReplyFrom"] = replyFrom?.toString() ?? "";
+        msgMap["ReplyType"] = replyType ?? "0";
+        msgMap["ReplyFiles"] = replyFiles;
       }
 
       final payload = {
         "Room": {
+          "IdRoom": parseIntSafe(idRoom?.toString().split('_').last),
           "IdLink": parseIntSafe(idLink),
           "IdGroup": parseIntSafe(idGroup),
           "IdAccount": parseIntSafe(idAccount),
-          "IdRoom": parseIntSafe(idRoom?.toString().split('_').last)
         },
-        "Msg": {
-          "Type": type,
-          "Msg": (msg == null || msg.isEmpty) ? null : msg,
-          "File": fileJson,
-          "Files": null,
-          "ReplyId": parseIntSafe(replyId),
-          "Id": "${now.millisecondsSinceEpoch}62",
-          "RoomId": parseIntSafe(idRoom?.toString().split('_').last),
-          "From": parseIntSafe(idAccount),
-          "To": parseIntSafe(idLink),
-          "AgentId": realAgentId,
-          "In": timeString,
-          "Up": timeString,
-          "InBy": realAgentId,
-          "UpBy": realAgentId,
-          "Ack": 1
-        }
+        "Msg": msgMap
       };
 
       // Payload must be sent as a single JSON string argument according to the network log
@@ -723,8 +706,15 @@ class SignalRService {
       );
       return null; // Return null on success
     } catch (e) {
+      final errorStr = e.toString();
+      if (errorStr.contains("underlying connection being closed") || 
+          errorStr.contains("Connection disconnected") ||
+          errorStr.contains("invocation canceled")) {
+        debugPrint('SignalR: ⚠️ Connection reset after KirimPesan (likely processed by server): $errorStr');
+        return null; // Treat as success like in Aplikasi
+      }
       debugPrint('SignalR: ❌ Failed to send KirimPesan: $e');
-      return e.toString();
+      return errorStr;
     }
   }
 

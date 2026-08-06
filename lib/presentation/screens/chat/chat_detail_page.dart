@@ -61,12 +61,116 @@ class _CachedSentMessage {
   final Message message;
   final DateTime addedAt;
   _CachedSentMessage(this.message, this.addedAt);
+
+  Map<String, dynamic> toMap() => {
+        'message': message.toMap(),
+        'addedAt': addedAt.toIso8601String(),
+      };
+
+  factory _CachedSentMessage.fromMap(Map<String, dynamic> map) {
+    return _CachedSentMessage(
+      Message.fromMap(Map<String, dynamic>.from(map['message'] as Map)),
+      DateTime.tryParse(map['addedAt']?.toString() ?? '') ?? DateTime.now(),
+    );
+  }
 }
 
 class _ChatDetailPageState extends State<ChatDetailPage> {
   late ChatModel chat;
   final TextEditingController _messageController = TextEditingController();
   final ChatService _chatService = ChatService();
+
+  void _showTopToast(String message, {bool isError = false}) {
+    if (!mounted) return;
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    bool isRemoved = false;
+
+    void removeToast() {
+      if (!isRemoved) {
+        isRemoved = true;
+        try {
+          entry.remove();
+        } catch (_) {}
+      }
+    }
+
+    entry = OverlayEntry(
+      builder: (context) {
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          builder: (context, val, child) {
+            return Positioned(
+              top: MediaQuery.of(context).padding.top + 12 + (val * 8) - 8,
+              left: 0,
+              right: 0,
+              child: Opacity(
+                opacity: val.clamp(0.0, 1.0),
+                child: Center(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isError
+                            ? const Color(0xFFE53935)
+                            : const Color(0xFF2B2D30),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isError ? Icons.error_outline : Icons.check_circle,
+                            color: isError
+                                ? Colors.white
+                                : const Color(0xFF4CAF50),
+                            size: 17,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              message,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    try {
+      overlay.insert(entry);
+      Future.delayed(const Duration(milliseconds: 2200), () {
+        removeToast();
+      });
+    } catch (_) {}
+  }
 
   // *** LOCAL SENT CACHE ***
   // Menyimpan pesan yang sudah dikirim tapi belum dikonfirmasi server.
@@ -76,6 +180,94 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FITUR: State Pesan Utama
   // FUNGSI: Menyimpan data daftar pesan (_messages) dan state loading saat memuat histori.
   List<Message> _messages = [];
+
+  Set<String> _getPersistenceKeys() {
+    final keys = <String>{};
+    if (chat.id.isNotEmpty && chat.id != 'null') keys.add(chat.id);
+    if (chat.contactId.isNotEmpty && chat.contactId != '0' && chat.contactId != 'null') keys.add(chat.contactId);
+    if (chat.ctRealId.isNotEmpty && chat.ctRealId != '0' && chat.ctRealId != 'null') keys.add(chat.ctRealId);
+    if (chat.link.isNotEmpty && chat.link != '0' && chat.link != 'null') keys.add(chat.link);
+    if (chat.sender.isNotEmpty && chat.sender != 'null') keys.add(chat.sender.trim().toLowerCase());
+    final phoneOnly = chat.sender.replaceAll(RegExp(r'[^0-9]'), '');
+    if (phoneOnly.isNotEmpty && phoneOnly.length >= 8) keys.add(phoneOnly);
+    if (keys.isEmpty) keys.add('default_chat_${chat.hashCode}');
+    return keys;
+  }
+
+  void _savePersistentMessages() async {
+    if (_messages.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final List<Map<String, dynamic>> mapList =
+          _messages.map((m) => m.toMap()).toList();
+      final jsonStr = jsonEncode(mapList);
+      final keys = _getPersistenceKeys();
+
+      for (final key in keys) {
+        await prefs.setString('persist_msgs_$key', jsonStr);
+      }
+      
+      final cacheList = (_localSentCache[chat.id] ?? []).map((c) => c.toMap()).toList();
+      if (cacheList.isNotEmpty) {
+        final cacheJsonStr = jsonEncode(cacheList);
+        for (final key in keys) {
+          await prefs.setString('sent_cache_$key', cacheJsonStr);
+        }
+      }
+      debugPrint(
+          'ChatDetail: 💾 Saved ${_messages.length} messages to SharedPreferences using keys: $keys (Hot Restart Protection)');
+    } catch (e) {
+      debugPrint('ChatDetail: ❌ Error saving persistent messages: $e');
+    }
+  }
+
+  Future<void> _restorePersistentMessages() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      List<Message>? restored;
+      final keys = _getPersistenceKeys();
+
+      for (final key in keys) {
+        final jsonStr = prefs.getString('persist_msgs_$key');
+        if (jsonStr != null && jsonStr.isNotEmpty) {
+          final decoded = jsonDecode(jsonStr) as List;
+          restored = decoded
+              .map((m) => Message.fromMap(m as Map<String, dynamic>))
+              .toList();
+          if (restored.isNotEmpty) {
+            debugPrint('ChatDetail: ⚡ Restored ${restored.length} messages from key persist_msgs_$key');
+            break;
+          }
+        }
+      }
+
+      if (restored != null && restored.isNotEmpty && mounted) {
+        setState(() {
+          _messages = restored!;
+        });
+        debugPrint(
+            'ChatDetail: ⚡ IMMEDIATELY RESTORED ${_messages.length} persistent messages across Hot Restart!');
+      }
+
+      for (final key in keys) {
+        final sentJson = prefs.getString('sent_cache_$key');
+        if (sentJson != null && sentJson.isNotEmpty) {
+          final decodedSent = jsonDecode(sentJson) as List;
+          final loaded = decodedSent
+              .map((c) => _CachedSentMessage.fromMap(c as Map<String, dynamic>))
+              .toList();
+          if (loaded.isNotEmpty) {
+            _localSentCache[chat.id] = loaded;
+            debugPrint(
+                'ChatDetail: ⚡ RESTORED ${_localSentCache[chat.id]!.length} _localSentCache items from key sent_cache_$key');
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('ChatDetail: ❌ Error restoring persistent messages: $e');
+    }
+  }
   bool _isLoadingMessages = true;
   Message? _repliedMessage;
   ChatStatusProvider? _statusProvider;
@@ -450,6 +642,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FITUR: Memuat Daftar Pesan (API Call)
   // FUNGSI: Mengambil daftar pesan dari backend untuk ruang chat aktif (menggunakan GraphQL/REST) atau arsip (REST), kemudian di-parse ke model Message.
   void _loadInitialMessages() async {
+    await _restorePersistentMessages();
+    if (!mounted) return;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final currentUserEmail = authProvider.currentUser ?? '';
 
@@ -633,9 +827,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               _debugApiState = 'API Error: ${response.error}';
             } else {
               if (response.data == null || response.data!.isEmpty) {
-                _debugApiState =
-                    'API berhasil dipanggil tapi mengembalikan 0 pesan (Kosong) dari server.';
-                _messages = [];
+                _debugApiState = 'Kamar obrolan terhubung (Riwayat percakapan masih kosong).';
+                if (_messages.isEmpty) {
+                  _messages = [];
+                } else {
+                  debugPrint('ChatDetail: 🛡️ Server API mengembalikan 0 pesan, mempertahankan ${_messages.length} pesan lokal persisten (Hot Restart Protection)');
+                }
               } else {
                 _debugApiState =
                     'Berhasil mengambil ${response.data!.length} pesan.';
@@ -643,7 +840,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 // Tampilkan isi JSON mentah dari pesan pertama untuk keperluan debug
                 if (response.data!.isNotEmpty) {
                   try {
-                    // Karena response.data sudah berisi List<Message>, kita tidak bisa print JSON mentah lagi 
+                    // Karena response.data sudah berisi List<Message>, kita tidak bisa print JSON mentah lagi
                     // kecuali kita ubah getMessageHistory. Tapi kita bisa print ID yang ter-parse!
                     final first = response.data!.first;
                     debugPrint('===== MSG DEBUG =====');
@@ -655,36 +852,23 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     debugPrint('=====================');
 
                     // 🚨 REPAIR MECHANISM 🚨
-                    // Jika chat.id terdeteksi KOSONG (misal gagal ter-parse dari JSON API), 
+                    // Jika chat.id terdeteksi KOSONG (misal gagal ter-parse dari JSON API),
                     // namun payload pesan memiliki RoomId, kita PERBAIKI secara lokal!
-                    if ((chat.id.isEmpty || chat.id == 'null' || chat.id == '0') && first.roomId.isNotEmpty) {
+                    if ((chat.id.isEmpty ||
+                            chat.id == 'null' ||
+                            chat.id == '0') &&
+                        first.roomId.isNotEmpty) {
                       chat = chat.copyWith(id: first.roomId);
                       context.read<ChatProvider>().updateLocalChat(chat);
-                      debugPrint('ChatDetail: 🛠️ REPAIRED EMPTY CHAT ID using Message.roomId = ${first.roomId}');
+                      debugPrint(
+                        'ChatDetail: 🛠️ REPAIRED EMPTY CHAT ID using Message.roomId = ${first.roomId}',
+                      );
                     }
                   } catch (e) {}
                 }
 
-                // FILTER: Strict Account Isolation (Anti-Bleeding)
-                // Jika server mengirimkan pesan gabungan (karena RoomId berupa nomor telepon yang 
-                // terdaftar di beberapa channel WA sekaligus), kita paksa buang pesan yang bukan 
-                // milik channel ini.
-                List<Message> filteredList = List<Message>.from(response.data!);
-                if (chat.accountId.isNotEmpty && !isTelegram) {
-                  filteredList = filteredList.where((m) {
-                    final fromStr = m.fromId?.toString() ?? '';
-                    final toStr = m.toId?.toString() ?? '';
-                    // Pesan harus masuk atau keluar melalui ID Akun (Channel) ini
-                    return fromStr == chat.accountId || toStr == chat.accountId;
-                  }).toList();
-                  
-                  if (filteredList.length != response.data!.length) {
-                    debugPrint('ChatDetail: 🛡️ Blocked ${response.data!.length - filteredList.length} leaked messages from other channels!');
-                  }
-                }
-
                 // Lakukan sorting lokal untuk memastikan urutan sesuai waktu
-                final sortedList = filteredList;
+                final sortedList = List<Message>.from(response.data!);
                 sortedList.sort((a, b) {
                   if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
                   try {
@@ -707,7 +891,39 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     return 0;
                   }
                 });
-                _messages = sortedList;
+
+                // FIX HOT RESTART: Jangan timpa pesan yang sudah ter-restore di memori!
+                // Gabungkan sortedList dari server dengan pesan lokal di _messages.
+                final existingLocal = List<Message>.from(_messages);
+                final Map<String, Message> mergedMap = {};
+                for (final msg in sortedList) {
+                  final k = msg.id.isNotEmpty && msg.id != '0' ? msg.id : 'api_${msg.rawTime}_${msg.content.hashCode}';
+                  mergedMap[k] = msg;
+                }
+                for (final localMsg in existingLocal) {
+                  final isOnServer = sortedList.any((s) =>
+                      (s.id.isNotEmpty && s.id == localMsg.id) ||
+                      (s.isMe == localMsg.isMe && s.content.trim().toLowerCase() == localMsg.content.trim().toLowerCase()));
+                  if (!isOnServer) {
+                    final k = localMsg.id.isNotEmpty && localMsg.id != '0' ? localMsg.id : 'local_${localMsg.rawTime}_${localMsg.content.hashCode}';
+                    mergedMap[k] = localMsg;
+                    debugPrint('ChatDetail: 🛡️ Mencegah overwrite pesan lokal oleh API: "${localMsg.content}"');
+                  }
+                }
+                final finalSorted = mergedMap.values.toList();
+                finalSorted.sort((a, b) {
+                  if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
+                  try {
+                    String ta = a.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z');
+                    String tb = b.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z');
+                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                    return DateTime.parse(ta).compareTo(DateTime.parse(tb));
+                  } catch (_) {
+                    return 0;
+                  }
+                });
+                _messages = finalSorted;
               }
               // *** MERGE LOCAL SENT CACHE ***
               // Tambahkan pesan yang sudah dikirim tapi belum dikonfirmasi server
@@ -763,17 +979,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               final currentRoomIdExt = chat.id.contains('_')
                   ? chat.id.split('_').last
                   : chat.id;
-              
+
               // ONLY add fallback IDs if it's Telegram, otherwise strict RoomId checking for WhatsApp
               final possibleRoomIds = <String>{chat.id, currentRoomIdExt};
-              if (currentRoomIdExt.isNotEmpty) possibleRoomIds.add(currentRoomIdExt);
-              
+              if (currentRoomIdExt.isNotEmpty)
+                possibleRoomIds.add(currentRoomIdExt);
+
               if (isTelegram) {
                 final numericChatId = chat.id.replaceAll(RegExp(r'[^0-9]'), '');
-                if (chat.contactId.isNotEmpty) possibleRoomIds.add(chat.contactId);
+                if (chat.contactId.isNotEmpty)
+                  possibleRoomIds.add(chat.contactId);
                 if (chat.groupId.isNotEmpty) possibleRoomIds.add(chat.groupId);
-                if (chat.ctRealId.isNotEmpty) possibleRoomIds.add(chat.ctRealId);
-                if (numericChatId.isNotEmpty) possibleRoomIds.add(numericChatId);
+                if (chat.ctRealId.isNotEmpty)
+                  possibleRoomIds.add(chat.ctRealId);
+                if (numericChatId.isNotEmpty)
+                  possibleRoomIds.add(numericChatId);
               }
 
               for (final rId in possibleRoomIds) {
@@ -789,14 +1009,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     tenantId: _chatService.currentTenantId,
                   );
                   final newMsg = parsedMsg.copyWith(status: MessageStatus.read);
-                  
+
                   // FILTER: Strict Account Isolation untuk Injeksi SignalR
                   if (chat.accountId.isNotEmpty && !isTelegram) {
-                    final fromStr = newMsg.fromId?.toString() ?? '';
-                    final toStr = newMsg.toId?.toString() ?? '';
-                    if (fromStr != chat.accountId && toStr != chat.accountId) {
-                      debugPrint('ChatDetail: 🛡️ Blocked SignalR cache message ${newMsg.id} from another channel!');
-                      continue; // Skip pesan ini karena milik channel lain
+                    if (newMsg.roomId.isEmpty || (newMsg.roomId != chat.id && int.tryParse(newMsg.roomId) == null)) {
+                      final fromStr = newMsg.fromId?.toString() ?? '';
+                      final toStr = newMsg.toId?.toString() ?? '';
+                      if (fromStr != chat.accountId && toStr != chat.accountId) {
+                        debugPrint(
+                          'ChatDetail: 🛡️ Blocked SignalR cache message ${newMsg.id} from another channel!',
+                        );
+                        continue; // Skip pesan ini karena milik channel lain
+                      }
                     }
                   }
 
@@ -836,6 +1060,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   return 0;
                 }
               });
+              _savePersistentMessages();
             }
           });
           if (!response.isError && _messages.isNotEmpty) {
@@ -848,9 +1073,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             final lastMsg = _messages.last;
             String newContent = lastMsg.content;
             if (lastMsg.messageType == MessageType.image) {
-              final isSticker = (lastMsg.imageUrl ?? '').toLowerCase().endsWith('.webp') || 
-                                (lastMsg.imagePath ?? '').toLowerCase().endsWith('.webp') ||
-                                newContent.toLowerCase().endsWith('.webp');
+              final isSticker =
+                  (lastMsg.imageUrl ?? '').toLowerCase().endsWith('.webp') ||
+                  (lastMsg.imagePath ?? '').toLowerCase().endsWith('.webp') ||
+                  newContent.toLowerCase().endsWith('.webp');
               if (isSticker) {
                 newContent = '🌟 Sticker';
               } else {
@@ -922,16 +1148,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       if (!mounted) return;
 
       if (!response.isError && response.data != null) {
-        // FILTER: Strict Account Isolation (Anti-Bleeding) untuk sinkronisasi latar belakang
-        List<Message> newMessages = List<Message>.from(response.data!);
-        if (chat.accountId.isNotEmpty && !isTelegram) {
-          newMessages = newMessages.where((m) {
-            final fromStr = m.fromId?.toString() ?? '';
-            final toStr = m.toId?.toString() ?? '';
-            return fromStr == chat.accountId || toStr == chat.accountId;
-          }).toList();
-        }
-        
+        final List<Message> newMessages = List<Message>.from(response.data!);
+
         debugPrint(
           'AckPolling: Fetched ${newMessages.length} filtered messages. Matching...',
         );
@@ -1231,33 +1449,55 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         'ChatDetailPage: TerimaPesan | room=$incomingRoomId | current=${chat.id}',
       );
 
-      // ❗ FILTER: Hanya proses pesan yang ditujukan untuk ROOM INI
-      // FIX: Telegram webhook mungkin mengirim RoomId hanya dengan contactId (tanpa prefix chId_)
-      final currentRoomIdExt = chat.id.contains('_')
-          ? chat.id.split('_').last
-          : chat.id;
+      // ❗ FILTER: Hanya proses pesan yang ditujukan untuk ROOM INI (dengan pencocokan luas untuk pesan teman)
+      final fromVal = messageData['From']?.toString() ?? '';
+      final toVal = messageData['To']?.toString() ?? '';
+      final ctIdVal = messageData['ContactId']?.toString() ?? '';
+      final linkVal = messageData['Link']?.toString() ?? '';
+      final ctRealIdVal = messageData['CtRealId']?.toString() ?? '';
 
-      // Ambil angka saja untuk pencocokan yang lebih longgar
       final numericChatId = chat.id.replaceAll(RegExp(r'[^0-9]'), '');
       final numericIncomingId = incomingRoomId.replaceAll(
         RegExp(r'[^0-9]'),
         '',
       );
 
-      if (incomingRoomId.isEmpty ||
-          (incomingRoomId != chat.id &&
-              incomingRoomId != currentRoomIdExt &&
-              incomingRoomId != chat.contactId &&
-              incomingRoomId != chat.groupId &&
-              incomingRoomId != chat.ctRealId &&
-              (numericIncomingId.isEmpty ||
-                  numericIncomingId != numericChatId) &&
-              (numericIncomingId.isEmpty ||
-                  numericIncomingId != chat.contactId))) {
+      final candidates = [
+        incomingRoomId,
+        incomingRoomId.replaceAll(RegExp(r'^[0-9]+_'), ''),
+        numericIncomingId,
+        fromVal,
+        toVal,
+        ctIdVal,
+        linkVal,
+        ctRealIdVal,
+      ].where((e) => e.isNotEmpty && e != '0' && e != 'null').toSet();
+
+      final myIds = [
+        chat.id,
+        chat.id.replaceAll(RegExp(r'^[0-9]+_'), ''),
+        numericChatId,
+        chat.contactId,
+        chat.groupId,
+        chat.ctRealId,
+        chat.link,
+        chat.sender,
+      ].where((e) => e.isNotEmpty && e != '0' && e != 'null').toSet();
+
+      if (candidates.intersection(myIds).isEmpty) {
         final errMsg =
             '🛑 IGNORED! Incoming: $incomingRoomId | ChatId: ${chat.id} | CtId: ${chat.contactId} | GrpId: ${chat.groupId} | RealId: ${chat.ctRealId}';
         debugPrint(errMsg);
         return;
+      }
+
+      // 🚨 AUTO-REPAIR CHAT ID DI REALTIME 🚨
+      if ((chat.id.isEmpty || chat.id == '0' || chat.id == 'null') && incomingRoomId.isNotEmpty && incomingRoomId != '0' && incomingRoomId != 'null') {
+        chat = chat.copyWith(id: incomingRoomId);
+        try {
+          context.read<ChatProvider>().updateLocalChat(chat);
+        } catch (_) {}
+        debugPrint('SignalR: 🛠️ REPAIRED EMPTY CHAT ID in Realtime from 0 to $incomingRoomId');
       }
 
       // Pesan pantulan (echo-back) dari pesan yang kita kirim sendiri (AgentId ada = dikirim oleh agen/kita)
@@ -1265,15 +1505,25 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       // sehingga kita bisa memperbarui status centang pesan secara real-time.
       final agentId = messageData['AgentId'];
       final isNobox = messageData['IsNobox'];
-      final dirVal = messageData['Dir'] ?? messageData['Direction'] ?? messageData['dir'];
+      final dirVal =
+          messageData['Dir'] ?? messageData['Direction'] ?? messageData['dir'];
       final dirStr = dirVal?.toString().toLowerCase() ?? '';
-      final isOutbound = messageData['IsOutbound'] ?? messageData['IsOutBound'] ?? messageData['Outbound'] ?? messageData['isOutbound'];
-      
-      bool isEchoBack = (agentId != null && agentId != 0 && agentId.toString() != '0') ||
-                        (isNobox == 1 || isNobox == '1' || isNobox == true) ||
-                        (dirStr == '1' || dirStr == '2' || dirStr == 'out' || dirStr == 'outbound' || dirStr == 'true') ||
-                        (isOutbound == true || isOutbound == 'true' || isOutbound == 1);
-      
+      final isOutbound =
+          messageData['IsOutbound'] ??
+          messageData['IsOutBound'] ??
+          messageData['Outbound'] ??
+          messageData['isOutbound'];
+
+      bool isEchoBack =
+          (agentId != null && agentId != 0 && agentId.toString() != '0') ||
+          (isNobox == 1 || isNobox == '1' || isNobox == true) ||
+          (dirStr == '1' ||
+              dirStr == '2' ||
+              dirStr == 'out' ||
+              dirStr == 'outbound' ||
+              dirStr == 'true') ||
+          (isOutbound == true || isOutbound == 'true' || isOutbound == 1);
+
       bool messageFoundLocally = false;
       if (isEchoBack) {
         final echoAck = messageData['Ack'] ?? messageData['ack'];
@@ -1302,7 +1552,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               for (int i = _messages.length - 1; i >= 0; i--) {
                 if (_messages[i].isMe && _messages[i].id.isEmpty) {
                   // Cek apakah konten sama (abaikan spasi/trim)
-                  if (_messages[i].content.trim() == echoMsg.trim() || _messages[i].content == echoMsg) {
+                  if (_messages[i].content.trim() == echoMsg.trim() ||
+                      _messages[i].content == echoMsg) {
                     matchIdx = i;
                     break;
                   }
@@ -1314,7 +1565,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               messageFoundLocally = true;
               final existingMsg = _messages[matchIdx];
               final updatedId = echoId.isNotEmpty ? echoId : existingMsg.id;
-              final updatedAck = newAck > existingMsg.ack ? newAck : existingMsg.ack;
+              final updatedAck = newAck > existingMsg.ack
+                  ? newAck
+                  : existingMsg.ack;
 
               debugPrint(
                 'SignalR: 🔄 Updating echo message at index $matchIdx | ID: $updatedId | Ack: ${existingMsg.ack} -> $updatedAck',
@@ -1329,9 +1582,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             }
           });
         }
-        
+
         // FIX: Jika pesan ditemukan secara lokal, hentikan agar tidak duplikat.
-        // TAPI jika TIDAK ditemukan (misal: dikirim dari Web Dashboard/Platform lain), jangan di-return! 
+        // TAPI jika TIDAK ditemukan (misal: dikirim dari Web Dashboard/Platform lain), jangan di-return!
         // Biarkan proses lanjut ke bawah agar pesan ini ditambahkan ke antarmuka aplikasi.
         if (messageFoundLocally) {
           return; // Don't add as a new message
@@ -1367,28 +1620,25 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         // SignalR messages from customers should always be read immediately when on this page
         final newMessage = parsedMessage.copyWith(status: MessageStatus.read);
 
-        // FILTER: Strict Account Isolation untuk Real-Time SignalR (Anti-Bleeding)
-        final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
-        if (chat.accountId.isNotEmpty && !isTelegram) {
-          final fromStr = newMessage.fromId?.toString() ?? '';
-          final toStr = newMessage.toId?.toString() ?? '';
-          if (fromStr != chat.accountId && toStr != chat.accountId) {
-            debugPrint('SignalR: 🛡️ Blocked real-time message ${newMessage.id} from another channel!');
-            return; // Batalkan penambahan ke _messages
-          }
-        }
+        // Incoming message verified for this room; proceed without blocking.
 
         if (mounted) {
           setState(() {
             // GUARD AKHIR ANTI-DUPLIKAT (Khusus pesan kita/keluar yang lolos dari pengecekan di atas)
             if (newMessage.isMe) {
               final isDup = _messages.any((m) {
-                if (newMessage.id.isNotEmpty && m.id == newMessage.id) return true;
-                if (m.isMe && m.id.isEmpty && m.content.trim() == newMessage.content.trim()) return true;
+                if (newMessage.id.isNotEmpty && m.id == newMessage.id)
+                  return true;
+                if (m.isMe &&
+                    m.id.isEmpty &&
+                    m.content.trim() == newMessage.content.trim())
+                  return true;
                 return false;
               });
               if (isDup) {
-                debugPrint('SignalR: 🛑 Prevented duplicate isMe message at final add guard.');
+                debugPrint(
+                  'SignalR: 🛑 Prevented duplicate isMe message at final add guard.',
+                );
                 return;
               }
             }
@@ -1453,6 +1703,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FITUR: Scroll Otomatis ke Bawah
   // FUNGSI: Menganimasi daftar pesan secara instan ke pesan yang paling baru saat ada pesan masuk atau saat form dibuka.
   void _scrollToBottom() {
+    _savePersistentMessages();
     if (_scrollController.hasClients) {
       Future.delayed(const Duration(milliseconds: 100), () {
         // With reverse: true, position 0.0 is the newest message (bottom)
@@ -1726,13 +1977,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     final now = DateTime.now();
     final timeString = _formatFullTime(now);
 
+    final targetReplyMsg = _repliedMessage;
     final newMessage = Message(
       content: content,
       isMe: true,
       time: timeString,
       rawTime: now.toIso8601String(),
       status: MessageStatus.sent,
-      repliedMessage: _repliedMessage,
+      repliedMessage: targetReplyMsg,
       ack: 1,
     );
 
@@ -1743,7 +1995,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
 
     _scrollToBottom();
-    
+
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     // FIX: Optimistic update for Chat List preview so it appears instantly when returning to list
     chatProvider.updateLocalLastMessage(chat.id, content);
@@ -1760,31 +2012,62 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     // WHATSAPP & TELEGRAM: Menggunakan SignalR (KirimPesan)
     // Berdasarkan sejarah, SignalR adalah satu-satunya jalur yang 100% masuk ke NoBox AI.
-    
-    // WA FIX: Jika ini adalah WhatsApp dan user membalas (reply), ID pesannya adalah string/UUID.
-    // SignalR backend memaksa ReplyId menjadi Integer. Memaksa konversi UUID ke Integer 
-    // menyebabkan payload rusak/worker WA gagal kirim. 
-    // Oleh karena itu, untuk non-Telegram, kita beri context balasan berupa teks kutipan,
-    // dan JANGAN kirim replyId ke SignalR.
+
     String finalContent = content;
-    String? finalReplyId = _repliedMessage?.id;
-    
-    if (!isTelegram && _repliedMessage != null) {
-      finalReplyId = null; // Cegah backend crash
-      // Sisipkan teks balasan ke dalam badan pesan agar teman di WA mengerti konteksnya
-      final quotedContent = _repliedMessage!.content.replaceAll('\n', '\n> ');
-      finalContent = '> $quotedContent\n\n$content';
+    String? finalReplyId;
+    String? finalReplyMsg;
+    String? finalReplyFrom;
+    String? finalReplyType;
+
+    if (targetReplyMsg != null) {
+      finalReplyId = targetReplyMsg.id;
+      finalReplyMsg = targetReplyMsg.content;
+      finalReplyFrom = targetReplyMsg.fromId;
+      if (finalReplyFrom == null || finalReplyFrom.isEmpty) {
+        finalReplyFrom = chat.accountId.isNotEmpty && chat.accountId != '0' ? chat.accountId : "0";
+      }
+      finalReplyType = "0";
     }
 
     final sendError = await chatProvider.sendMessageViaSignalR(
       chat: chat,
-      type: "1", // 1 is for Text
+      type: "1", // 1 is for Text as used in Aplikasi
       msg: finalContent,
       replyId: finalReplyId,
+      replyMsg: finalReplyMsg,
+      replyFrom: finalReplyFrom,
+      replyType: finalReplyType,
     );
 
     isSuccess = (sendError == null);
     if (!isSuccess) errorMsg = sendError ?? 'Failed to send via SignalR';
+
+    // FIX: Jika pengiriman via SignalR gagal (karena koneksi atau validasi ID), lakukan fallback ke REST API Inbox/Send
+    if (!isSuccess) {
+      debugPrint('ChatDetail: ⚠️ SignalR send failed ($errorMsg), attempting fallback via REST API Inbox/Send...');
+      try {
+        final resp = await _chatService.sendMessage(
+          MessageRequest(
+            receiver: chat.id.isNotEmpty && chat.id != '0' ? chat.id : (chat.ctRealId.isNotEmpty ? chat.ctRealId : chat.contactId),
+            content: finalContent,
+            accountId: chat.accountId,
+            contactId: chat.contactId.isNotEmpty ? chat.contactId : chat.link,
+            extId: chat.sender.replaceAll(RegExp(r'[^0-9]'), '').length >= 9 ? chat.sender : null,
+            channelId: chat.chId,
+          ),
+        );
+        if (!resp.isError) {
+          isSuccess = true;
+          errorMsg = null;
+          debugPrint('ChatDetail: ✅ Pesan berhasil terkirim via REST API fallback!');
+        } else {
+          errorMsg = resp.error ?? 'Gagal mengirim via SignalR & REST API';
+          debugPrint('ChatDetail: ❌ REST API fallback failed: $errorMsg');
+        }
+      } catch (restErr) {
+        debugPrint('ChatDetail: ❌ REST API exception: $restErr');
+      }
+    }
 
     // Find message by reference or by content to survive modifications
     int currentIndex = _messages.indexOf(newMessage);
@@ -1795,11 +2078,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             m.isMe &&
             m.time == newMessage.time,
       );
-    }
-
-    // Perbarui konten pesan di UI lokal agar tampil sesuai yang dikirimkan (dengan kutipan)
-    if (currentIndex != -1 && finalContent != newMessage.content) {
-      _messages[currentIndex] = _messages[currentIndex].copyWith(content: finalContent);
     }
 
     // CACHE DULU WALAU USER SUDAH KELUAR HALAMAN (mounted = false)
@@ -1815,6 +2093,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       _localSentCache[chat.id]!.add(
         _CachedSentMessage(updatedMessage, DateTime.now()),
       );
+      _savePersistentMessages();
       debugPrint(
         'LocalCache: Pesan (Sukses) disimpan ke cache walau user pindah halaman. Total cache[${chat.id}]: ${_localSentCache[chat.id]!.length}',
       );
@@ -2256,6 +2535,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         _localSentCache[chat.id]!.add(
           _CachedSentMessage(updatedMsg, DateTime.now()),
         );
+        _savePersistentMessages();
 
         if (mounted && messageIndex < _messages.length) {
           setState(() {
@@ -2345,9 +2625,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       type: "1", // Location is sent as text
       msg: '📍 Lokasi saya\n$mapsUrl',
     );
-    
+
     isSuccess = (sendError == null);
-    if (!isSuccess) errorMsg = sendError ?? 'Failed to send location via SignalR';
+    if (!isSuccess)
+      errorMsg = sendError ?? 'Failed to send location via SignalR';
 
     if (isSuccess) {
       final updatedMsg = newMessage.copyWith(
@@ -2358,6 +2639,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       _localSentCache[chat.id]!.add(
         _CachedSentMessage(updatedMsg, DateTime.now()),
       );
+      _savePersistentMessages();
 
       if (mounted && messageIndex < _messages.length) {
         setState(() {
@@ -2460,6 +2742,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       _localSentCache[chat.id]!.add(
         _CachedSentMessage(updatedMsg, DateTime.now()),
       );
+      _savePersistentMessages();
 
       if (mounted && messageIndex < _messages.length) {
         setState(() {
@@ -2639,6 +2922,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         _localSentCache[chat.id]!.add(
           _CachedSentMessage(updatedMsg, DateTime.now()),
         );
+        _savePersistentMessages();
 
         if (mounted && messageIndex < _messages.length) {
           setState(() {
@@ -3643,10 +3927,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     onPressed: () async {
                       Navigator.pop(ctx);
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Menghapus pesan...')),
-                      );
-
                       final selectedMsgs = _selectedMessageIndices
                           .where((idx) => idx >= 0 && idx < _messages.length)
                           .map((idx) => _messages[idx])
@@ -3677,10 +3957,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                               final errText = resp.error ?? 'Unknown error';
                               // Jika error adalah EntityNotFound / Record not found, berarti pesan sudah terhapus di server.
                               // Jangan panik atau munculkan error, anggap sukses dan hapus dari antarmuka layar!
-                              if (errText.contains('EntityNotFound') || errText.contains('Record not found')) {
-                                debugPrint('Pesan $msgId sudah tidak ada di server. Dihapus dari UI.');
+                              if (errText.contains('EntityNotFound') ||
+                                  errText.contains('Record not found')) {
+                                debugPrint(
+                                  'Pesan $msgId sudah tidak ada di server. Dihapus dari UI.',
+                                );
                                 if (mounted) {
-                                  Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
+                                  Provider.of<ChatProvider>(
+                                    context,
+                                    listen: false,
+                                  ).ignoreServerTime(chat.id, msg.rawTime);
                                 }
                                 setState(() {
                                   _messages.removeWhere((m) => m.id == msgId);
@@ -3691,7 +3977,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                               }
                             } else {
                               if (mounted) {
-                                Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
+                                Provider.of<ChatProvider>(
+                                  context,
+                                  listen: false,
+                                ).ignoreServerTime(chat.id, msg.rawTime);
                               }
                               setState(() {
                                 _messages.removeWhere((m) => m.id == msgId);
@@ -3715,9 +4004,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           context: context,
                           builder: (ctxErr) => AlertDialog(
                             title: const Text('Gagal Menghapus Beberapa Pesan'),
-                            content: Text('Terjadi kendala saat menghapus sebagian pesan di server: $errorMessage'),
+                            content: Text(
+                              'Terjadi kendala saat menghapus sebagian pesan di server: $errorMessage',
+                            ),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctxErr), child: const Text('OK'))
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctxErr),
+                                child: const Text('OK'),
+                              ),
                             ],
                           ),
                         );
@@ -3733,20 +4027,32 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         final lastMsg = _messages.last;
                         String newLastContent = lastMsg.content;
                         String typeStr = '1';
-                        if (lastMsg.messageType == MessageType.image) typeStr = '3';
-                        else if (lastMsg.messageType == MessageType.voice) typeStr = '2';
-                        else if (lastMsg.messageType == MessageType.document) typeStr = '5';
-                        else if (lastMsg.messageType == MessageType.video) typeStr = '4';
+                        if (lastMsg.messageType == MessageType.image)
+                          typeStr = '3';
+                        else if (lastMsg.messageType == MessageType.voice)
+                          typeStr = '2';
+                        else if (lastMsg.messageType == MessageType.document)
+                          typeStr = '5';
+                        else if (lastMsg.messageType == MessageType.video)
+                          typeStr = '4';
 
                         if (newLastContent.isEmpty) {
                           if (lastMsg.messageType == MessageType.image) {
-                            final isSticker = (lastMsg.imageUrl ?? '').toLowerCase().endsWith('.webp') || 
-                                              (lastMsg.imagePath ?? '').toLowerCase().endsWith('.webp') ||
-                                              newLastContent.toLowerCase().endsWith('.webp');
-                            newLastContent = isSticker ? '🌟 Sticker' : '📷 Foto';
+                            final isSticker =
+                                (lastMsg.imageUrl ?? '').toLowerCase().endsWith(
+                                  '.webp',
+                                ) ||
+                                (lastMsg.imagePath ?? '')
+                                    .toLowerCase()
+                                    .endsWith('.webp') ||
+                                newLastContent.toLowerCase().endsWith('.webp');
+                            newLastContent = isSticker
+                                ? '🌟 Sticker'
+                                : '📷 Foto';
                           } else if (lastMsg.messageType == MessageType.voice) {
                             newLastContent = '🎤 Pesan Suara';
-                          } else if (lastMsg.messageType == MessageType.document) {
+                          } else if (lastMsg.messageType ==
+                              MessageType.document) {
                             newLastContent = '📄 Dokumen';
                           } else if (lastMsg.messageType == MessageType.video) {
                             newLastContent = '🎥 Video';
@@ -3760,7 +4066,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           newLastContent,
                           lastMessageType: typeStr,
                           updateTimeAndPosition: false,
-                          overrideTime: lastMsg.rawTime.isNotEmpty ? lastMsg.rawTime : null,
+                          overrideTime: lastMsg.rawTime.isNotEmpty
+                              ? lastMsg.rawTime
+                              : null,
                         );
                       } else {
                         Provider.of<ChatProvider>(
@@ -3772,14 +4080,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           updateTimeAndPosition: false,
                         );
                       }
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            hasError
-                                ? 'Gagal dihapus dari server. Error: $errorMessage'
-                                : 'Pesan berhasil dihapus dari server.',
-                          ),
-                        ),
+                      _showTopToast(
+                        hasError
+                            ? 'Gagal dihapus: $errorMessage'
+                            : 'Pesan berhasil dihapus',
+                        isError: hasError,
                       );
                     },
                     child: const Text(
@@ -3882,8 +4187,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void _markAsResolved() async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
+    debugPrint('🔍 [DEBUG] _markAsResolved called with chat.id="${chat.id}", chat.contactId="${chat.contactId}", chat.ctRealId="${chat.ctRealId}", chat.link="${chat.link}"');
+
+    String resolveId = chat.id;
+    if (resolveId.isEmpty || resolveId == '0' || resolveId == 'null' || int.tryParse(resolveId.replaceAll(RegExp(r'[^0-9]'), '')) == null) {
+      if (int.tryParse(chat.contactId.replaceAll(RegExp(r'[^0-9]'), '')) != null && chat.contactId != '0') {
+        resolveId = chat.contactId;
+      } else if (int.tryParse(chat.link.replaceAll(RegExp(r'[^0-9]'), '')) != null && chat.link != '0') {
+        resolveId = chat.link;
+      }
+    }
+
     try {
-      final response = await _chatService.resolveConversation(chat.id);
+      final response = await _chatService.resolveConversation(resolveId, accountId: chat.accountId);
       if (mounted) {
         if (!response.isError) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -4498,7 +4814,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                                 );
                             isError = (sendError != null);
                             if (isError)
-                              errorMessage = sendError ?? 'SignalR delivery failed';
+                              errorMessage =
+                                  sendError ?? 'SignalR delivery failed';
                           } else {
                             final request = MessageRequest(
                               receiver: target.id,
@@ -5520,18 +5837,35 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   Row(
                     children: [
                       if (_repliedMessage!.messageType == MessageType.voice)
-                        Icon(Icons.mic, size: 16, color: isDark ? Colors.white70 : Colors.black87),
+                        Icon(
+                          Icons.mic,
+                          size: 16,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
                       if (_repliedMessage!.messageType == MessageType.image)
-                        Icon(Icons.image, size: 16, color: isDark ? Colors.white70 : Colors.black87),
+                        Icon(
+                          Icons.image,
+                          size: 16,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
                       if (_repliedMessage!.messageType == MessageType.document)
-                        Icon(Icons.insert_drive_file, size: 16, color: isDark ? Colors.white70 : Colors.black87),
+                        Icon(
+                          Icons.insert_drive_file,
+                          size: 16,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
                       if (_repliedMessage!.messageType != MessageType.text)
                         const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           _repliedMessage!.messageType == MessageType.voice
                               ? 'Voice note'
-                              : (_repliedMessage!.content.isNotEmpty ? _repliedMessage!.content : _repliedMessage!.messageType.toString().split('.').last),
+                              : (_repliedMessage!.content.isNotEmpty
+                                    ? _repliedMessage!.content
+                                    : _repliedMessage!.messageType
+                                          .toString()
+                                          .split('.')
+                                          .last),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

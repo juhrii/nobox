@@ -147,10 +147,34 @@ class Conversation {
       }
     }
 
+    // Helper untuk mendeteksi apakah obrolan benar-benar Group atau Private (individu)
+    bool resolveIsGroup() {
+      // 1. Cek JID WhatsApp secara eksplisit (@g.us = Group, @s.whatsapp.net / @c.us = Private)
+      final contactStr = (getValue(['CtRealId', 'ct_real_id', 'CtId', 'ContactId', 'Id', 'id', 'LinkTmp', 'Link'])?.toString() ?? '').trim().toLowerCase();
+      if (contactStr.contains('@g.us') || contactStr.contains('-') && contactStr.endsWith('@g.us')) return true;
+      if (contactStr.contains('@s.whatsapp.net') || contactStr.contains('@c.us') || contactStr.contains('@lid')) return false;
+
+      // 2. Cek flag boolean/integer eksplisit dari server (IsGrp, IsGroup, is_group, isGroup)
+      final grpFlag = getValue(['IsGrp', 'IsGroup', 'is_group', 'isGroup']);
+      if (grpFlag != null && grpFlag.toString().isNotEmpty && grpFlag.toString() != 'null') {
+        final strFlag = grpFlag.toString().trim().toLowerCase();
+        if (strFlag == '1' || strFlag == 'true') return true;
+        if (strFlag == '0' || strFlag == 'false') return false;
+      }
+
+      // 3. Cek tipe obrolan secara eksplisit (ChatType / type)
+      final chatType = (getValue(['ChatType', 'chat_type', 'Type', 'type'])?.toString() ?? '').trim().toLowerCase();
+      if (chatType == 'group' || chatType == 'grup' || chatType == 'groupchat') return true;
+      if (chatType == 'private' || chatType == 'personal' || chatType == 'user' || chatType == 'contact' || chatType == 'direct') return false;
+
+      // 4. Jika tidak terdeteksi penanda grup WhatsApp yang spesifik, maka dipaksa sebagai Private Chat (individu)
+      return false;
+    }
+
     final conv = Conversation(
-      id: getValue(['Id', 'id'])?.toString() ?? '',
-      contactId: getValue(['CtId', 'ContactId', 'GrpId', 'Id', 'id'])?.toString() ?? '',
-      participantEmail: getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Grp', 'Name', 'participant_email', 'GroupNm', 'GroupName', 'group_name', 'Title', 'pushName'])?.toString() ?? 'Unknown',
+      id: getValue(['Id', 'id', 'RoomId', 'room_id'])?.toString() ?? '',
+      contactId: getValue(['CtId', 'IdLink', 'LinkId', 'IdContact', 'ContactId', 'CtIdExt', 'ExtId', 'IdAlias'])?.toString() ?? '',
+      participantEmail: getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Name', 'pushName', 'Title', 'participant_email', 'GroupNm', 'GroupName', 'group_name', 'Grp'])?.toString() ?? 'Unknown',
       lastMessage: finalLastMessage,
       lastMessageTime: getValue(['TimeMsg', 'In', 'last_message_time']) ?? '',
       unreadCount: int.tryParse(getValue(['Uc', 'uc', 'UC', 'unread_count', 'UnreadCount', 'Unread', 'unread', 'UnreadMsg', 'UnreadMsgs'])?.toString() ?? '') ?? 0,
@@ -165,22 +189,11 @@ class Conversation {
       channelType: getValue(['ChNm', 'ChannelName', 'chnm'])?.toString() ?? '',
       isPinned: json['IsPin'] == 2 || json['is_pinned'] == true,
       chId: getValue(['ChId', 'ch_id'])?.toString() ?? '',
-      accountId: getValue(['IdAccount', 'idAccount', 'AccId', 'acc_id', 'AccountId', 'accountId'])?.toString() ?? '',
+      accountId: getValue(['IdAccount', 'idAccount', 'AccId', 'acc_id', 'AccountId', 'accountId', 'ChAccId', 'ch_acc_id', 'To', 'to'])?.toString() ?? '',
       funnel: rawFnName,
       tagsIds: rawTagsIds,
       funnelId: rawFnId,
-      isGroup: (json['IsGrp']?.toString() == '1') || 
-               (json['IsGrp'] == 1) || 
-               (json['IsGrp'] == true) || 
-               (json['IsGroup'] == true) || 
-               (json['is_group'] == true) || 
-               (json['isGroup'] == true) || 
-               (json['GrpId'] != null && json['GrpId'].toString().isNotEmpty && json['GrpId'].toString() != '0') || 
-               ((getValue(['CtRealId', 'ct_real_id', 'CtId', 'ContactId', 'Id', 'id'])?.toString() ?? '').endsWith('@g.us')) ||
-               ((getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Grp', 'Name', 'participant_email'])?.toString() ?? '').toUpperCase().contains('GROUP')) ||
-               ((getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Grp', 'Name', 'participant_email'])?.toString() ?? '').toUpperCase().contains('GRUP')) ||
-               ((getValue(['GroupNm', 'GroupName', 'group_name'])?.toString() ?? '').isNotEmpty) ||
-               ((getValue(['ChatType', 'chat_type', 'Type', 'type'])?.toString() ?? '').toLowerCase() == 'group'),
+      isGroup: resolveIsGroup(),
       isBlocked: json['CtIsBlock'] == 1 || json['CtIsBlock'] == true,
       isLastMessageFromMe: json['IsMe'] == true ||
           json['LastIsMe'] == true ||
@@ -193,7 +206,7 @@ class Conversation {
           json['isNeedReply'] == 1 ||
           json['isNeedReply'] == true,
       ctRealId: getValue(['CtRealId', 'ct_real_id'])?.toString() ?? '',
-      link: getValue(['LinkTmp', 'LinkNm', 'LinkName', 'link_name', 'Link'])?.toString() ?? '',
+      link: getValue(['IdLink', 'LinkId', 'CtId', 'IdContact', 'CtIdExt', 'ExtId', 'IdAlias', 'LinkTmp', 'LinkNm', 'LinkName', 'link_name', 'Link'])?.toString() ?? '',
       campaign: getValue(['CmpNm', 'CampaignNm', 'CampaignName', 'campaign_name', 'Campaign'])?.toString() ?? '',
       deal: getValue(['DealNm', 'DealName', 'deal_name', 'Deal'])?.toString() ?? '',
       groupName: getValue(['Grp', 'GroupNm', 'GroupName', 'group_name'])?.toString() ?? '',

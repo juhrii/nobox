@@ -868,6 +868,88 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () async {
+                                void showValidationToast(String title, String msg) {
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      behavior: SnackBarBehavior.floating,
+                                      elevation: 8,
+                                      backgroundColor: Colors.transparent,
+                                      margin: const EdgeInsets.all(16),
+                                      padding: EdgeInsets.zero,
+                                      duration: const Duration(seconds: 4),
+                                      content: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [Color(0xFFD32F2F), Color(0xFFB71C1C)],
+                                          ),
+                                          borderRadius: BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.25),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withValues(alpha: 0.2),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 24),
+                                            ),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    title,
+                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    msg,
+                                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                // Validasi wajib isian sebelum proses pembuatan ruangan (New Conversation)
+                                if (selectedChannel == null || selectedChannel!.trim().isEmpty) {
+                                  showValidationToast('Kolom Belum Lengkap!', 'Silakan pilih Channel komunikasi terlebih dahulu.');
+                                  return;
+                                }
+                                if (selectedAccount == null || selectedAccount!.trim().isEmpty) {
+                                  showValidationToast('Kolom Belum Lengkap!', 'Silakan pilih Akun (Account) pengirim terlebih dahulu.');
+                                  return;
+                                }
+                                if (selectedChat != 'Group') {
+                                  if (selectedTo == 'Contact' && (selectedContact == null || selectedContact!.trim().isEmpty || selectedContact!.contains('No Contacts'))) {
+                                    showValidationToast('Kolom Belum Lengkap!', 'Silakan pilih Kontak penerima dari daftar yang tersedia.');
+                                    return;
+                                  } else if (selectedTo == 'Manual' && manualInput.trim().isEmpty) {
+                                    showValidationToast('Kolom Belum Lengkap!', 'Silakan masukkan nomor telepon tujuan secara manual.');
+                                    return;
+                                  } else if (selectedTo == 'Link' && manualInput.trim().isEmpty) {
+                                    showValidationToast('Kolom Belum Lengkap!', 'Silakan masukkan ID Tautan (Link) tujuan.');
+                                    return;
+                                  }
+                                }
+
                                 // Dapatkan Id akun yang dipilih dalam format integer
                                 int accountIdInt = 0;
                                 if (selectedAccount != null) {
@@ -933,9 +1015,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 }
 
                                 if (!isGroup && (receiver == null || receiver!.isEmpty)) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Silakan pilih penerima')),
-                                  );
+                                  showValidationToast('Kolom Belum Lengkap!', 'Silakan periksa kembali data penerima yang dipilih.');
                                   return;
                                 }
 
@@ -1001,10 +1081,40 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                         );
                                       } catch (e) {
                                         // Jika tidak ditemukan di 20 list pertama karena belum ada pesan (waktu masih null di server)
+                                        String resolvedCtId = result['contactId']?.toString() ?? (contactId?.toString() ?? '');
+                                        String resolvedLinkId = result['linkId']?.toString() ?? (linkId?.toString() ?? '');
+                                        String resolvedAccId = result['accountId']?.toString() ?? accountIdInt.toString();
+                                        String resolvedCtRealId = result['ctRealId']?.toString() ?? (receiver ?? '');
+                                        String resolvedSender = selectedContact?.isNotEmpty == true ? selectedContact! : (manualInput.isNotEmpty ? manualInput : 'New Chat');
+
+                                        // Jika ID masih kosong/tidak lengkap, ambil detail obrolan dari server menggunakan getDetailRoom
+                                        if (newRoomIdStr != null && newRoomIdStr.isNotEmpty && (resolvedCtId.isEmpty || resolvedCtId == '0')) {
+                                          try {
+                                            final detail = await context.read<ChatProvider>().getDetailRoom(newRoomIdStr, forceRefresh: true);
+                                            if (detail != null) {
+                                              final rData = detail['Room'] ?? detail['Data']?['Room'] ?? detail;
+                                              if (rData is Map) {
+                                                final dCtId = rData['CtId']?.toString() ?? rData['ContactId']?.toString();
+                                                if (dCtId != null && dCtId.isNotEmpty && dCtId != '0') resolvedCtId = dCtId;
+                                                final dLinkId = rData['LinkTmp']?.toString() ?? rData['LinkId']?.toString();
+                                                if (dLinkId != null && dLinkId.isNotEmpty && dLinkId != '0') resolvedLinkId = dLinkId;
+                                                final dAccId = rData['ChAccId']?.toString() ?? rData['AccId']?.toString();
+                                                if (dAccId != null && dAccId.isNotEmpty && dAccId != '0') resolvedAccId = dAccId;
+                                                final dCtReal = rData['CtRealId']?.toString();
+                                                if (dCtReal != null && dCtReal.isNotEmpty && dCtReal != '0') resolvedCtRealId = dCtReal;
+                                                final dSender = rData['CtRealNm']?.toString() ?? rData['ContactName']?.toString();
+                                                if (dSender != null && dSender.isNotEmpty && dSender != 'null') resolvedSender = dSender;
+                                              }
+                                            }
+                                          } catch (err) {
+                                            debugPrint('ChatList: Gagal fetch getDetailRoom untuk New Chat: $err');
+                                          }
+                                        }
+
                                         newChat = ChatModel(
                                           id: newRoomIdStr ?? '',
-                                          contactId: receiver ?? '',
-                                          sender: selectedContact?.isNotEmpty == true ? selectedContact! : (manualInput.isNotEmpty ? manualInput : 'New Chat'),
+                                          contactId: resolvedCtId.isNotEmpty ? resolvedCtId : (receiver ?? ''),
+                                          sender: resolvedSender,
                                           lastMessage: '',
                                           time: DateTime.now().toIso8601String(),
                                           unreadCount: 0,
@@ -1022,9 +1132,9 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                           isBlocked: false,
                                           isLastMessageFromMe: true,
                                           needReply: false,
-                                          accountId: accountIdInt.toString(),
-                                          ctRealId: receiver ?? '',
-                                          link: linkId?.toString() ?? '',
+                                          accountId: resolvedAccId,
+                                          ctRealId: resolvedCtRealId,
+                                          link: resolvedLinkId,
                                           campaign: '',
                                           deal: '',
                                           groupName: isGroup ? (manualInput.isNotEmpty ? manualInput : 'Group') : '',
@@ -1545,18 +1655,22 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                          (!isDocument && (['.ogg', '.oga', '.mp3', '.wav', '.m4a', '.opus', '.aac', '.weba', '.amr'].any((ext) => filename.contains(ext) || originalName.contains(ext)) ||
                           originalName.contains('voice note') || originalName.contains('voice_') || filename.contains('voice_')));
           
-          final isImage = typeVal == '3' || 
-                         (!isDocument && ['.jpg', '.jpeg', '.png', '.gif', '.webp'].any((ext) => filename.contains(ext) || originalName.contains(ext)));
+          final isSticker = typeVal == '16' || typeVal == '17' || 
+              ['.webm', '.tgs', '.webp', '.ezgif', 'sticker', 'stiker', 'animated'].any((s) => filename.contains(s) || originalName.contains(s) || caption.toLowerCase().contains(s) || trimmedMsg.toLowerCase().contains(s));
+
+          final isImage = !isSticker && (typeVal == '3' || 
+                         (!isDocument && ['.jpg', '.jpeg', '.png', '.gif', '.webp'].any((ext) => filename.contains(ext) || originalName.contains(ext))));
                          
-          final isAnimatedSticker = typeVal == '16' || (!isDocument && ['.webm', '.tgs'].any((ext) => filename.contains(ext) || originalName.contains(ext)));
-          
-          final isVideo = (typeVal == '4' && !isAnimatedSticker) || 
-                         (!isDocument && !isAnimatedSticker && ['.mp4', '.avi', '.mov', '.3gp', '.mkv'].any((ext) => filename.contains(ext) || originalName.contains(ext)));
+          final isVideo = !isSticker && ((typeVal == '4' && !isSticker) || 
+                         (!isDocument && !isSticker && ['.mp4', '.avi', '.mov', '.3gp', '.mkv'].any((ext) => filename.contains(ext) || originalName.contains(ext))));
                          
           final isLocation = typeVal == '15' || typeVal == '11' || trimmedMsg.toLowerCase().contains('"lat":');
           final isContact = typeVal == '14' || typeVal == '10';
 
-          if (isDocument) {
+          if (isSticker) {
+            displayMessage = '🌟 Sticker';
+            parsedAsMedia = true;
+          } else if (isDocument && !isSticker) {
             String docName = 'Dokumen';
             if (originalName.isNotEmpty) {
               docName = targetMap['OriginalName']?.toString() ?? targetMap['originalname']?.toString() ?? 'Dokumen';
@@ -1570,9 +1684,6 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             parsedAsMedia = true;
           } else if (isImage) {
             displayMessage = '📷 Foto${caption.isNotEmpty ? ' $caption' : ''}';
-            parsedAsMedia = true;
-          } else if (isAnimatedSticker) {
-            displayMessage = '🌟 Sticker';
             parsedAsMedia = true;
           } else if (isVideo) {
             displayMessage = '🎥 Video${caption.isNotEmpty ? ' $caption' : ''}';
@@ -2379,7 +2490,15 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                 ScaffoldMessenger.of(this.context).showSnackBar(
                   const SnackBar(content: Text('Menyelesaikan chat...')),
                 );
-                final success = await chatProvider.resolveChat(chat.id);
+                String resolveId = chat.id;
+                if (resolveId.isEmpty || resolveId == '0' || resolveId == 'null' || int.tryParse(resolveId.replaceAll(RegExp(r'[^0-9]'), '')) == null) {
+                  if (int.tryParse(chat.contactId.replaceAll(RegExp(r'[^0-9]'), '')) != null && chat.contactId != '0') {
+                    resolveId = chat.contactId;
+                  } else if (int.tryParse(chat.link.replaceAll(RegExp(r'[^0-9]'), '')) != null && chat.link != '0') {
+                    resolveId = chat.link;
+                  }
+                }
+                final success = await chatProvider.resolveChat(resolveId, accountId: chat.accountId);
                 if (mounted) {
                   ScaffoldMessenger.of(this.context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(this.context).showSnackBar(

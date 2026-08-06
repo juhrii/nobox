@@ -68,7 +68,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
     super.initState();
     _needReply = widget.chat.needReply;
     _muteAIAgent = widget.chat.muteAiAgent;
-    _isBlocked = widget.chat.isBlocked;
+    _isBlocked = Provider.of<ChatProvider>(context, listen: false).resolveIsBlocked(widget.chat.id, widget.chat.isBlocked);
     _currentAccount = 'Not Set';
     _currentFunnel = widget.chat.funnel;
     _currentTags = List.from(widget.chat.tags);
@@ -294,8 +294,9 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
         if (room['IsMuteBot'] != null) _muteAIAgent = room['IsMuteBot'].toString() == 'true' || room['IsMuteBot'].toString() == '1';
         if (room['IsNeedReply'] != null) _needReply = room['IsNeedReply'].toString() == 'true' || room['IsNeedReply'].toString() == '1';
         
-        final blockVal = room['IsBlock'] ?? room['CtIsBlock'];
-        if (blockVal != null) _isBlocked = blockVal.toString() == 'true' || blockVal.toString() == '1';
+        final blockVal = room['CtIsBlock'] ?? room['IsBlock'];
+        final rawBlock = blockVal != null ? (blockVal.toString() == 'true' || blockVal.toString() == '1') : widget.chat.isBlocked;
+        _isBlocked = chatProvider.resolveIsBlocked(widget.chat.id, rawBlock);
 
         // Extract Agent info from RoomAgents if available
         try {

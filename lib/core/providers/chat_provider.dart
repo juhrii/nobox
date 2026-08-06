@@ -63,11 +63,43 @@ class ChatProvider with ChangeNotifier {
   static const String _savedContactLocationsKey = 'saved_contact_locations';
   // Key untuk menyimpan override pesan lokal (supaya bertahan saat hot restart)
   static const String _localOverridesKey = 'local_overrides';
+  // Key untuk menyimpan nama agent yang diassign agar tidak revert saat tombol back atau refresh
+  static const String _savedAgentNamesKey = 'saved_agent_names';
+  // Key untuk menyimpan status block/unblock lokal agar kontak baru tidak otomatis dianggap terblokir oleh backend NoBox
+  static const String _savedBlockStatesKey = 'saved_block_states';
 
   // Map: roomId → nama kontak yang sudah disave (persisten melewati hot restart & refresh)
   Map<String, String> _savedContactNames = {};
   // Map: roomId → data lokasi kontak {Country, State, City, Address, Postal}
   Map<String, Map<String, String>> _savedContactLocations = {};
+  // Map: roomId → nama agent yang ditugaskan (persisten melewati refresh & restart)
+  Map<String, String> _savedAgentNames = {};
+  // Map: roomId → status blokir lokal (true=blocked, false=unblocked)
+  Map<String, bool> _savedBlockStates = {};
+
+  /// Mendapatkan status blokir yang akurat dan melindunginya dari nilai default keliru pada API NoBox untuk kontak baru
+  bool resolveIsBlocked(String roomId, bool serverIsBlocked) {
+    if (_savedBlockStates.containsKey(roomId)) {
+      return _savedBlockStates[roomId]!;
+    }
+    return serverIsBlocked;
+  }
+
+  ChatModel _applyAgentOverride(ChatModel chat) {
+    var updatedChat = chat;
+    final persistedAgent = _savedAgentNames[chat.id];
+    if (persistedAgent != null) {
+      if (persistedAgent.isNotEmpty && persistedAgent != 'Unassigned') {
+        updatedChat = updatedChat.copyWith(agentName: persistedAgent, status: 'Assigned');
+      } else {
+        updatedChat = updatedChat.copyWith(agentName: '', status: 'Unassigned');
+      }
+    }
+    if (_savedBlockStates.containsKey(chat.id)) {
+      updatedChat = updatedChat.copyWith(isBlocked: _savedBlockStates[chat.id]!);
+    }
+    return updatedChat;
+  }
   
   // Map: roomId → list of ignored server times (used to ignore stale data after deleting a message)
   Map<String, List<String>> _ignoredServerTimes = {};
@@ -487,6 +519,8 @@ Future<void> fetchChats() async {
           if (persistedName != null && persistedName.isNotEmpty) {
             chat = chat.copyWith(sender: persistedName);
           }
+          // Terapkan assigned agent override agar status tidak revert ke Unassigned saat polling/refresh
+          chat = _applyAgentOverride(chat);
 
           // FIX: Cegah string generik ("File", "Document") menimpa JSON array media yang sudah valid
           final shieldReference = oldChat ?? override;
@@ -538,6 +572,19 @@ Future<void> fetchChats() async {
             unreadCount: _readIds.contains(chat.id) ? 0 : chat.unreadCount,
           );
         }).toList();
+
+        // FIX: Pastikan percakapan lokal (dari New Conversation) yang tersimpan di _localOverrides
+        // namun belum masuk di halaman pertama API NoBox tetap ada di daftar percakapan sesudah hot restart!
+        for (final overrideEntry in _localOverrides.entries) {
+          final overrideChat = overrideEntry.value;
+          if (overrideChat.sender.isNotEmpty) {
+            final existsInServer = _chats.any((c) => c.id == overrideChat.id || (c.ctRealId.isNotEmpty && c.ctRealId == overrideChat.ctRealId) || (c.contactId.isNotEmpty && c.contactId == overrideChat.contactId && c.contactId != '0'));
+            if (!existsInServer) {
+              _chats.insert(0, _applyAgentOverride(overrideChat));
+              debugPrint('ChatProvider: 📌 Restored persistent local chat ${overrideChat.id} (${overrideChat.sender}) across hot restart');
+            }
+          }
+        }
 
         // Perbarui state pagination
         _currentSkip = response.data!.length;
@@ -776,6 +823,15 @@ Future<void> fetchChats() async {
   /// Menyisipkan obrolan baru secara lokal ke urutan teratas tanpa harus menunggu server.
   /// Ini memperbaiki bug di mana obrolan baru menghilang atau melempar ke chat acak.
   void insertLocalChat(ChatModel chat) {
+    // Pastikan percakapan baru yang ditambahkan TIDAK dianggap terblokir oleh default API NoBox
+    _savedBlockStates[chat.id] = false;
+    _saveSavedBlockStates();
+
+    // Simpan chat baru ke local overrides agar tersimpan secara permanen melewati hot restart
+    _localOverrides[chat.id] = chat;
+    _overrideTimestamps[chat.id] = DateTime.now().toUtc().toIso8601String();
+    _saveLocalOverrides();
+
     // Hindari duplikasi
     final idx = _chats.indexWhere((c) => c.id == chat.id);
     if (idx != -1) {
@@ -885,6 +941,8 @@ Future<void> fetchChats() async {
             if (persistedName != null && persistedName.isNotEmpty) {
               chat = chat.copyWith(sender: persistedName);
             }
+            // Terapkan assigned agent override saat kembali ke halaman utama / refresh first page
+            chat = _applyAgentOverride(chat);
 
             // FIX: Lindungi override lokal agar tidak tertimpa oleh data server yang USANG.
             // Override bertahan SELAMANYA sampai server mengirim pesan yang BENAR-BENAR lebih baru.
@@ -992,6 +1050,7 @@ Future<void> fetchChats() async {
               if (persistedName != null && persistedName.isNotEmpty) {
                 chat = chat.copyWith(sender: persistedName);
               }
+              chat = _applyAgentOverride(chat);
 
               // FIX: Terapkan local overrides saat app baru load (Hot Restart)
               if (_localOverrides.containsKey(chat.id)) {
@@ -1197,6 +1256,30 @@ Future<void> fetchMoreChats() async {
           debugPrint('ChatProvider: ❌ Error decoding saved contact locations: $e');
         }
       }
+
+      // Load data agent assignments yang sudah disave
+      final savedAgentsJson = prefs.getString(_savedAgentNamesKey);
+      if (savedAgentsJson != null) {
+        try {
+          final decoded = jsonDecode(savedAgentsJson) as Map<String, dynamic>;
+          _savedAgentNames = decoded.map((k, v) => MapEntry(k, v.toString()));
+          debugPrint('ChatProvider: ✅ Loaded ${_savedAgentNames.length} saved agent names: $_savedAgentNames');
+        } catch (e) {
+          debugPrint('ChatProvider: ❌ Error decoding saved agent names: $e');
+        }
+      }
+
+      // Load data status block/unblock yang sudah disave
+      final savedBlocksJson = prefs.getString(_savedBlockStatesKey);
+      if (savedBlocksJson != null) {
+        try {
+          final decoded = jsonDecode(savedBlocksJson) as Map<String, dynamic>;
+          _savedBlockStates = decoded.map((k, v) => MapEntry(k, v == true || v == 'true' || v == 1 || v == '1'));
+          debugPrint('ChatProvider: ✅ Loaded ${_savedBlockStates.length} saved block states');
+        } catch (e) {
+          debugPrint('ChatProvider: ❌ Error decoding saved block states: $e');
+        }
+      }
     } catch (e) {
       debugPrint('ChatProvider: ❌ Error loading persisted state: $e');
     }
@@ -1235,6 +1318,18 @@ Future<void> fetchMoreChats() async {
   Future<void> _saveSavedContactLocations() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_savedContactLocationsKey, jsonEncode(_savedContactLocations));
+  }
+
+  /// Simpan peta nama agent ke SharedPreferences.
+  Future<void> _saveSavedAgentNames() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_savedAgentNamesKey, jsonEncode(_savedAgentNames));
+  }
+
+  /// Simpan peta status block ke SharedPreferences.
+  Future<void> _saveSavedBlockStates() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_savedBlockStatesKey, jsonEncode(_savedBlockStates));
   }
 
   /// Ambil data lokasi kontak yang disimpan secara lokal.
@@ -1300,7 +1395,17 @@ Future<void> fetchMoreChats() async {
           final val = entry.value as Map<String, dynamic>;
           _localOverrides[entry.key] = ChatModel(
             id: entry.key,
-            sender: '',
+            sender: val['sender']?.toString() ?? '',
+            contactId: val['contactId']?.toString() ?? '',
+            ctRealId: val['ctRealId']?.toString() ?? '',
+            accountId: val['accountId']?.toString() ?? '',
+            chId: val['chId']?.toString() ?? '',
+            channelName: val['channelName']?.toString() ?? '',
+            channelType: val['channelType']?.toString() ?? '',
+            link: val['link']?.toString() ?? '',
+            isGroup: val['isGroup'] == true,
+            isBlocked: val['isBlocked'] == true,
+            status: val['status']?.toString() ?? 'Unassigned',
             lastMessage: val['lastMessage']?.toString() ?? '',
             lastMessageType: val['lastMessageType']?.toString(),
             time: val['time']?.toString() ?? '',
@@ -1327,6 +1432,17 @@ Future<void> fetchMoreChats() async {
         'lastMessageType': v.lastMessageType,
         'isLastMessageFromMe': v.isLastMessageFromMe,
         'time': v.time,
+        'sender': v.sender,
+        'contactId': v.contactId,
+        'ctRealId': v.ctRealId,
+        'accountId': v.accountId,
+        'chId': v.chId,
+        'channelName': v.channelName,
+        'channelType': v.channelType,
+        'link': v.link,
+        'isGroup': v.isGroup,
+        'isBlocked': v.isBlocked,
+        'status': v.status,
       }));
       await prefs.setString(_localOverridesKey, jsonEncode(data));
       await prefs.setString('override_timestamps', jsonEncode(_overrideTimestamps));
@@ -1534,6 +1650,10 @@ Future<void> fetchMoreChats() async {
   }
 
   Future<bool> toggleBlockContact(String roomId, String contactId, bool isBlocked) async {
+    // Simpan status baru secara persisten agar selalu akurat saat refresh/restart
+    _savedBlockStates[roomId] = isBlocked;
+    _saveSavedBlockStates();
+
     final index = _chats.indexWhere((chat) => chat.id == roomId);
     if (index != -1) {
       // Optimistic update
@@ -1569,32 +1689,67 @@ Future<void> fetchMoreChats() async {
     String? msg,
     String? fileJson,
     String? replyId,
+    String? replyMsg,
+    String? replyFrom,
+    String? replyType,
+    String? replyFiles,
   }) async {
     String resolvedAccountId = chat.accountId;
 
-    // --- TELEGRAM SMART FALLBACK ---
-    // Chatrooms/List API sering mengembalikan AccId yang sudah kedaluwarsa untuk Telegram.
-    // Web Dashboard secara otomatis menggunakan bot Telegram yang aktif.
-    // Oleh karena itu, kita harus menimpa (override) resolvedAccountId dengan bot Telegram aktif dari _cachedAccounts.
-    if (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) {
-      if (_cachedAccounts != null) {
+    // --- SMART TELEGRAM & FALLBACK ACCOUNT ID ---
+    // Hanya override jika channel Telegram, ATAU jika AccountId memang kosong di data chat (jangan timpahi Account ID WhatsApp yang valid seperti WA HRTS!).
+    final isTelegram = chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram');
+    if (resolvedAccountId.isEmpty || resolvedAccountId == '0' || resolvedAccountId == 'null' || isTelegram) {
+      if (_cachedAccounts != null && _cachedAccounts!.isNotEmpty) {
         try {
-          final activeTelegramAcc = _cachedAccounts!.firstWhere(
-            (acc) => acc['Channel']?.toString() == '2' || (acc['Code']?.toString() ?? '').toLowerCase().contains('telegram')
+          final activeAcc = _cachedAccounts!.firstWhere(
+            (acc) {
+              final ch = acc['Channel']?.toString() ?? '';
+              final code = (acc['Code']?.toString() ?? '').toLowerCase();
+              if (isTelegram) {
+                return ch == '2' || code.contains('telegram');
+              }
+              final isWa = chat.chId == '1' || chat.channelType.toLowerCase().contains('whatsapp') || chat.channelName.toLowerCase().contains('whatsapp') || chat.channelType.toLowerCase() == 'wa';
+              if (isWa) {
+                return ch == '1' || code.contains('whatsapp') || code == 'wa';
+              }
+              return false;
+            },
+            orElse: () => _cachedAccounts!.first,
           );
-          if (activeTelegramAcc['Id'] != null) {
-            resolvedAccountId = activeTelegramAcc['Id'].toString();
-            debugPrint('Telegram Smart Fallback: Overriding AccId ${chat.accountId} -> $resolvedAccountId');
+          if (activeAcc['Id'] != null && (resolvedAccountId.isEmpty || resolvedAccountId == '0' || resolvedAccountId == 'null' || isTelegram)) {
+            resolvedAccountId = activeAcc['Id'].toString();
+            debugPrint('Smart Fallback: Overriding AccId ${chat.accountId} -> $resolvedAccountId');
           }
         } catch (e) {
-          debugPrint('Telegram Smart Fallback Failed: $e');
+          debugPrint('Smart Fallback Failed: $e');
         }
       }
     }
     // --------------------------------
 
+    // Pilih ID Link yang dipastikan berupa angka integer valid (sesuai spesifikasi dan implementasi di folder Aplikasi)
+    String idLinkValue = chat.contactId;
+    if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null' || int.tryParse(idLinkValue.replaceAll(RegExp(r'[^0-9]'), '')) == null) {
+      if (chat.link.isNotEmpty && chat.link != '0' && chat.link != 'null' && int.tryParse(chat.link.replaceAll(RegExp(r'[^0-9]'), '')) != null) {
+        idLinkValue = chat.link;
+      }
+    }
+    if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
+      idLinkValue = chat.link;
+    }
+    if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
+      idLinkValue = chat.ctRealId;
+    }
+    if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
+      idLinkValue = chat.sender.replaceAll(RegExp(r'[^0-9]'), '');
+    }
+    if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
+      idLinkValue = chat.id.replaceAll(RegExp(r'^[0-9]+_'), '').replaceAll(RegExp(r'[^0-9]'), '');
+    }
+
     final error = await SignalRService().invokeKirimPesan(
-      idLink: chat.contactId, // Harus contactId (CtId) karena backend menuntut INTEGER!
+      idLink: idLinkValue, // Harus contactId (CtId) karena backend menuntut INTEGER!
       idAccount: resolvedAccountId,
       idRoom: chat.id,
       idGroup: chat.groupId, // Pass groupId if it is a group
@@ -1602,6 +1757,10 @@ Future<void> fetchMoreChats() async {
       msg: msg,
       fileJson: fileJson,
       replyId: replyId,
+      replyMsg: replyMsg,
+      replyFrom: replyFrom,
+      replyType: replyType,
+      replyFiles: replyFiles,
     );
     return error;
   }
@@ -1753,6 +1912,15 @@ Future<void> toggleArchive(String chatId) async {
   Future<bool> updateContactInfo(String contactId, Map<String, dynamic> contactData) async {
     debugPrint('ChatProvider: updateContactInfo called | roomId=$contactId | data=$contactData');
 
+    // FIX: Saat mengedit nama atau info kontak, jika kontak tersebut tidak diblokir secara nyata,
+    // kirimkan IsBlock/CtIsBlock=0 agar database server NoBox tidak mengunci nilai default CtIsBlock=1
+    if (!contactData.containsKey('CtIsBlock') && !contactData.containsKey('IsBlock')) {
+      if (!resolveIsBlocked(contactId, false)) {
+        contactData['CtIsBlock'] = 0;
+        contactData['IsBlock'] = 0;
+      }
+    }
+
     // OPTIMISTIC SAVE: simpan nama ke memori dan disk SEBELUM memanggil API,
     // agar nama tetap tersimpan meski response API ambigu atau IsError=true.
     if (contactData['CtRealNm'] != null) {
@@ -1848,8 +2016,8 @@ Future<void> toggleArchive(String chatId) async {
     return false;
   }
 
-  Future<bool> resolveChat(String contactId) async {
-    final response = await _chatService.resolveChat(contactId);
+  Future<bool> resolveChat(String contactId, {String? accountId}) async {
+    final response = await _chatService.resolveChat(contactId, accountId: accountId);
     if (!response.isError) {
       // Immediately update local UI for snappy feel
       final index = _chats.indexWhere((c) => c.id == contactId);
@@ -1956,6 +2124,10 @@ Future<void> toggleArchive(String chatId) async {
   }
 
   Future<bool> assignAgent(String contactId, String agentId, String agentName, {String chId = '', String ctId = ''}) async {
+    _detailRoomCache.remove(contactId);
+    _savedAgentNames[contactId] = agentName;
+    _saveSavedAgentNames();
+
     final response = await _chatService.addAgentToConversation(contactId, agentId, agentName, chId: chId, ctId: ctId);
     if (!response.isError) {
       // Update local state immediately
@@ -1972,6 +2144,10 @@ Future<void> toggleArchive(String chatId) async {
   }
 
   Future<bool> removeAgent(String contactId) async {
+    _detailRoomCache.remove(contactId);
+    _savedAgentNames[contactId] = "";
+    _saveSavedAgentNames();
+
     // Assuming passing empty id/name will unassign
     final response = await _chatService.addAgentToConversation(contactId, "", "");
     if (!response.isError) {

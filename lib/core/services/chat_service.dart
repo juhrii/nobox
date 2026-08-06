@@ -405,9 +405,14 @@ class ChatService {
           final response = await _apiClient.post(
             AppConfig.updateChatroomEndpoint,
             data: {
-              "EntityId": roomId,
+              "EntityId": int.tryParse(roomId) ?? roomId,
               "Entity": {
                 "St": 1, // Unassigned
+                "Status": "Unassigned",
+                "AgentId": null,
+                "AssigneeId": null,
+                "AgentName": "",
+                "AssignedAgentName": "",
               }
             },
           );
@@ -421,51 +426,56 @@ class ChatService {
         }
       }
 
-      final response = await _apiClient.post(
-        AppConfig.addAgentToConversationEndpoint,
-        data: payload,
-      );
+      try {
+        final response = await _apiClient.post(
+          AppConfig.addAgentToConversationEndpoint,
+          data: payload,
+        );
+        debugPrint('AddAgent Response Code: ${response.statusCode}');
+        debugPrint('AddAgent Response Data: ${response.data}');
 
-      debugPrint('AddAgent Response Code: ${response.statusCode}');
-      debugPrint('AddAgent Response Data: ${response.data}');
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        final rawData = response.data;
-        if (rawData is Map && rawData['IsError'] == true) {
-          final errorMsg = rawData['Error']?.toString() ?? 'Server error';
-          return ApiResponse.failure(errorMsg, 200);
+        if (response.statusCode == 200 || response.statusCode == 204) {
+          final rawData = response.data;
+          if (rawData is Map && rawData['IsError'] == true) {
+            debugPrint('AddAgent API message: ${rawData['Error']}');
+          }
         }
-
-        // FORCE UPDATE STATUS TO 2 (Assigned) using universal Update endpoint!
-        try {
-          debugPrint('ChatService: Forcing Chatroom Status to 2 via Update endpoint.');
-          
-          final updateData = {
-            "EntityId": roomId,
-            "Entity": {
-              "St": 2, 
-              "ReById": int.tryParse(agentId) ?? 1,
-            }
-          };
-          
-          await _apiClient.post(
-            AppConfig.updateChatroomEndpoint,
-            data: updateData,
-          );
-        } catch (e) {
-          debugPrint('ChatService: Failed to force update status to 2: $e');
-        }
-
-        return ApiResponse.success(true, response.statusCode!);
-      } else {
-        return ApiResponse.failure('Failed to assign agent: ${response.statusCode}', response.statusCode!);
+      } catch (e) {
+        debugPrint('ChatService: ⚠️ AddAgentToConversation API error ($e). Proceeding with universal Update fallback.');
       }
-    } on DioException catch (e) {
-      debugPrint('AddAgent DioError Data: ${e.response?.data}');
-      debugPrint('AddAgent DioError Message: ${e.message}');
-      return ApiResponse.failure(e.message ?? 'Connection error', e.response?.statusCode ?? 500);
+
+      // FORCE UPDATE STATUS TO 2 (Assigned) using universal Update endpoint!
+      // Ini menjamin penugasan agen tetap berhasil tersimpan di database meskipun API AddAgentToConversation mengalami eror 500 dari server.
+      try {
+        debugPrint('ChatService: Updating Chatroom assignment (Status 2, Agent $agentName) via Update endpoint.');
+        
+        final updateData = {
+          "EntityId": int.tryParse(roomId) ?? roomId,
+          "Entity": {
+            "St": 2, 
+            "Status": "Assigned",
+            "ReById": int.tryParse(agentId) ?? 1,
+            "AgentId": int.tryParse(agentId) ?? agentId,
+            "AssigneeId": int.tryParse(agentId) ?? agentId,
+            "AssignedTo": agentId,
+            "AgentName": agentName,
+            "AssignedAgentName": agentName,
+          }
+        };
+        
+        await _apiClient.post(
+          AppConfig.updateChatroomEndpoint,
+          data: updateData,
+        );
+        debugPrint('ChatService: ✅ Successfully assigned agent via Update endpoint!');
+      } catch (updateErr) {
+        debugPrint('ChatService: Failed to force update status to 2: $updateErr');
+      }
+
+      return ApiResponse.success(true, 200);
     } catch (e) {
-      return ApiResponse.failure(e.toString(), 500);
+      debugPrint('ChatService: ❌ Unexpected error in addAgentToConversation: $e');
+      return ApiResponse.failure('Gagal menugaskan agen: Terjadi gangguan koneksi server', 500);
     }
   }
 
@@ -473,7 +483,7 @@ class ChatService {
   /// Endpoint: POST Services/Chat/Chatrooms/MarkResolved
   /// St: 3 = Status Resolved
   /// ReById & ReByNm = diambil dari user data yang login
-  Future<ApiResponse<bool>> resolveConversation(String roomId) async {
+  Future<ApiResponse<bool>> resolveConversation(String roomId, {String? accountId}) async {
     try {
       // Get agent info from user data (SharedPreferences) or JWT fallback
       String agentId = "1";
@@ -512,66 +522,67 @@ class ChatService {
         debugPrint('ChatService: Error getting user info for resolve payload: $e');
       }
 
-      debugPrint('✅ [Resolve] Marking room $roomId as resolved by $agentName (ID: $agentId)');
-
-      // If the roomId is a UUID (like WhatsApp 'wa-1234'), the Chatrooms/MarkResolved
-      // API throws 'Input string was not in a correct format' because it expects an INT.
-      // We bypass this backend bug by directly updating the Chatroom via the universal Update endpoint!
-      if (int.tryParse(roomId) == null) {
-        debugPrint('ChatService: RoomId is UUID, attempting generic Chatrooms/Update endpoint.');
-        try {
-          final response = await _apiClient.post(
-            AppConfig.updateChatroomEndpoint,
-            data: {
-              "EntityId": roomId,
-              "Entity": {
-                "St": 3, // Resolved
-                "ReById": int.tryParse(agentId) ?? 1,
-              }
-            },
-          );
-          
-          if (response.statusCode == 200) {
-            final data = response.data;
-            if (data is Map && data['IsError'] == true) {
-              return ApiResponse.failure(data['Error']?.toString() ?? 'Failed', 200);
+      // Extract a clean numeric ID from compound formats like "1234_5678" or remove letters/null
+      // MarkResolved API strictly requires an integer EntityId string.
+      String cleanRoomId = roomId.toString().trim().replaceAll('null', '').replaceAll('undefined', '');
+      if (int.tryParse(cleanRoomId) == null) {
+        if (cleanRoomId.contains('_')) {
+          final afterUnderscore = cleanRoomId.split('_').last;
+          if (int.tryParse(afterUnderscore) != null && afterUnderscore != '0') {
+            cleanRoomId = afterUnderscore;
+          } else {
+            final beforeUnderscore = cleanRoomId.split('_').first;
+            if (int.tryParse(beforeUnderscore) != null && beforeUnderscore != '0') {
+              cleanRoomId = beforeUnderscore;
             }
-            return ApiResponse.success(true, response.statusCode!);
           }
-        } catch (e) {
-          debugPrint('ChatService: Chatrooms/Update failed: $e, falling back to MarkResolved');
+        }
+        if (int.tryParse(cleanRoomId) == null) {
+          final numericOnly = cleanRoomId.replaceAll(RegExp(r'[^0-9]'), '');
+          if (numericOnly.isNotEmpty && int.tryParse(numericOnly) != null) {
+            cleanRoomId = numericOnly;
+          }
         }
       }
 
+      // Proteksi agar tidak mengirim ID kosong yang memicu error di backend
+      if (cleanRoomId.isEmpty || cleanRoomId == '0' || cleanRoomId == 'null') {
+        debugPrint('❌ [Resolve] DIBATALKAN: ID "$roomId" tidak valid untuk MarkResolved.');
+        return ApiResponse.failure('ID Obrolan tidak valid ($roomId). Harap muat ulang daftar obrolan.', 400);
+      }
+
+      debugPrint('✅ [Resolve] Marking room $roomId (cleanId: $cleanRoomId) as resolved by $agentName (ID: $agentId, accountId: $accountId)');
+
+      final String cleanAgentId = agentId.toString().replaceAll(RegExp(r'[^0-9]'), '');
+      final String reByIdStr = cleanAgentId.isNotEmpty ? cleanAgentId : '1';
+
       final requestData = {
-        'EntityId': int.tryParse(roomId) ?? roomId,
+        'EntityId': cleanRoomId,
         'Entity': {
-          'St': 3,       // Status 3 = Resolved
-          'ReById': int.tryParse(agentId) ?? 1,
+          'ReById': reByIdStr,
+          'ReByNm': agentName,
         },
       };
+
+      debugPrint('🔄 [Resolve] Payload: ${jsonEncode(requestData)}');
 
       final response = await _apiClient.post(
         AppConfig.resolveConversationEndpoint,
         data: requestData,
       );
 
-      if (response.statusCode == 200) {
-        final isError = response.data['IsError'];
-        final hasError = isError == true;
-        
-        if (!hasError) {
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        final isError = response.data is Map ? response.data['IsError'] : false;
+        if (isError != true) {
           debugPrint('✅ [Resolve] Room marked as resolved successfully');
           return ApiResponse.success(true, response.statusCode!);
-        } else {
-          final errorMsg = response.data['ErrorMsg'] ?? response.data['Error'] ?? 'Failed to mark room as resolved';
-          debugPrint('❌ [Resolve] Error: $errorMsg');
-          return ApiResponse.failure(errorMsg, response.statusCode!);
         }
-      } else {
-        debugPrint('❌ [Resolve] HTTP ${response.statusCode}: ${response.statusMessage}');
-        return ApiResponse.failure('HTTP ${response.statusCode}: ${response.statusMessage}', response.statusCode!);
+        final errorMsg = response.data['ErrorMsg'] ?? response.data['Error'] ?? 'Failed to mark resolved';
+        debugPrint('❌ [Resolve] Server returned error: $errorMsg');
+        return ApiResponse.failure(errorMsg.toString(), response.statusCode!);
       }
+
+      return ApiResponse.failure('Failed to resolve conversation (HTTP ${response.statusCode})', response.statusCode ?? 500);
     } on DioException catch (e) {
       debugPrint('❌ [Resolve] DioException: ${e.message}');
       return ApiResponse.failure(e.message ?? 'Connection error', e.response?.statusCode ?? 500);
@@ -1002,12 +1013,14 @@ class ChatService {
   // Endpoint ini memanggil rute `/Chatmessages/List` untuk menyedot jutaan baris data obrolan
   // dari database server ke layar HP. Ini bertugas melayani fitur pagination / tarik layar ke bawah.
   Future<ApiResponse<List<Message>>> getMessageHistory(String roomId, String currentUserEmail, {int skip = 0, int take = 50, String contactId = '', String groupId = '', String ctRealId = '', String link = '', String participantEmail = '', bool isTelegram = false}) async {
-    if (roomId.isEmpty) {
-      if (ctRealId.isNotEmpty && ctRealId != '0') {
+    if (roomId.isEmpty || roomId == '0' || roomId == 'null') {
+      if (groupId.isNotEmpty && groupId != '0' && groupId != 'null') {
+        roomId = groupId;
+      } else if (ctRealId.isNotEmpty && ctRealId != '0' && ctRealId != 'null') {
         roomId = ctRealId;
-      } else if (link.isNotEmpty && link != '0') {
+      } else if (link.isNotEmpty && link != '0' && link != 'null') {
         roomId = link;
-      } else if (contactId.isNotEmpty && contactId != '0') {
+      } else if (contactId.isNotEmpty && contactId != '0' && contactId != 'null') {
         roomId = contactId;
       } else {
         debugPrint('ChatService: 🛑 getMessageHistory called with ALL IDs empty! Returning empty list to prevent global message dump.');
@@ -1021,17 +1034,15 @@ class ChatService {
     }
     
     try {
+      final String cleanRoomStr = roomId.contains('_') ? roomId.split('_').last : roomId;
+      final int? numericRoomId = int.tryParse(cleanRoomStr.replaceAll(RegExp(r'[^0-9]'), ''));
+
       final payload = {
         'Take': isTelegram ? 9999 : take,
         'Skip': skip,
         'Sort': ['In DESC'],
-        'IncludeColumns': [
-          'Id', 'IdAlias', 'RoomId', 'Ack', 'From', 'ReplyFrom', 'To', 'AgentId',
-          'IsNobox', 'Type', 'Msg', 'File', 'Files', 'Note', 'In', 'IdAccount', 'ChAccId', 'ChId'
-        ],
-        'ColumnSelection': 1,
         'EqualityFilter': {
-          'RoomId': roomId
+          'RoomId': numericRoomId ?? roomId
         },
       };
   
@@ -1071,26 +1082,44 @@ class ChatService {
 
         final messages = dataList.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
         
-        // ONLY FOR TELEGRAM: 
-        // NoBox occasionally stores Telegram messages under the raw CtRealId instead of the RoomId.
-        // We MUST NOT do this for WhatsApp, as it causes severe data bleeding (fetching by generic integer IDs).
-        if (isTelegram) {
-          final Set<String> fallbackIds = {};
-          if (ctRealId.isNotEmpty && ctRealId != roomId) fallbackIds.add(ctRealId);
-          if (contactId.isNotEmpty && contactId != roomId) fallbackIds.add(contactId);
-          
-          final numericRoomId = roomId.replaceAll(RegExp(r'[^0-9]'), '');
-          if (numericRoomId.isNotEmpty && numericRoomId != roomId) fallbackIds.add(numericRoomId);
+        // FIX UNIVERSAL FALLBACK:
+        // NoBox occasionally stores messages under CtRealId, ContactId, or Link instead of the newly assigned RoomId
+        // (baik untuk Telegram maupun WhatsApp yang dibuat lewat New Conversation nomor telepon).
+        // Untuk menghindari "data bleeding" pada channel non-Telegram (di mana angka kecil berurut seperti '1' atau '2'
+        // bisa milik RoomId pengguna lain), kita terapkan filter pengaman otomatis.
+        final Set<String> fallbackIds = {};
+        if (ctRealId.isNotEmpty && ctRealId != roomId) fallbackIds.add(ctRealId);
+        if (contactId.isNotEmpty && contactId != roomId) fallbackIds.add(contactId);
+        if (link.isNotEmpty && link != roomId) fallbackIds.add(link);
+        
+        final numericRoomId = roomId.replaceAll(RegExp(r'[^0-9]'), '');
+        if (numericRoomId.isNotEmpty && numericRoomId != roomId) fallbackIds.add(numericRoomId);
 
-          if (roomId.contains('_')) {
-             final afterUnderscore = roomId.split('_').last;
-             if (afterUnderscore.isNotEmpty && afterUnderscore != roomId) fallbackIds.add(afterUnderscore);
-          }
+        if (roomId.contains('_')) {
+           final afterUnderscore = roomId.split('_').last;
+           if (afterUnderscore.isNotEmpty && afterUnderscore != roomId) fallbackIds.add(afterUnderscore);
+        }
 
+        // Pengaman anti-bleeding untuk non-Telegram: saring keluar angka kecil urut (< 100.000)
+        // yang bukan merupakan nomor telepon atau UUID.
+        if (!isTelegram) {
+          fallbackIds.removeWhere((fId) {
+            final clean = fId.trim();
+            if (clean.isEmpty) return true;
+            final asInt = int.tryParse(clean);
+            // Angka kecil tanpa awalan 0 atau + adalah ID database internal (berpotensi bleeding jika dijadikan RoomId)
+            if (asInt != null && asInt < 100000 && !clean.startsWith('0') && !clean.startsWith('+')) {
+              return true;
+            }
+            return false;
+          });
+        }
+
+        if (fallbackIds.isNotEmpty) {
           bool hasNewMessages = false;
 
           for (final fId in fallbackIds) {
-            debugPrint('ChatService: │ [TELEGRAM FALLBACK] Fetching fallback ID: $fId (chId=$roomId)');
+            debugPrint('ChatService: │ [UNIVERSAL FALLBACK] Fetching fallback ID: $fId (chId=$roomId)');
             try {
               final payload2 = Map<String, dynamic>.from(payload);
               payload2['EqualityFilter'] = {'RoomId': fId};
@@ -1114,7 +1143,7 @@ class ChatService {
                 }
               }
             } catch (e) {
-              debugPrint('ChatService: │ [TELEGRAM FALLBACK] Error fetching $fId: $e');
+              debugPrint('ChatService: │ [UNIVERSAL FALLBACK] Error fetching $fId: $e');
             }
           }
           
@@ -1397,17 +1426,34 @@ class ChatService {
 
           final dataObj = result['Data'] ?? result['Value'] ?? result['Entity'] ?? result['data'] ?? result['value'];
           String? extractedRoomId;
+          String? extractedCtId;
+          String? extractedLinkId;
+          String? extractedAccId;
+          String? extractedCtRealId;
+
           if (dataObj is Map) {
             extractedRoomId = dataObj['Id']?.toString() ?? dataObj['RoomId']?.toString() ?? dataObj['id']?.toString() ?? dataObj['roomId']?.toString();
+            extractedCtId = dataObj['CtId']?.toString() ?? dataObj['ContactId']?.toString() ?? dataObj['ctId']?.toString() ?? dataObj['IdLink']?.toString();
+            extractedLinkId = dataObj['LinkId']?.toString() ?? dataObj['LinkTmp']?.toString() ?? dataObj['linkId']?.toString();
+            extractedAccId = dataObj['AccId']?.toString() ?? dataObj['accId']?.toString() ?? dataObj['ChAccId']?.toString();
+            extractedCtRealId = dataObj['CtRealId']?.toString() ?? dataObj['ctRealId']?.toString();
           } else if (dataObj != null && dataObj is! List) {
             extractedRoomId = dataObj.toString();
           }
           extractedRoomId ??= result['Id']?.toString() ?? result['RoomId']?.toString() ?? result['id']?.toString() ?? result['roomId']?.toString();
+          extractedCtId ??= result['CtId']?.toString() ?? result['ContactId']?.toString() ?? result['ctId']?.toString();
+          extractedLinkId ??= result['LinkId']?.toString() ?? result['LinkTmp']?.toString() ?? result['linkId']?.toString();
+          extractedAccId ??= result['AccId']?.toString() ?? result['accId']?.toString();
+          extractedCtRealId ??= result['CtRealId']?.toString() ?? result['ctRealId']?.toString();
 
-          debugPrint('ChatService: ✅ Extracted RoomId from createNewRoom: $extractedRoomId');
+          debugPrint('ChatService: ✅ Extracted RoomId from createNewRoom: $extractedRoomId | CtId: $extractedCtId | LinkId: $extractedLinkId | AccId: $extractedAccId');
           return {
             'success': true,
             'roomId': extractedRoomId,
+            'contactId': extractedCtId,
+            'linkId': extractedLinkId,
+            'accountId': extractedAccId,
+            'ctRealId': extractedCtRealId,
             'data': result['Data'] ?? responseData,
           };
         } else if (responseData != null) {
@@ -1519,11 +1565,22 @@ class ChatService {
         }
       }
 
+      // Helper untuk mendeteksi apakah suatu ID sebenarnya adalah nomor telepon (ExtId) dan bukan database LinkId/CtId
+      bool isTelephoneNumber(String? str) {
+        if (str == null || str.isEmpty) return false;
+        final clean = str.trim().replaceAll(RegExp(r'[^0-9]'), '');
+        return clean.length >= 9 || str.trim().startsWith('08') || str.trim().startsWith('628') || str.trim().startsWith('+62');
+      }
+
       if (extId.isEmpty && request.extId != null && request.extId!.isNotEmpty) {
         extId = request.extId!;
       }
-
-
+      if (extId.isEmpty && isTelephoneNumber(request.contactId)) {
+        extId = request.contactId!;
+      }
+      if (extId.isEmpty && isTelephoneNumber(request.receiver)) {
+        extId = request.receiver;
+      }
 
       // Do NOT send ExtId as a JSON string for WA. 
       // HACK: Tapi untuk Telegram, C# backend mem-parsing ExtId sebagai objek JSON (extra.ExtId).
@@ -1545,10 +1602,10 @@ class ChatService {
       }
 
       payload['ExtId'] = finalExtId;
-      // Fallback: jika ExtId kosong, LinkId akan menyelamatkan pengiriman
-      if (request.contactId != null && request.contactId!.isNotEmpty) {
+      // Fallback: jika ExtId kosong atau ada LinkId valid, tambahkan LinkId (pastikan BUKAN nomor telepon!)
+      if (request.contactId != null && request.contactId!.isNotEmpty && !isTelephoneNumber(request.contactId)) {
         final linkIdInt = int.tryParse(request.contactId!);
-        if (linkIdInt != null) payload['LinkId'] = linkIdInt;
+        if (linkIdInt != null && linkIdInt < 99999999) payload['LinkId'] = linkIdInt;
       }
 
       debugPrint('ChatService: ┌── sendMessage PAYLOAD FINAL ──');
@@ -2575,17 +2632,33 @@ class ChatService {
       } catch (e) {
         debugPrint('ChatService: Error getting user info for assign payload: $e');
       }
+      // Extract clean numeric ID from compound formats like "1234_5678"
+      String cleanContactId = contactId;
+      if (int.tryParse(contactId) == null) {
+        if (contactId.contains('_')) {
+          final afterUnderscore = contactId.split('_').last;
+          if (int.tryParse(afterUnderscore) != null) {
+            cleanContactId = afterUnderscore;
+          }
+        }
+        if (int.tryParse(cleanContactId) == null) {
+          final numericOnly = contactId.replaceAll(RegExp(r'[^0-9]'), '');
+          if (numericOnly.isNotEmpty && int.tryParse(numericOnly) != null) {
+            cleanContactId = numericOnly;
+          }
+        }
+      }
+
+      final int reByIdInt = int.tryParse(userId.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 1;
 
       final response = await _apiClient.post(
-        "Services/Chat/Chatrooms/MarkResolved",
+        AppConfig.updateChatroomEndpoint,
         data: {
-          "EntityId": contactId,
+          "EntityId": cleanContactId,
           "Entity": {
               "St": 2, // Status 2 = Assigned
               "Uc": 0,
-              "IsPin": 1,
-              "Isblock": 1,
-              "ReById": userId, 
+              "ReById": reByIdInt, 
               "ReByNm": userName
           }
         }, 
@@ -2610,7 +2683,7 @@ class ChatService {
   /// Endpoint: POST Services/Chat/Chatrooms/MarkResolved
   /// St: 3 = Status Resolved
   /// ReById & ReByNm = diambil dari user data yang login
-  Future<ApiResponse<bool>> resolveChat(String contactId) async {
+  Future<ApiResponse<bool>> resolveChat(String contactId, {String? accountId}) async {
     try {
       // Get agent info from user data (SharedPreferences) or JWT fallback
       String userId = "1";
@@ -2652,42 +2725,49 @@ class ChatService {
         debugPrint('ChatService: Error getting user info for resolve payload: $e');
       }
 
-      debugPrint('✅ [Resolve Chat] Marking room $contactId as resolved by $userName (ID: $userId)');
-
-      // If contactId is a UUID, fallback to universal Update endpoint
-      if (int.tryParse(contactId) == null) {
-        debugPrint('ChatService: RoomId is UUID, attempting generic Chatrooms/Update endpoint.');
-        try {
-          final response = await _apiClient.post(
-            AppConfig.updateChatroomEndpoint,
-            data: {
-              "EntityId": contactId,
-              "Entity": {
-                "St": 3, // Resolved
-                "ReById": int.tryParse(userId) ?? 1,
-              }
-            },
-          );
-          
-          if (response.statusCode == 200) {
-            final data = response.data;
-            if (data is Map && data['IsError'] == true) {
-              return ApiResponse.failure(data['Error']?.toString() ?? 'Failed', 200);
+      // Extract a clean numeric ID from compound formats like "1234_5678"
+      // MarkResolved API strictly requires an integer EntityId.
+      String cleanContactId = contactId.toString().trim().replaceAll('null', '').replaceAll('undefined', '');
+      if (int.tryParse(cleanContactId) == null) {
+        if (cleanContactId.contains('_')) {
+          final afterUnderscore = cleanContactId.split('_').last;
+          if (int.tryParse(afterUnderscore) != null && afterUnderscore != '0') {
+            cleanContactId = afterUnderscore;
+          } else {
+            final beforeUnderscore = cleanContactId.split('_').first;
+            if (int.tryParse(beforeUnderscore) != null && beforeUnderscore != '0') {
+              cleanContactId = beforeUnderscore;
             }
-            return ApiResponse.success(true, response.statusCode!);
           }
-        } catch (e) {
-          debugPrint('ChatService: Chatrooms/Update failed: $e, falling back to MarkResolved');
+        }
+        if (int.tryParse(cleanContactId) == null) {
+          final numericOnly = cleanContactId.replaceAll(RegExp(r'[^0-9]'), '');
+          if (numericOnly.isNotEmpty && int.tryParse(numericOnly) != null) {
+            cleanContactId = numericOnly;
+          }
         }
       }
 
+      // Proteksi agar tidak mengirim ID kosong yang memicu error di backend
+      if (cleanContactId.isEmpty || cleanContactId == '0' || cleanContactId == 'null') {
+        debugPrint('❌ [Resolve Chat] DIBATALKAN: ID "$contactId" tidak valid untuk MarkResolved.');
+        return ApiResponse.failure('ID Obrolan tidak valid ($contactId). Harap muat ulang daftar obrolan.', 400);
+      }
+
+      debugPrint('✅ [Resolve Chat] Marking room $contactId (cleanId: $cleanContactId) as resolved by $userName (ID: $userId, accountId: $accountId)');
+
+      final String cleanUserId = userId.toString().replaceAll(RegExp(r'[^0-9]'), '');
+      final String reByIdStr = cleanUserId.isNotEmpty ? cleanUserId : '1';
+
       final requestData = {
-        'EntityId': int.tryParse(contactId) ?? contactId,
+        'EntityId': cleanContactId,
         'Entity': {
-          'St': 3,       // Status 3 = Resolved
-          'ReById': int.tryParse(userId) ?? 1,
+          'ReById': reByIdStr,
+          'ReByNm': userName,
         },
       };
+
+      debugPrint('🔄 [Resolve Chat] Payload: ${jsonEncode(requestData)}');
 
       final response = await _apiClient.post(
         AppConfig.resolveConversationEndpoint,
@@ -2697,22 +2777,18 @@ class ChatService {
       debugPrint('🔄 [Resolve Chat] Response status: ${response.statusCode}');
       debugPrint('🔄 [Resolve Chat] Response data: ${response.data}');
 
-      if (response.statusCode == 200) {
-        final isError = response.data['IsError'];
-        final hasError = isError == true;
-        
-        if (!hasError) {
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        final isError = response.data is Map ? response.data['IsError'] : false;
+        if (isError != true) {
           debugPrint('✅ [Resolve Chat] Room marked as resolved successfully');
           return ApiResponse.success(true, response.statusCode!);
-        } else {
-          final errorMsg = response.data['ErrorMsg'] ?? response.data['Error'] ?? 'Failed to mark room as resolved';
-          debugPrint('❌ [Resolve Chat] Error: $errorMsg');
-          return ApiResponse.failure(errorMsg, response.statusCode!);
         }
-      } else {
-        debugPrint('❌ [Resolve Chat] HTTP ${response.statusCode}: ${response.statusMessage}');
-        return ApiResponse.failure('HTTP ${response.statusCode}: ${response.statusMessage}', response.statusCode!);
+        final errorMsg = response.data['ErrorMsg'] ?? response.data['Error'] ?? 'Failed to mark resolved';
+        debugPrint('❌ [Resolve Chat] Error: $errorMsg');
+        return ApiResponse.failure(errorMsg.toString(), response.statusCode!);
       }
+
+      return ApiResponse.failure('Failed to resolve chat (HTTP ${response.statusCode})', response.statusCode ?? 500);
     } on DioException catch (e) {
       debugPrint('❌ [Resolve Chat] DioException: ${e.message}');
       return ApiResponse.failure(e.message ?? 'Connection error', e.response?.statusCode ?? 500);

@@ -319,11 +319,11 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
         !displayMessage.startsWith('📎') && !displayMessage.startsWith('📍') &&
         !displayMessage.startsWith('👤') && !displayMessage.startsWith('🌟')) {
       final lower = displayMessage.toLowerCase().trim();
-      if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].any((ext) => lower.endsWith(ext)) || 
+      if (['.webm', '.tgs', '.webp'].any((ext) => lower.endsWith(ext)) || lower.contains('sticker') || lower.contains('stiker')) {
+        displayMessage = '🌟 Sticker';
+      } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp'].any((ext) => lower.endsWith(ext)) || 
           lower.startsWith('img-') || lower.startsWith('img_') || lower.startsWith('photo')) {
         displayMessage = '📷 Foto';
-      } else if (['.webm', '.tgs'].any((ext) => lower.endsWith(ext)) || lower.contains('sticker')) {
-        displayMessage = '🌟 Sticker';
       } else if (['.mp4', '.avi', '.mov', '.3gp', '.mkv'].any((ext) => lower.endsWith(ext)) || 
                  lower.startsWith('vid-') || lower.startsWith('vid_')) {
         displayMessage = '🎥 Video';

@@ -103,13 +103,19 @@ class _AddAgentDialogState extends State<AddAgentDialog> {
       // pop dialog
       Navigator.pop(context);
 
+      String errorMessage = chatProvider.error ?? "Gagal memproses ke server";
+      if (errorMessage.contains('500') || errorMessage.contains('503') || errorMessage.contains('validateStatus')) {
+        errorMessage = "Terjadi gangguan sementara pada server NoBox";
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             success
-                ? 'Agent "$name" assigned'
-                : 'Failed to assign agent: ${chatProvider.error ?? "Unknown error"} (ID: $id)',
+                ? 'Agen "$name" berhasil ditugaskan'
+                : 'Gagal menugaskan agen: $errorMessage',
           ),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     }

@@ -11,6 +11,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
@@ -266,8 +267,8 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                           ),
                           child: Builder(
                             builder: (context) {
-                              final isNoBubble = widget.message.messageType == MessageType.sticker;
-                              final isMedia = widget.message.messageType == MessageType.image || widget.message.messageType == MessageType.video || _hasVideoUrl(widget.message);
+                              final isNoBubble = _isStickerMessage(widget.message);
+                              final isMedia = !isNoBubble && (widget.message.messageType == MessageType.image || widget.message.messageType == MessageType.video || _hasVideoUrl(widget.message));
                               return Container(
                                 padding: isNoBubble
                                     ? EdgeInsets.zero
@@ -515,13 +516,29 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     );
   }
 
+  bool _isStickerMessage(Message msg) {
+    if (msg.messageType == MessageType.sticker) return true;
+    final cLower = msg.content.toLowerCase();
+    if (cLower.contains('🌟 sticker') || cLower.contains('animated sticker') || cLower.contains('stiker bergerak') || (cLower == 'sticker') || (cLower == 'stiker')) return true;
+    final url = (msg.imageUrl ?? msg.videoUrl ?? '').toLowerCase();
+    if (url.isNotEmpty && (url.contains('.webm') || url.contains('.tgs') || url.contains('.webp') || url.contains('.ezgif') || url.contains('sticker') || url.contains('stiker'))) {
+      return true;
+    }
+    return false;
+  }
+
   Widget _buildMessageContent(BuildContext context, bool isMe, bool isDarkMode) {
     if (widget.message.messageType == MessageType.text &&
         _isLocationMessage(widget.message.content)) {
       return _buildLocationMessage(isMe, isDarkMode);
     }
 
-    // Video detection: check content text, messageType, AND URL extension
+    // Pengecekan stiker MUTLAK HARUS DIATAS pengecekan video
+    if (_isStickerMessage(widget.message)) {
+      return _buildStickerMessage(isMe, isDarkMode);
+    }
+
+    // Video detection: check content text, messageType, AND URL extension (tanpa .webm stiker)
     if (widget.message.content.contains('🎥 Video') ||
         widget.message.content.contains('📹 Video') ||
         widget.message.content.contains('🎬 Video') ||
@@ -549,9 +566,10 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
   /// Check if the message has a video file URL (by extension), even if
   /// messageType was misdetected as image by the server.
   bool _hasVideoUrl(Message msg) {
+    if (_isStickerMessage(msg)) return false;
     final url = (msg.imageUrl ?? msg.videoUrl ?? '').toLowerCase();
     if (url.isEmpty) return false;
-    const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.3gp', '.webm'];
+    const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.3gp'];
     return videoExts.any((ext) => url.contains(ext));
   }
 
@@ -590,7 +608,9 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
   }
 
   Widget _buildStickerMessage(bool isMe, bool isDarkMode) {
-    final imageUrl = widget.message.imageUrl;
+    final imageUrl = widget.message.imageUrl ?? widget.message.videoUrl ?? '';
+    final lowerUrl = imageUrl.toLowerCase();
+    final isAnimatedVideoSticker = lowerUrl.contains('.webm') || lowerUrl.contains('.mp4') || lowerUrl.contains('.mov') || lowerUrl.contains('.tgs') || lowerUrl.contains('.ezgif');
 
     return Column(
       crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -600,29 +620,31 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
             maxWidth: 180,
             maxHeight: 180,
           ),
-          child: imageUrl != null && imageUrl.isNotEmpty
-              ? CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.contain,
-                  placeholder: (_, __) => const SizedBox(
-                    width: 100,
-                    height: 100,
-                    child: Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                  errorWidget: (_, __, ___) => Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.emoji_emotions_outlined, size: 48, color: Colors.grey),
-                    ),
-                  ),
-                )
+          child: imageUrl.isNotEmpty
+              ? (isAnimatedVideoSticker
+                  ? AnimatedVideoSticker(url: imageUrl)
+                  : CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      fit: BoxFit.contain,
+                      placeholder: (_, __) => const SizedBox(
+                        width: 100,
+                        height: 100,
+                        child: Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.emoji_emotions_outlined, size: 48, color: Colors.grey),
+                        ),
+                      ),
+                    ))
               : Container(
                   width: 100,
                   height: 100,
@@ -990,7 +1012,10 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
   Widget _buildVideoMessage(BuildContext context, bool isMe, bool isDarkMode) {
     // Read from both imageUrl (locally sent) and videoUrl (server received)
     final videoUrl = widget.message.imageUrl ?? widget.message.videoUrl ?? '';
-    final isSticker = videoUrl.toLowerCase().endsWith('.webm') || videoUrl.toLowerCase().endsWith('.tgs') || widget.message.content.contains('Animated Sticker');
+    final isSticker = _isStickerMessage(widget.message) || videoUrl.toLowerCase().contains('.webm') || videoUrl.toLowerCase().contains('.tgs') || videoUrl.toLowerCase().contains('.webp') || widget.message.content.toLowerCase().contains('animated sticker');
+    if (isSticker) {
+      return _buildStickerMessage(isMe, isDarkMode);
+    }
     
     final caption = widget.message.content
         .replaceAll('📹 Video', '')
@@ -1511,6 +1536,62 @@ class _VideoThumbnailWidgetState extends State<_VideoThumbnailWidget> {
           size: 48,
           color: Colors.white54,
         ),
+      ),
+    );
+  }
+}
+
+class AnimatedVideoSticker extends StatefulWidget {
+  final String url;
+  const AnimatedVideoSticker({super.key, required this.url});
+
+  @override
+  State<AnimatedVideoSticker> createState() => _AnimatedVideoStickerState();
+}
+
+class _AnimatedVideoStickerState extends State<AnimatedVideoSticker> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..setVolume(0.0)
+      ..setLooping(true)
+      ..initialize().then((_) {
+        if (mounted) {
+          setState(() {
+            _isInitialized = true;
+          });
+          _controller.play();
+        }
+      }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return const SizedBox(
+        width: 120,
+        height: 120,
+        child: Center(
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    return SizedBox(
+      width: 160,
+      height: 160,
+      child: AspectRatio(
+        aspectRatio: _controller.value.aspectRatio > 0 ? _controller.value.aspectRatio : 1.0,
+        child: VideoPlayer(_controller),
       ),
     );
   }

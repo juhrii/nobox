@@ -419,6 +419,47 @@ class Message {
       return '';
     }
 
+    bool isAbsoluteSticker(dynamic fileData, String? typeVal, String filePath, String originalName, String content) {
+      if (typeVal == '16' || typeVal == '17') return true;
+      final fLower = filePath.toLowerCase();
+      final oLower = originalName.toLowerCase();
+      final cLower = content.toLowerCase();
+      if (fLower.contains('.webm') || oLower.contains('.webm') ||
+          fLower.contains('.tgs') || oLower.contains('.tgs') ||
+          fLower.contains('.webp') || oLower.contains('.webp') ||
+          fLower.contains('.ezgif') || oLower.contains('.ezgif') ||
+          fLower.contains('sticker') || oLower.contains('sticker') ||
+          fLower.contains('stiker') || oLower.contains('stiker') ||
+          cLower.contains('🌟 sticker') || cLower.contains('animated sticker') ||
+          cLower.contains('stiker bergerak')) {
+        return true;
+      }
+      final jsonType = (json['Type'] ?? json['MessageType'] ?? '').toString().toLowerCase();
+      if (jsonType == '16' || jsonType == '17' || jsonType.contains('sticker') || jsonType.contains('stiker')) return true;
+
+      // Cek metadata stiker dari WhatsApp / Baileys / WaaS / NoBox API
+      try {
+        final rawFileStr = fileData != null ? jsonEncode(fileData).toLowerCase() : '';
+        final rawJsonStr = jsonEncode(json).toLowerCase();
+        if (rawFileStr.contains('"issticker":true') ||
+            rawFileStr.contains('"isanimated":true') ||
+            rawFileStr.contains('"isanimatedsticker":true') ||
+            rawFileStr.contains('"assticker":true') ||
+            rawFileStr.contains('"mimetype":"image/webp"') ||
+            rawFileStr.contains('image/webp') ||
+            rawJsonStr.contains('"issticker":true') ||
+            rawJsonStr.contains('"isanimated":true') ||
+            rawJsonStr.contains('"isanimatedsticker":true') ||
+            rawJsonStr.contains('"assticker":true') ||
+            rawJsonStr.contains('"mimetype":"image/webp"') ||
+            rawJsonStr.contains('stiker bergerak') ||
+            rawJsonStr.contains('animated sticker')) {
+          return true;
+        }
+      } catch (_) {}
+      return false;
+    }
+
     String? docName;
     String? docUrl;
 
@@ -426,10 +467,12 @@ class Message {
       final firstFile = (json['Files'] as List).first;
       final filePath = extractFilePath(firstFile);
       final originalName = extractOriginalName(firstFile);
-      // Deteksi stiker PERTAMA (typeVal == '16') — sebelum pengecekan ekstensi
-      if (typeVal == '16' && filePath.isNotEmpty) {
+      // Deteksi stiker MUTLAK PERTAMA — baik stiker diam maupun bergerak (.webm/.tgs/.webp) dari semua channel
+      if (isAbsoluteSticker(firstFile, typeVal, filePath, originalName, content)) {
         msgType = MessageType.sticker;
-        imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        final url = filePath.startsWith('http') ? filePath : (filePath.isNotEmpty ? 'https://id.nobox.ai/upload/$filePath' : '');
+        imgUrl = url;
+        videoUrl = url;
         content = '🌟 Sticker';
       } else if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(firstFile) || originalName.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('pesan suara') || filePath.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('voice_') || filePath.toLowerCase().contains('voice_')) {
         // Voice note: cek ekstensi audio ATAU flag Ptt:true ATAU nama file mengandung voice note — SEBELUM cek document (type 5)
@@ -448,11 +491,7 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        if (filePath.toLowerCase().endsWith('.webm') || originalName.toLowerCase().endsWith('.webm')) {
-          content = '🌟 Sticker';
-        } else {
-          content = '📹 Video';
-        }
+        content = '📹 Video';
       } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -470,11 +509,7 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        if (filePath.toLowerCase().endsWith('.webm') || originalName.toLowerCase().endsWith('.webm')) {
-          content = '🌟 Sticker';
-        } else {
-          content = '📹 Video';
-        }
+        content = '📹 Video';
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -501,10 +536,12 @@ class Message {
     } else if (json['File'] != null && json['File'].toString().isNotEmpty) {
       final filePath = extractFilePath(json['File']);
       final originalName = extractOriginalName(json['File']);
-      // Sticker detection FIRST (typeVal == '16') — before extension checks
-      if (typeVal == '16' && filePath.isNotEmpty) {
+      // Deteksi stiker MUTLAK PERTAMA — baik stiker diam maupun bergerak (.webm/.tgs/.webp) dari semua channel
+      if (isAbsoluteSticker(json['File'], typeVal, filePath, originalName, content)) {
         msgType = MessageType.sticker;
-        imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        final url = filePath.startsWith('http') ? filePath : (filePath.isNotEmpty ? 'https://id.nobox.ai/upload/$filePath' : '');
+        imgUrl = url;
+        videoUrl = url;
         content = '🌟 Sticker';
       } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || originalName.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('pesan suara') || filePath.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('voice_') || filePath.toLowerCase().contains('voice_')) {
         // Voice note: cek typeVal=='2', ekstensi audio, nama file, ATAU flag Ptt:true — sebelum cek document (type 5)
@@ -532,11 +569,7 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        if (filePath.toLowerCase().endsWith('.webm') || originalName.toLowerCase().endsWith('.webm')) {
-          content = '🌟 Sticker';
-        } else {
-          content = '📹 Video';
-        }
+        content = '📹 Video';
       } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -545,11 +578,7 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        if (filePath.toLowerCase().endsWith('.webm') || originalName.toLowerCase().endsWith('.webm')) {
-          content = '🌟 Sticker';
-        } else {
-          content = '📹 Video';
-        }
+        content = '📹 Video';
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -693,6 +722,62 @@ class Message {
       ack: ack ?? this.ack,
       fromId: fromId ?? this.fromId,
       toId: toId ?? this.toId,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'content': content,
+      'isMe': isMe,
+      'time': time,
+      'rawTime': rawTime,
+      'status': status.index,
+      'repliedMessage': repliedMessage?.toMap(),
+      'isSystemMessage': isSystemMessage,
+      'messageType': messageType.index,
+      'audioPath': audioPath,
+      'audioDuration': audioDuration,
+      'imagePath': imagePath,
+      'imageUrl': imageUrl,
+      'videoUrl': videoUrl,
+      'documentName': documentName,
+      'documentUrl': documentUrl,
+      'ack': ack,
+      'fromId': fromId,
+      'toId': toId,
+      'roomId': roomId,
+    };
+  }
+
+  factory Message.fromMap(Map<String, dynamic> map) {
+    return Message(
+      id: map['id']?.toString() ?? '',
+      content: map['content']?.toString() ?? '',
+      isMe: map['isMe'] == true,
+      time: map['time']?.toString() ?? '',
+      rawTime: map['rawTime']?.toString() ?? '',
+      status: (map['status'] != null && map['status'] is int && (map['status'] as int) < MessageStatus.values.length) 
+          ? MessageStatus.values[map['status'] as int] 
+          : MessageStatus.sent,
+      repliedMessage: map['repliedMessage'] != null 
+          ? Message.fromMap(Map<String, dynamic>.from(map['repliedMessage'] as Map)) 
+          : null,
+      isSystemMessage: map['isSystemMessage'] == true,
+      messageType: (map['messageType'] != null && map['messageType'] is int && (map['messageType'] as int) < MessageType.values.length) 
+          ? MessageType.values[map['messageType'] as int] 
+          : MessageType.text,
+      audioPath: map['audioPath']?.toString(),
+      audioDuration: (map['audioDuration'] as num?)?.toInt() ?? 0,
+      imagePath: map['imagePath']?.toString(),
+      imageUrl: map['imageUrl']?.toString(),
+      videoUrl: map['videoUrl']?.toString(),
+      documentName: map['documentName']?.toString(),
+      documentUrl: map['documentUrl']?.toString(),
+      ack: (map['ack'] as num?)?.toInt() ?? 0,
+      fromId: map['fromId']?.toString(),
+      toId: map['toId']?.toString(),
+      roomId: map['roomId']?.toString() ?? '',
     );
   }
 }
