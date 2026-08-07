@@ -195,7 +195,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   }
 
   void _savePersistentMessages() async {
-    if (_messages.isEmpty) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       final List<Map<String, dynamic>> mapList =
@@ -205,6 +204,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       for (final key in keys) {
         await prefs.setString('persist_msgs_$key', jsonStr);
+        await prefs.setStringList('deleted_ids_$key', _deletedMessageIds.toList());
       }
       
       final cacheList = (_localSentCache[chat.id] ?? []).map((c) => c.toMap()).toList();
@@ -213,9 +213,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         for (final key in keys) {
           await prefs.setString('sent_cache_$key', cacheJsonStr);
         }
+      } else {
+        for (final key in keys) {
+          await prefs.remove('sent_cache_$key');
+        }
       }
       debugPrint(
-          'ChatDetail: 💾 Saved ${_messages.length} messages to SharedPreferences using keys: $keys (Hot Restart Protection)');
+          'ChatDetail: 💾 Saved ${_messages.length} messages and ${_deletedMessageIds.length} deleted IDs to SharedPreferences using keys: $keys (Hot Restart Protection)');
     } catch (e) {
       debugPrint('ChatDetail: ❌ Error saving persistent messages: $e');
     }
@@ -228,11 +232,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       final keys = _getPersistenceKeys();
 
       for (final key in keys) {
+        final delList = prefs.getStringList('deleted_ids_$key');
+        if (delList != null) _deletedMessageIds.addAll(delList);
+      }
+
+      for (final key in keys) {
         final jsonStr = prefs.getString('persist_msgs_$key');
         if (jsonStr != null && jsonStr.isNotEmpty) {
           final decoded = jsonDecode(jsonStr) as List;
           restored = decoded
               .map((m) => Message.fromMap(m as Map<String, dynamic>))
+              .where((m) => m.id.isEmpty || !_deletedMessageIds.contains(m.id))
               .toList();
           if (restored.isNotEmpty) {
             debugPrint('ChatDetail: ⚡ Restored ${restored.length} messages from key persist_msgs_$key');
@@ -241,7 +251,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         }
       }
 
-      if (restored != null && restored.isNotEmpty && mounted) {
+      if (restored != null && mounted) {
         setState(() {
           _messages = restored!;
         });
@@ -255,13 +265,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           final decodedSent = jsonDecode(sentJson) as List;
           final loaded = decodedSent
               .map((c) => _CachedSentMessage.fromMap(c as Map<String, dynamic>))
+              .where((c) => c.message.id.isEmpty || !_deletedMessageIds.contains(c.message.id))
               .toList();
-          if (loaded.isNotEmpty) {
-            _localSentCache[chat.id] = loaded;
-            debugPrint(
-                'ChatDetail: ⚡ RESTORED ${_localSentCache[chat.id]!.length} _localSentCache items from key sent_cache_$key');
-            break;
-          }
+          _localSentCache[chat.id] = loaded;
+          debugPrint(
+              'ChatDetail: ⚡ RESTORED ${_localSentCache[chat.id]!.length} _localSentCache items from key sent_cache_$key');
+          break;
         }
       }
     } catch (e) {
@@ -281,7 +290,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FITUR: Mode Seleksi Pesan (Multiple Selection)
   // FUNGSI: Digunakan saat pengguna menahan pesan untuk memilih beberapa pesan (misal untuk forward/delete).
   bool _isSelectionMode = false;
-  final Set<int> _selectedMessageIndices = {};
+  final Set<String> _selectedMessageKeys = {};
+  final Set<String> _deletedMessageIds = {};
+
+  String _getMessageKey(Message m) {
+    if (m.id.isNotEmpty) return 'id_${m.id}';
+    return 'local_${m.time}_${m.content}_${m.messageType}';
+  }
 
   bool _isInit = false;
   String _archivedDateLabel = '';
@@ -923,7 +938,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     return 0;
                   }
                 });
-                _messages = finalSorted;
+                _messages = finalSorted.where((m) => m.id.isEmpty || !_deletedMessageIds.contains(m.id)).toList();
               }
               // *** MERGE LOCAL SENT CACHE ***
               // Tambahkan pesan yang sudah dikirim tapi belum dikonfirmasi server
@@ -932,10 +947,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 'LocalCache: Found ${cache.length} items in cache for ${chat.id} before filter.',
               );
 
-              // Bersihkan cache yang sudah > 2 jam
+              // Bersihkan cache yang sudah > 2 jam atau sudah dihapus user
               final activeCache = cache
                   .where(
-                    (c) => DateTime.now().difference(c.addedAt).inHours < 2,
+                    (c) => DateTime.now().difference(c.addedAt).inHours < 2 &&
+                           (c.message.id.isEmpty || !_deletedMessageIds.contains(c.message.id)),
                   )
                   .toList();
 
@@ -1069,46 +1085,54 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             });
 
             // HACK/FIX: Sinkronisasi ikon media ke ChatProvider agar list obrolan memunculkan icon media
-            // yang benar dan tidak hilang saat polling (/Chatrooms/List).
-            final lastMsg = _messages.last;
-            String newContent = lastMsg.content;
-            if (lastMsg.messageType == MessageType.image) {
-              final isSticker =
-                  (lastMsg.imageUrl ?? '').toLowerCase().endsWith('.webp') ||
-                  (lastMsg.imagePath ?? '').toLowerCase().endsWith('.webp') ||
-                  newContent.toLowerCase().endsWith('.webp');
-              if (isSticker) {
-                newContent = '🌟 Sticker';
-              } else {
+            // yang benar dan tidak hilang saat polling (/Chatrooms/List). Saring pesan sistem agar tidak menimpa obrolan asli!
+            final realMessages = _messages.where((m) {
+              if (m.isSystemMessage || m.content == 'Site.Inbox.DeletedMessage') return false;
+              final lower = m.content.toLowerCase();
+              return !lower.contains('site.inbox.') && !lower.contains('percakapan di-assign') && !lower.contains('percakapan diselesaikan') && !lower.contains('pemberitahuan sistem');
+            }).toList();
+
+            if (realMessages.isNotEmpty) {
+              final lastMsg = realMessages.last;
+              String newContent = lastMsg.content;
+              if (lastMsg.messageType == MessageType.image) {
+                final isSticker =
+                    (lastMsg.imageUrl ?? '').toLowerCase().endsWith('.webp') ||
+                    (lastMsg.imagePath ?? '').toLowerCase().endsWith('.webp') ||
+                    newContent.toLowerCase().endsWith('.webp');
+                if (isSticker) {
+                  newContent = '🌟 Sticker';
+                } else {
+                  final cleaned = newContent
+                      .replaceAll('📷', '')
+                      .replaceAll('Photo', '')
+                      .trim();
+                  newContent = '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+                }
+              } else if (lastMsg.messageType == MessageType.voice) {
+                newContent = '🎵 Voice Note';
+              } else if (lastMsg.messageType == MessageType.video) {
                 final cleaned = newContent
-                    .replaceAll('📷', '')
-                    .replaceAll('Photo', '')
+                    .replaceAll('🎥', '')
+                    .replaceAll('📹', '')
+                    .replaceAll('Video', '')
                     .trim();
-                newContent = '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+                newContent = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+              } else if (lastMsg.messageType == MessageType.document) {
+                if (!newContent.contains('📄') && !newContent.contains('📁')) {
+                  newContent = '📄 $newContent';
+                }
               }
-            } else if (lastMsg.messageType == MessageType.voice) {
-              newContent = '🎵 Voice Note';
-            } else if (lastMsg.messageType == MessageType.video) {
-              final cleaned = newContent
-                  .replaceAll('🎥', '')
-                  .replaceAll('📹', '')
-                  .replaceAll('Video', '')
-                  .trim();
-              newContent = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
-            } else if (lastMsg.messageType == MessageType.document) {
-              if (!newContent.contains('📄') && !newContent.contains('📁')) {
-                newContent = '📄 $newContent';
-              }
+              Provider.of<ChatProvider>(
+                context,
+                listen: false,
+              ).updateLocalLastMessage(
+                chat.id,
+                newContent,
+                updateTimeAndPosition:
+                    false, // JANGAN pindahkan obrolan ke atas hanya karena sinkronisasi ikon!
+              );
             }
-            Provider.of<ChatProvider>(
-              context,
-              listen: false,
-            ).updateLocalLastMessage(
-              chat.id,
-              newContent,
-              updateTimeAndPosition:
-                  false, // JANGAN pindahkan obrolan ke atas hanya karena sinkronisasi ikon!
-            );
           }
         });
       }
@@ -1249,10 +1273,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       return true;
                     }
                   }
-                } else if (oldMsg.messageType == MessageType.video) {
-                  if (oldMsg.videoUrl != null) {
-                    final localFileName = oldMsg.videoUrl!.split('/').last;
+                } else if (oldMsg.messageType == MessageType.video || oldMsg.messageType == MessageType.sticker) {
+                  final checkUrl = oldMsg.videoUrl ?? oldMsg.imageUrl;
+                  if (checkUrl != null) {
+                    final localFileName = checkUrl.split('/').last;
                     if (m.videoUrl?.contains(localFileName) == true ||
+                        m.imageUrl?.contains(localFileName) == true ||
                         m.documentUrl?.contains(localFileName) == true) {
                       return true;
                     }
@@ -1370,7 +1396,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           });
 
           for (final msg in sortedList) {
-            if (msg.id.isNotEmpty && !updatedCurrentIds.contains(msg.id)) {
+            if (msg.id.isNotEmpty && (_deletedMessageIds.contains(msg.id) || !updatedCurrentIds.contains(msg.id))) {
+              if (_deletedMessageIds.contains(msg.id)) continue;
               // Guard tambahan: jangan tambahkan jika kontennya ada di pending local (pesan kita yang baru dikirim belum dapat ID)
               if (msg.isMe &&
                   pendingLocalContents.contains(
@@ -2279,13 +2306,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     final now = DateTime.now();
     final timeString = _formatFullTime(now);
 
+    final pLower = pickedFile.path.toLowerCase();
+    final nLower = pickedFile.name.toLowerCase();
+    final isStickerFile = pLower.endsWith('.webp') || pLower.endsWith('.webm') || pLower.endsWith('.tgs') || pLower.endsWith('.gif') ||
+                          nLower.endsWith('.webp') || nLower.endsWith('.webm') || nLower.endsWith('.tgs') || nLower.endsWith('.gif') ||
+                          nLower.contains('sticker') || nLower.contains('stiker');
+
     final newMessage = Message(
-      content: '🎬 Video',
+      content: isStickerFile ? '🌟 Sticker' : '🎬 Video',
       isMe: true,
       time: timeString,
       status: MessageStatus.sent,
-      messageType: MessageType.video,
+      messageType: isStickerFile ? MessageType.sticker : MessageType.video,
       videoUrl: pickedFile.path,
+      imageUrl: isStickerFile ? pickedFile.path : null,
       ack: 1,
     );
 
@@ -3845,12 +3879,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         onPressed: () {
           setState(() {
             _isSelectionMode = false;
-            _selectedMessageIndices.clear();
+            _selectedMessageKeys.clear();
           });
         },
       ),
       title: Text(
-        '${_selectedMessageIndices.length} selected',
+        '${_selectedMessageKeys.length} selected',
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.bold,
@@ -3862,15 +3896,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         IconButton(
           icon: const Icon(Icons.reply, color: Colors.white),
           onPressed: () {
-            if (_selectedMessageIndices.length == 1) {
-              final msgIndex = _selectedMessageIndices.first;
-              if (msgIndex >= 0 && msgIndex < _messages.length) {
-                setState(() {
-                  _repliedMessage = _messages[msgIndex];
-                  _isSelectionMode = false;
-                  _selectedMessageIndices.clear();
-                });
-              }
+            if (_selectedMessageKeys.length == 1) {
+              final targetKey = _selectedMessageKeys.first;
+              final msg = _messages.firstWhere((m) => _getMessageKey(m) == targetKey, orElse: () => _messages.first);
+              setState(() {
+                _repliedMessage = msg;
+                _isSelectionMode = false;
+                _selectedMessageKeys.clear();
+              });
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Pilih 1 pesan saja untuk reply')),
@@ -3890,16 +3923,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           icon: const Icon(Icons.copy, color: Colors.white),
           onPressed: () {
             final buffer = StringBuffer();
-            final sortedIndices = _selectedMessageIndices.toList()..sort();
-            for (final idx in sortedIndices) {
-              if (idx >= 0 && idx < _messages.length) {
-                buffer.writeln(_messages[idx].content);
-              }
+            final selectedMsgs = _messages.where((m) => _selectedMessageKeys.contains(_getMessageKey(m))).toList();
+            for (final msg in selectedMsgs) {
+              buffer.writeln(msg.content);
             }
             Clipboard.setData(ClipboardData(text: buffer.toString().trim()));
             setState(() {
               _isSelectionMode = false;
-              _selectedMessageIndices.clear();
+              _selectedMessageKeys.clear();
             });
             ScaffoldMessenger.of(
               context,
@@ -3916,7 +3947,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               builder: (ctx) => AlertDialog(
                 title: const Text('Hapus Pesan'),
                 content: Text(
-                  'Hapus ${_selectedMessageIndices.length} pesan yang dipilih untuk semua orang?',
+                  'Hapus ${_selectedMessageKeys.length} pesan yang dipilih untuk semua orang?',
                 ),
                 actions: [
                   TextButton(
@@ -3927,9 +3958,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     onPressed: () async {
                       Navigator.pop(ctx);
 
-                      final selectedMsgs = _selectedMessageIndices
-                          .where((idx) => idx >= 0 && idx < _messages.length)
-                          .map((idx) => _messages[idx])
+                      final selectedMsgs = _messages
+                          .where((m) => _selectedMessageKeys.contains(_getMessageKey(m)))
                           .toList();
 
                       bool hasError = false;
@@ -3939,8 +3969,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       for (final msg in selectedMsgs) {
                         final msgId = msg.id;
                         if (msgId.isNotEmpty) {
+                          _deletedMessageIds.add(msgId);
                           if (processedIds.contains(msgId)) {
-                            // Jika pesan dengan ID ini sudah diproses/dihapus (duplikat di UI), cukup hapus dari UI
                             setState(() {
                               _messages.removeWhere((m) => m.id == msgId);
                             });
@@ -3949,24 +3979,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           processedIds.add(msgId);
 
                           try {
-                            // Panggil API penghapusan
-                            final resp = await _chatService.deleteMessage(
-                              msgId,
-                            );
+                            final resp = await _chatService.deleteMessage(msgId);
                             if (resp.isError) {
                               final errText = resp.error ?? 'Unknown error';
-                              // Jika error adalah EntityNotFound / Record not found, berarti pesan sudah terhapus di server.
-                              // Jangan panik atau munculkan error, anggap sukses dan hapus dari antarmuka layar!
                               if (errText.contains('EntityNotFound') ||
                                   errText.contains('Record not found')) {
-                                debugPrint(
-                                  'Pesan $msgId sudah tidak ada di server. Dihapus dari UI.',
-                                );
+                                debugPrint('Pesan $msgId sudah tidak ada di server. Dihapus dari UI.');
                                 if (mounted) {
-                                  Provider.of<ChatProvider>(
-                                    context,
-                                    listen: false,
-                                  ).ignoreServerTime(chat.id, msg.rawTime);
+                                  Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
                                 }
                                 setState(() {
                                   _messages.removeWhere((m) => m.id == msgId);
@@ -3977,10 +3997,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                               }
                             } else {
                               if (mounted) {
-                                Provider.of<ChatProvider>(
-                                  context,
-                                  listen: false,
-                                ).ignoreServerTime(chat.id, msg.rawTime);
+                                Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
                               }
                               setState(() {
                                 _messages.removeWhere((m) => m.id == msgId);
@@ -3991,22 +4008,26 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                             errorMessage = 'Error: $e';
                           }
                         } else {
-                          // Jika pesan lokal / tidak ada ID dari server, hapus dari UI lokal
                           setState(() {
-                            _messages.removeWhere((m) => identical(m, msg));
+                            _messages.removeWhere((m) => identical(m, msg) || (_getMessageKey(m) == _getMessageKey(msg)));
                           });
+                        }
+                        
+                        // Bersihkan juga dari local sent cache!
+                        if (_localSentCache[chat.id] != null) {
+                          _localSentCache[chat.id]!.removeWhere((c) => identical(c.message, msg) || (msgId.isNotEmpty && c.message.id == msgId) || (_getMessageKey(c.message) == _getMessageKey(msg)));
                         }
                       }
 
-                      // Tampilkan popup error HANYA SEKALI setelah loop selesai jika ada error nyata
+                      // Segera simpan status penghapusan dan blacklist ke SharedPreferences
+                      _savePersistentMessages();
+
                       if (hasError && mounted) {
                         showDialog(
                           context: context,
                           builder: (ctxErr) => AlertDialog(
                             title: const Text('Gagal Menghapus Beberapa Pesan'),
-                            content: Text(
-                              'Terjadi kendala saat menghapus sebagian pesan di server: $errorMessage',
-                            ),
+                            content: Text('Terjadi kendala saat menghapus sebagian pesan di server: $errorMessage'),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(ctxErr),
@@ -4019,7 +4040,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
                       setState(() {
                         _isSelectionMode = false;
-                        _selectedMessageIndices.clear();
+                        _selectedMessageKeys.clear();
                       });
 
                       // Update Last Message di Chat List (agar tidak menampilkan pesan yang sudah dihapus)
@@ -4280,10 +4301,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       );
     }
 
-    // +1 for "No more messages" header at top, +1 for archived footer at bottom
-    final hasArchivedFooter = chat.isArchived;
-    final extraItems = 1 + (hasArchivedFooter ? 1 : 0);
-    final totalItems = _messages.length + extraItems;
+    // Filter out noisy inline system events so they don't clutter the middle of the conversation
+    final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
+
+    // Status footer: shown at the bottom if archived or resolved
+    final isResolved = chat.status.toLowerCase() == 'resolved';
+    final hasStatusFooter = chat.isArchived || isResolved;
+    final extraItems = 1 + (hasStatusFooter ? 1 : 0);
+    final totalItems = displayMessages.length + extraItems;
 
     // Align.topCenter + shrinkWrap ensures messages start from top when few,
     // while reverse: true keeps newest messages at bottom and auto-scroll works.
@@ -4298,29 +4323,29 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         itemBuilder: (context, index) {
           // With reverse: true, index 0 = bottom-most item
 
-          // Index 0: Archived footer (if applicable)
-          if (hasArchivedFooter && index == 0) {
-            return _buildArchivedDivider();
+          // Index 0: Status footer (if applicable, positioned below the latest messages/day)
+          if (hasStatusFooter && index == 0) {
+            return _buildStatusDivider(isResolved: isResolved && !chat.isArchived);
           }
 
-          // Adjust index for archived footer offset
-          final adjustedIndex = hasArchivedFooter ? index - 1 : index;
+          // Adjust index for status footer offset
+          final adjustedIndex = hasStatusFooter ? index - 1 : index;
 
           // Last index (top of screen): loading indicator or "No more messages"
-          if (adjustedIndex == _messages.length) {
+          if (adjustedIndex == displayMessages.length) {
             return _buildMessageListHeader();
           }
 
           // Map reversed index to message index (newest = index 0, oldest = last)
-          // Messages are stored oldest-first, so reverse the access
-          final messageIndex = _messages.length - 1 - adjustedIndex;
-          final message = _messages[messageIndex];
+          final displayIndex = displayMessages.length - 1 - adjustedIndex;
+          final message = displayMessages[displayIndex];
           // The message visually above this one (older) for date separator check
-          final prevMessage = (messageIndex > 0)
-              ? _messages[messageIndex - 1]
+          final prevMessage = (displayIndex > 0)
+              ? displayMessages[displayIndex - 1]
               : null;
+          final realIndex = _messages.indexOf(message);
 
-          // System message
+          // System message fallback
           if (message.isSystemMessage) {
             return _buildSystemMessage(message, isDark);
           }
@@ -4333,7 +4358,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           }
 
           // Normal chat bubble with swipe-to-reply + long-press selection
-          final isSelected = _selectedMessageIndices.contains(messageIndex);
+          final msgKey = _getMessageKey(message);
+          final isSelected = _selectedMessageKeys.contains(msgKey);
 
           return Column(
             children: [
@@ -4351,19 +4377,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   onLongPress: () {
                     setState(() {
                       _isSelectionMode = true;
-                      _selectedMessageIndices.add(messageIndex);
+                      _selectedMessageKeys.add(msgKey);
                     });
                   },
                   onTap: () {
                     if (_isSelectionMode) {
                       setState(() {
-                        if (_selectedMessageIndices.contains(messageIndex)) {
-                          _selectedMessageIndices.remove(messageIndex);
-                          if (_selectedMessageIndices.isEmpty) {
+                        if (_selectedMessageKeys.contains(msgKey)) {
+                          _selectedMessageKeys.remove(msgKey);
+                          if (_selectedMessageKeys.isEmpty) {
                             _isSelectionMode = false;
                           }
                         } else {
-                          _selectedMessageIndices.add(messageIndex);
+                          _selectedMessageKeys.add(msgKey);
                         }
                       });
                     }
@@ -4389,8 +4415,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  /// Archived divider widget — shown once at the bottom of archived chat messages
-  Widget _buildArchivedDivider() {
+  /// Status divider widget — shown once at the bottom of archived or resolved chat messages
+  Widget _buildStatusDivider({required bool isResolved}) {
+    final textLabel = isResolved ? 'Percakapan ini telah diselesaikan' : 'Agent archived this conversation';
+    final dateLabel = isResolved ? _formatBubbleTime(chat.time) : _archivedDateLabel;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       child: Column(
@@ -4405,21 +4434,23 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 child: Column(
                   children: [
                     Text(
-                      'Agent archived this conversation',
+                      textLabel,
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade500,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _archivedDateLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey.shade400,
+                    if (dateLabel.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        dateLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade400,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -4471,6 +4502,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     } catch (_) {
       return null;
     }
+  }
+
+  String _formatBubbleTime(String rawTime) {
+    if (rawTime.contains(', ')) {
+      return rawTime.split(', ').last.trim();
+    }
+    return rawTime;
   }
 
   Widget _buildDateSeparator(String timeStr, bool isDark) {
@@ -4868,8 +4906,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     final allChats = chatProvider.chats;
 
     // Simpan list pesan yang di-select secara urut waktu
-    final sortedIndices = _selectedMessageIndices.toList()..sort();
-    final selectedMessages = sortedIndices.map((i) => _messages[i]).toList();
+    final selectedMessages = _messages.where((m) => _selectedMessageKeys.contains(_getMessageKey(m))).toList();
 
     showDialog(
       context: context,
@@ -5004,7 +5041,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           if (mounted) {
                             setState(() {
                               _isSelectionMode = false;
-                              _selectedMessageIndices.clear();
+                              _selectedMessageKeys.clear();
                             });
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -5107,7 +5144,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                message.time,
+                _formatBubbleTime(message.time),
                 style: TextStyle(color: Colors.grey[500], fontSize: 11),
               ),
             ),
@@ -5189,7 +5226,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  message.time,
+                  _formatBubbleTime(message.time),
                   style: TextStyle(
                     color: isMe
                         ? Colors.white70
@@ -5369,7 +5406,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  message.time,
+                  _formatBubbleTime(message.time),
                   style: TextStyle(
                     color: isMe
                         ? Colors.white70
@@ -5487,7 +5524,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    message.time,
+                    _formatBubbleTime(message.time),
                     style: TextStyle(
                       color: isMe
                           ? Colors.white70

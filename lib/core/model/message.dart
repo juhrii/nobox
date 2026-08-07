@@ -238,9 +238,6 @@ class Message {
     }
     // ChatMessages/List menggunakan Type: 6 untuk pesan sistem, Type: 1/2 untuk pesan biasa
     final typeVal = json['Type']?.toString();
-    final isSystem = json['IsSystemMessage'] == true || 
-                     typeVal?.toLowerCase() == 'system' ||
-                     typeVal == '6';
 
     // Tentukan konten pesan — ChatMessages/List menggunakan field 'Msg'
     // Tangani format String maupun Map untuk 'Msg'
@@ -253,6 +250,13 @@ class Message {
     } else {
       content = json['Body']?.toString() ?? json['Message']?.toString() ?? json['message']?.toString() ?? json['Content']?.toString() ?? '';
     }
+
+    final isSystem = json['IsSystemMessage'] == true || 
+                     typeVal?.toLowerCase() == 'system' ||
+                     typeVal == '6' ||
+                     content.contains('Site.Inbox.DeletedMessage') ||
+                     content.contains('Percakapan di-assign') ||
+                     content.contains('Percakapan diselesaikan');
     
     // Tangani anomali dari API: 'document(Empty)' atau 'voice(Empty)'
     if (content.trim().toLowerCase() == 'document(empty)' || content.trim().toLowerCase() == 'voice(empty)') {
@@ -261,26 +265,35 @@ class Message {
 
     // Pesan sistem (Type: 6) memiliki JSON di Msg seperti {"msg":"Site.Inbox.UnmuteBotByAgent",...}
     // Parse untuk menampilkan label yang mudah dibaca
-    if (isSystem && content.startsWith('{')) {
+    if (isSystem && (content.startsWith('{') || json['Msg'] is Map)) {
       try {
+        dynamic decoded = json['Msg'];
+        if (content.startsWith('{')) {
+          decoded = jsonDecode(content);
+        }
         final parsed = Map<String, dynamic>.from(
-          content is Map ? content : (json['Msg'] is Map ? json['Msg'] : {}),
+          decoded is Map ? decoded : (json['Msg'] is Map ? json['Msg'] : {}),
         );
-        final msgKey = parsed['msg']?.toString() ?? '';
-        // Ubah "Site.Inbox.UnmuteBotByAgent" → "Bot diaktifkan"
+        final msgKey = parsed['msg']?.toString() ?? parsed['Msg']?.toString() ?? parsed['text']?.toString() ?? '';
+        // Ubah "Site.Inbox.UnmuteBotByAgent" -> "Bot diaktifkan"
         if (msgKey.contains('UnmuteBot')) {
           content = '🤖 Bot diaktifkan';
         } else if (msgKey.contains('MuteBot')) {
           content = '🤖 Bot dinonaktifkan';
-        } else if (msgKey.contains('Assign')) {
+        } else if (msgKey.contains('Assign') || msgKey.contains('assign') || msgKey.contains('Asign')) {
           content = '👤 Percakapan di-assign';
-        } else if (msgKey.contains('Resolve')) {
+        } else if (msgKey.contains('Resolve') || msgKey.contains('resolve')) {
           content = '✅ Percakapan diselesaikan';
+        } else if (msgKey.isNotEmpty) {
+          final readableKey = msgKey.replaceAll("Site.Inbox.", "").replaceAll("_", " ");
+          content = '📋 $readableKey';
         } else {
-          content = '📋 $msgKey';
+          content = '📋 Pemberitahuan sistem';
         }
-      } catch (_) {
-        // Pertahankan konten asli jika proses parse gagal
+      } catch (e) {
+        if (content.trim().isEmpty || content.startsWith('{')) {
+          content = '📋 Pemberitahuan sistem';
+        }
       }
     }
 
@@ -430,7 +443,7 @@ class Message {
           fLower.contains('.ezgif') || oLower.contains('.ezgif') ||
           fLower.contains('sticker') || oLower.contains('sticker') ||
           fLower.contains('stiker') || oLower.contains('stiker') ||
-          cLower.contains('🌟 sticker') || cLower.contains('animated sticker') ||
+          cLower.contains('sticker') || cLower.contains('stiker') ||
           cLower.contains('stiker bergerak')) {
         return true;
       }
@@ -447,13 +460,20 @@ class Message {
             rawFileStr.contains('"assticker":true') ||
             rawFileStr.contains('"mimetype":"image/webp"') ||
             rawFileStr.contains('image/webp') ||
+            rawFileStr.contains('video/webm') ||
+            rawFileStr.contains('application/x-tgsticker') ||
+            rawFileStr.contains('animated') ||
+            rawFileStr.contains('sticker') ||
             rawJsonStr.contains('"issticker":true') ||
             rawJsonStr.contains('"isanimated":true') ||
             rawJsonStr.contains('"isanimatedsticker":true') ||
             rawJsonStr.contains('"assticker":true') ||
             rawJsonStr.contains('"mimetype":"image/webp"') ||
             rawJsonStr.contains('stiker bergerak') ||
-            rawJsonStr.contains('animated sticker')) {
+            rawJsonStr.contains('animated sticker') ||
+            rawJsonStr.contains('video/webm') ||
+            rawJsonStr.contains('application/x-tgsticker') ||
+            rawJsonStr.contains('"sticker":')) {
           return true;
         }
       } catch (_) {}

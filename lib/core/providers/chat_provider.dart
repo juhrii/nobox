@@ -591,6 +591,20 @@ Future<void> fetchChats() async {
         _hasMore = response.data!.length >= _pageSize;
         debugPrint('📄 [Pagination] Initial fetch: loaded ${response.data!.length} items, hasMore=$_hasMore');
 
+        // Cek jika ada lastMessage berupa log sistem / placeholder dan ambil pesan obrolan aslinya
+        final invalidRooms = _chats.where((c) {
+          final lower = c.lastMessage.toLowerCase();
+          return c.lastMessage == 'Site.Inbox.DeletedMessage' ||
+                 lower.contains('site.inbox.') ||
+                 lower.contains('percakapan di-assign') ||
+                 lower.contains('percakapan diselesaikan') ||
+                 lower.contains('bot diaktifkan') ||
+                 lower.contains('pemberitahuan sistem');
+        }).map((c) => c.id).toList();
+        if (invalidRooms.isNotEmpty) {
+          _fetchRealLastMessagesForDeletedRooms(invalidRooms);
+        }
+
         // Segera perbarui UI agar pengguna tidak menunggu lama
         _isLoading = false;
         notifyListeners();
@@ -783,17 +797,24 @@ Future<void> fetchChats() async {
     }
   }
 
-  /// Mengambil pesan asli terakhir untuk ruangan yang pesan terakhirnya dihapus
+  /// Mengambil pesan asli terakhir untuk ruangan yang pesan terakhirnya dihapus atau berupa log sistem
   Future<void> _fetchRealLastMessagesForDeletedRooms(List<String> roomIds) async {
     for (final roomId in roomIds) {
       try {
         final response = await _chatService.getMessageHistory(roomId, '');
         if (!response.isError && response.data != null && response.data!.isNotEmpty) {
-          // Find the most recent message that is NOT a deleted message placeholder
-          final validMessages = response.data!.where((m) => m.content != 'Site.Inbox.DeletedMessage').toList();
+          // Find the most recent message that is NOT a deleted message placeholder or system notification
+          final validMessages = response.data!.where((m) {
+            if (m.content == 'Site.Inbox.DeletedMessage' || m.isSystemMessage) return false;
+            final lower = m.content.toLowerCase();
+            if (lower.contains('site.inbox.') || lower.contains('percakapan di-assign') || lower.contains('percakapan diselesaikan') || lower.contains('pemberitahuan sistem')) return false;
+            return true;
+          }).toList();
           
           if (validMessages.isNotEmpty) {
-            final realLastMsg = validMessages.first;
+            // NOTE: getMessageHistory mengembalikan urutan ASC (pesan terlama di index 0, terbaru di index .last).
+            // WAJIB gunakan .last agar mengambil pesan chat ASLI TERBARU!
+            final realLastMsg = validMessages.last;
             String typeStr = '1';
             if (realLastMsg.messageType == MessageType.voice) typeStr = '2';
             else if (realLastMsg.messageType == MessageType.image) typeStr = '3';
@@ -807,7 +828,7 @@ Future<void> fetchChats() async {
               overrideTime: realLastMsg.rawTime
             );
           } else {
-            // All messages are deleted placeholders
+            // All messages are deleted placeholders or system logs
             updateLocalLastMessage(roomId, '');
           }
         } else {
@@ -1105,8 +1126,16 @@ Future<void> fetchChats() async {
           _chats.insertAll(0, newChats);
         }
 
-        // 1. Check for DeletedMessages and fetch their actual last messages
-        final deletedRooms = _chats.where((c) => c.lastMessage == 'Site.Inbox.DeletedMessage').map((c) => c.id).toList();
+        // 1. Check for DeletedMessages or system logs and fetch their actual last chat messages
+        final deletedRooms = _chats.where((c) {
+          final lower = c.lastMessage.toLowerCase();
+          return c.lastMessage == 'Site.Inbox.DeletedMessage' ||
+                 lower.contains('site.inbox.') ||
+                 lower.contains('percakapan di-assign') ||
+                 lower.contains('percakapan diselesaikan') ||
+                 lower.contains('bot diaktifkan') ||
+                 lower.contains('pemberitahuan sistem');
+        }).map((c) => c.id).toList();
         if (deletedRooms.isNotEmpty) {
           _fetchRealLastMessagesForDeletedRooms(deletedRooms);
         }
@@ -1393,6 +1422,18 @@ Future<void> fetchMoreChats() async {
         _localOverrides.clear();
         for (final entry in decoded.entries) {
           final val = entry.value as Map<String, dynamic>;
+          final lastMsgStr = val['lastMessage']?.toString() ?? '';
+          final lowerMsg = lastMsgStr.toLowerCase();
+          final isBogusSystemMsg = lastMsgStr == 'Site.Inbox.DeletedMessage' ||
+              lowerMsg.contains('site.inbox.') ||
+              lowerMsg.contains('percakapan di-assign') ||
+              lowerMsg.contains('percakapan diselesaikan') ||
+              lowerMsg.contains('bot diaktifkan') ||
+              lowerMsg.contains('pemberitahuan sistem');
+          if (isBogusSystemMsg) {
+            debugPrint('ChatProvider: 🧹 Ignoring bogus system message override in SharedPreferences for room ${entry.key}');
+            continue;
+          }
           _localOverrides[entry.key] = ChatModel(
             id: entry.key,
             sender: val['sender']?.toString() ?? '',
@@ -1406,7 +1447,7 @@ Future<void> fetchMoreChats() async {
             isGroup: val['isGroup'] == true,
             isBlocked: val['isBlocked'] == true,
             status: val['status']?.toString() ?? 'Unassigned',
-            lastMessage: val['lastMessage']?.toString() ?? '',
+            lastMessage: lastMsgStr,
             lastMessageType: val['lastMessageType']?.toString(),
             time: val['time']?.toString() ?? '',
             isLastMessageFromMe: val['isLastMessageFromMe'] == true,

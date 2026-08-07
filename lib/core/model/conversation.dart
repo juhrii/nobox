@@ -149,12 +149,39 @@ class Conversation {
 
     // Helper untuk mendeteksi apakah obrolan benar-benar Group atau Private (individu)
     bool resolveIsGroup() {
-      // 1. Cek JID WhatsApp secara eksplisit (@g.us = Group, @s.whatsapp.net / @c.us = Private)
-      final contactStr = (getValue(['CtRealId', 'ct_real_id', 'CtId', 'ContactId', 'Id', 'id', 'LinkTmp', 'Link'])?.toString() ?? '').trim().toLowerCase();
-      if (contactStr.contains('@g.us') || contactStr.contains('-') && contactStr.endsWith('@g.us')) return true;
-      if (contactStr.contains('@s.whatsapp.net') || contactStr.contains('@c.us') || contactStr.contains('@lid')) return false;
+      final chNm = (getValue(['ChNm', 'ChannelName', 'chnm', 'ChId', 'ch_id', 'Channel'])?.toString() ?? '').trim().toLowerCase();
+      final idStr = (getValue(['Id', 'id', 'RoomId', 'room_id'])?.toString() ?? '').trim().toLowerCase();
+      final contactStr = (getValue(['CtRealId', 'ct_real_id', 'CtId', 'ContactId', 'IdLink', 'LinkId', 'LinkTmp', 'Link'])?.toString() ?? '').trim().toLowerCase();
+      final combined = '$idStr $contactStr';
 
-      // 2. Cek flag boolean/integer eksplisit dari server (IsGrp, IsGroup, is_group, isGroup)
+      // 1. ATURAN MUTLAK GROUP WHATSAPP: Pada channel WhatsApp, Grup WA WAJIB berakhiran / mengandung '@g.us' atau '@group'.
+      if (combined.contains('@g.us') || combined.contains('@group')) {
+        return true;
+      }
+
+      // 2. ATURAN MUTLAK TELEGRAM: Di Telegram, Grup selalu ber-ID negatif (awalan tanda minus '-'), user private bernilai positif.
+      if (chNm.contains('telegram') || chNm.contains('tg') || combined.contains('telegram')) {
+        if (idStr.startsWith('-') || contactStr.startsWith('-')) return true;
+        return false;
+      }
+
+      // 3. ATURAN MUTLAK PRIVATE CHAT: Jika ID / Kontak / Link mengandung '@s.whatsapp.net', '@c.us',
+      // atau FULL NUMERIC (hanya angka positif murni, misal nomor HP 628xxx atau ID kontak NoBox contoh: 723418040483845),
+      // maka DIJAMIN 100% PRIVATE CHAT (INDIVIDU), mengabaikan flag IsGrp dari server yang salah kaprah!
+      if (combined.contains('@s.whatsapp.net') || combined.contains('@c.us')) {
+        return false;
+      }
+
+      final cleanContact = contactStr.replaceAll(RegExp(r'\s+'), '');
+      if (cleanContact.isNotEmpty && RegExp(r'^[0-9]+$').hasMatch(cleanContact)) {
+        return false;
+      }
+      final cleanId = idStr.replaceAll(RegExp(r'\s+'), '');
+      if (cleanId.isNotEmpty && RegExp(r'^[0-9]+$').hasMatch(cleanId)) {
+        return false;
+      }
+
+      // 4. Untuk channel lain yang ID-nya bukan angka murni, cek flag eksplisit dari server
       final grpFlag = getValue(['IsGrp', 'IsGroup', 'is_group', 'isGroup']);
       if (grpFlag != null && grpFlag.toString().isNotEmpty && grpFlag.toString() != 'null') {
         final strFlag = grpFlag.toString().trim().toLowerCase();
@@ -162,12 +189,10 @@ class Conversation {
         if (strFlag == '0' || strFlag == 'false') return false;
       }
 
-      // 3. Cek tipe obrolan secara eksplisit (ChatType / type)
       final chatType = (getValue(['ChatType', 'chat_type', 'Type', 'type'])?.toString() ?? '').trim().toLowerCase();
       if (chatType == 'group' || chatType == 'grup' || chatType == 'groupchat') return true;
       if (chatType == 'private' || chatType == 'personal' || chatType == 'user' || chatType == 'contact' || chatType == 'direct') return false;
 
-      // 4. Jika tidak terdeteksi penanda grup WhatsApp yang spesifik, maka dipaksa sebagai Private Chat (individu)
       return false;
     }
 

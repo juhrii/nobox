@@ -519,8 +519,8 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
   bool _isStickerMessage(Message msg) {
     if (msg.messageType == MessageType.sticker) return true;
     final cLower = msg.content.toLowerCase();
-    if (cLower.contains('🌟 sticker') || cLower.contains('animated sticker') || cLower.contains('stiker bergerak') || (cLower == 'sticker') || (cLower == 'stiker')) return true;
-    final url = (msg.imageUrl ?? msg.videoUrl ?? '').toLowerCase();
+    if (cLower.contains('sticker') || cLower.contains('stiker')) return true;
+    final url = (msg.imageUrl ?? msg.videoUrl ?? msg.documentUrl ?? msg.imagePath ?? msg.documentName ?? '').toLowerCase();
     if (url.isNotEmpty && (url.contains('.webm') || url.contains('.tgs') || url.contains('.webp') || url.contains('.ezgif') || url.contains('sticker') || url.contains('stiker'))) {
       return true;
     }
