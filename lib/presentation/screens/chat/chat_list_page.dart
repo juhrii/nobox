@@ -1651,9 +1651,21 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
           
           final isDocument = typeVal == '5';
 
-          final isAudio = isPtt || typeVal == '2' || 
+          bool _isWebLink(String str) {
+            if (str.isEmpty) return false;
+            final lower = str.toLowerCase();
+            if (lower.startsWith('http')) return true;
+            if (lower.startsWith('www.')) return true;
+            if (lower.contains('tiktok.com') || lower.contains('tiktok.co') || lower.contains('instagram.com') || lower.contains('youtube.com') || lower.contains('youtu.be') || lower.contains('shopee.co') || lower.contains('tokopedia.com') || lower.contains('facebook.com') || lower.contains('twitter.com') || lower.contains('x.com')) return true;
+            if (RegExp(r'^[a-zA-Z0-9-]+\.(com|id|net|org|co|io|me|be|xyz)(\/|$)').hasMatch(lower)) return true;
+            return false;
+          }
+
+          final isWebLink = _isWebLink(filename) || _isWebLink(originalName) || _isWebLink(trimmedMsg);
+
+          final isAudio = !isWebLink && (isPtt || typeVal == '2' || 
                          (!isDocument && (['.ogg', '.oga', '.mp3', '.wav', '.m4a', '.opus', '.aac', '.weba', '.amr'].any((ext) => filename.contains(ext) || originalName.contains(ext)) ||
-                          originalName.contains('voice note') || originalName.contains('voice_') || filename.contains('voice_')));
+                          originalName.contains('voice note') || originalName.contains('voice_') || filename.contains('voice_'))));
           
           final isSticker = typeVal == '16' || typeVal == '17' || 
               ['.webm', '.tgs', '.webp', '.ezgif', 'sticker', 'stiker', 'animated'].any((s) => filename.contains(s) || originalName.contains(s) || caption.toLowerCase().contains(s) || trimmedMsg.toLowerCase().contains(s));

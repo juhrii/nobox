@@ -345,6 +345,28 @@ class Message {
       return ['mp3', 'wav', 'ogg', 'oga', 'opus', 'm4a', 'aac', 'weba', 'amr'].contains(ext);
     }
 
+    // Helper untuk mengecek string penanda Voice Note / Audio secara aman
+    bool isVoiceNoteString(String str) {
+      if (str.isEmpty) return false;
+      final lower = str.toLowerCase();
+      if (lower.contains('voice note') || lower.contains('pesan suara')) return true;
+      if (lower.contains('voice_') && !lower.contains('invoice_')) return true;
+      if (lower.contains('audio_')) return true;
+      if (lower.contains('ptt-')) return true;
+      return false;
+    }
+
+    // Helper untuk mengecek apakah string adalah web link / URL
+    bool _isWebLink(String str) {
+      if (str.isEmpty) return false;
+      final lower = str.toLowerCase();
+      if (lower.startsWith('http')) return true;
+      if (lower.startsWith('www.')) return true;
+      if (lower.contains('tiktok.com') || lower.contains('tiktok.co') || lower.contains('instagram.com') || lower.contains('youtube.com') || lower.contains('youtu.be') || lower.contains('shopee.co') || lower.contains('tokopedia.com') || lower.contains('facebook.com') || lower.contains('twitter.com') || lower.contains('x.com')) return true;
+      if (RegExp(r'^[a-zA-Z0-9-]+\.(com|id|net|org|co|io|me|be|xyz)(\/|$)').hasMatch(lower)) return true;
+      return false;
+    }
+
     // Helper untuk mengecek flag Ptt:true (Voice Note marker dari WhatsApp/Telegram)
     bool _isPttFile(dynamic fileData) {
       if (fileData == null) return false;
@@ -396,6 +418,19 @@ class Message {
       if (fileData is Map) {
         if (fileData['Filename'] != null) filePath = fileData['Filename'].toString();
         else if (fileData['url'] != null) filePath = fileData['url'].toString();
+        else if (fileData['Url'] != null) filePath = fileData['Url'].toString();
+        else if (fileData['URL'] != null) filePath = fileData['URL'].toString();
+        else if (fileData['link'] != null) filePath = fileData['link'].toString();
+        else if (fileData['Link'] != null) filePath = fileData['Link'].toString();
+        else {
+          for (var value in fileData.values) {
+            final valStr = value?.toString().trim() ?? '';
+            if (_isWebLink(valStr)) {
+              filePath = valStr;
+              break;
+            }
+          }
+        }
       } else if (filePath.startsWith('{') || filePath.startsWith('[')) {
         try {
           final decoded = jsonDecode(filePath);
@@ -403,6 +438,20 @@ class Message {
           if (fileMap is Map) {
             if (fileMap['Filename'] != null) filePath = fileMap['Filename'].toString();
             else if (fileMap['url'] != null) filePath = fileMap['url'].toString();
+            else if (fileMap['Url'] != null) filePath = fileMap['Url'].toString();
+            else if (fileMap['URL'] != null) filePath = fileMap['URL'].toString();
+            else if (fileMap['link'] != null) filePath = fileMap['link'].toString();
+            else if (fileMap['Link'] != null) filePath = fileMap['Link'].toString();
+            else {
+              // Fallback: cari nilai apapun di dalam JSON yang terlihat seperti URL
+              for (var value in fileMap.values) {
+                final valStr = value?.toString().trim() ?? '';
+                if (_isWebLink(valStr)) {
+                  filePath = valStr;
+                  break;
+                }
+              }
+            }
           }
         } catch (_) {}
       }
@@ -494,7 +543,7 @@ class Message {
         imgUrl = url;
         videoUrl = url;
         content = '🌟 Sticker';
-      } else if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(firstFile) || originalName.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('pesan suara') || filePath.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('voice_') || filePath.toLowerCase().contains('voice_')) {
+      } else if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(firstFile) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath)) {
         // Voice note: cek ekstensi audio ATAU flag Ptt:true ATAU nama file mengandung voice note — SEBELUM cek document (type 5)
         // Server NoBox kadang mengembalikan Type=5 untuk voice notes
         msgType = MessageType.voice;
@@ -517,12 +566,15 @@ class Message {
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '2') {
         // Fallback berdasarkan API Type saat ekstensi tidak dikenali
-        if (filePath.isNotEmpty || content.isEmpty || content.startsWith('{') || content.startsWith('[') || content.contains('Voice Note') || content.contains('🎵')) {
+        if (isVoiceNoteString(filePath) || content.contains('Voice Note') || content.contains('🎵') || (content.isEmpty && !_isWebLink(filePath))) {
           msgType = MessageType.voice;
           audioPath = filePath.startsWith('http') || filePath.isEmpty ? filePath : 'https://id.nobox.ai/upload/$filePath';
           content = '';
         } else {
-          msgType = MessageType.text; // Ignore buggy Type=2 if it's clearly a text message
+          msgType = MessageType.text; // Ignore buggy Type=2 if it's clearly a text message (like a link)
+          if (content.isEmpty || content.startsWith('{') || content.startsWith('[')) {
+            content = filePath; // Tampilkan isi link jika content kosong
+          }
         }
       } else if (typeVal == '4') {
         msgType = MessageType.video;
@@ -563,14 +615,17 @@ class Message {
         imgUrl = url;
         videoUrl = url;
         content = '🌟 Sticker';
-      } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || originalName.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('pesan suara') || filePath.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('voice_') || filePath.toLowerCase().contains('voice_')) {
+      } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath)) {
         // Voice note: cek typeVal=='2', ekstensi audio, nama file, ATAU flag Ptt:true — sebelum cek document (type 5)
-        if (filePath.isNotEmpty || content.isEmpty || content.startsWith('{') || content.startsWith('[') || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || originalName.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('pesan suara') || filePath.toLowerCase().contains('voice note') || originalName.toLowerCase().contains('voice_') || filePath.toLowerCase().contains('voice_')) {
+        if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath) || (content.trim().isEmpty && !_isWebLink(filePath) && filePath.isNotEmpty)) {
           msgType = MessageType.voice;
           audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
           content = '';
         } else {
-          msgType = MessageType.text;
+          msgType = MessageType.text; // Ignore buggy Type=2 if it's clearly a text message (like a link)
+          if (content.trim().isEmpty || content.startsWith('{') || content.startsWith('[')) {
+            content = filePath.isNotEmpty ? filePath : 'Pesan tidak dapat ditampilkan';
+          }
         }
       } else if (typeVal == '5' || _isDocumentFlag(json['File'])) {
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
@@ -677,6 +732,10 @@ class Message {
         time: '', // Waktu tidak dikirimkan oleh API untuk pesan balasan
         rawTime: '',
       );
+    }
+
+    if (msgType == MessageType.text && content.trim().isEmpty) {
+      content = "⚠️ Pesan gagal diproses oleh server.";
     }
 
     return Message(

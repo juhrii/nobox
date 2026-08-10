@@ -649,7 +649,35 @@ Future<void> fetchChats() async {
   ///
   /// [roomData] is the parsed JSON from TerimaSubSpv with keys like:
   /// Id, Ct, LastMsg, Uc, TimeMsg, IsPin, St, IsNeedReply, SdrMsg, etc.
-    // FITUR 3: Menyinkronkan status obrolan secara instan dari event SignalR.
+
+  // Helper untuk mendapatkan waktu yang dipastikan berada di urutan teratas (mengatasi bug zona waktu server)
+  String _getTopSortTime() {
+    DateTime maxTime = DateTime.now().toUtc();
+    for (var c in _chats) {
+      if (!c.isPinned) {
+        final t = _parseTimeForSort(c.time).toUtc();
+        if (t.isAfter(maxTime)) {
+          maxTime = t;
+        }
+      }
+    }
+    return maxTime.add(const Duration(seconds: 1)).toIso8601String();
+  }
+
+  DateTime _parseTimeForSort(String rawTime) {
+    if (rawTime.isEmpty) return DateTime.fromMillisecondsSinceEpoch(0);
+    try {
+      String timeString = rawTime;
+      if (!timeString.endsWith('Z') && !timeString.contains('+') && timeString.length >= 19) {
+        timeString += 'Z';
+      }
+      return DateTime.parse(timeString).toLocal();
+    } catch (_) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+  }
+
+  // FITUR 3: Menyinkronkan status obrolan secara instan dari event SignalR.
   // [ACTION: UPDATE_ROOM_SIGNALR] - Memperbarui state chat saat ada pesan real-time masuk
   void updateRoomFromSignalR(Map<String, dynamic> roomData) {
     final roomId = roomData['Id']?.toString() ?? '';
@@ -678,6 +706,7 @@ Future<void> fetchChats() async {
           // Lindungi selama 10 detik agar tidak tertimpa oleh echo usang dari SignalR.
           lastMsg = existing.lastMessage;
           roomData['LastMessageType'] = existing.lastMessageType;
+          roomData['TimeMsg'] = existing.time; // Lindungi waktu agar posisi tidak turun!
           debugPrint('ChatProvider: 🛡️ Override protected for $roomId – incoming SignalR event is ignored (diff=$diffNow s)');
         } else {
           // Event SignalR baru yang valid! Hapus override lokal.
@@ -723,7 +752,15 @@ Future<void> fetchChats() async {
       }
 
       final uc = int.tryParse(roomData['Uc']?.toString() ?? '') ?? existing.unreadCount;
-      final timeMsg = roomData['TimeMsg']?.toString() ?? existing.time;
+      String timeMsg = roomData['TimeMsg']?.toString() ?? existing.time;
+      if (DateTime.tryParse(timeMsg) == null) {
+        timeMsg = _getTopSortTime(); // Pastikan waktu pesan baru yang masuk selalu berada di atas
+      } else {
+        // Normalisasi TimeMsg dari SignalR agar setara dengan Chatrooms/List (kasus bug timezone dari backend)
+        if (!timeMsg.endsWith('Z') && !timeMsg.contains('+') && timeMsg.length >= 19) {
+          timeMsg += 'Z';
+        }
+      }
       final isNeedReply = roomData['IsNeedReply'] == 1 || roomData['IsNeedReply'] == true;
       final sdrMsg = roomData['SdrMsg']?.toString() ?? '';
 
@@ -866,7 +903,7 @@ Future<void> fetchChats() async {
   void updateLocalLastMessage(String roomId, String lastMessage, {bool isFromMe = true, bool updateTimeAndPosition = true, String? overrideTime, String? lastMessageType}) {
     final index = _chats.indexWhere((c) => c.id == roomId);
     if (index >= 0) {
-      final newTime = overrideTime ?? (updateTimeAndPosition ? DateTime.now().toUtc().toIso8601String() : _chats[index].time);
+      final newTime = overrideTime ?? (updateTimeAndPosition ? _getTopSortTime() : _chats[index].time);
       final chat = _chats[index].copyWith(
         lastMessage: lastMessage,
         lastMessageType: lastMessageType ?? '1',
@@ -876,7 +913,7 @@ Future<void> fetchChats() async {
       
       // Simpan sebagai override agar tidak tertimpa Inbox/GetList yang usang
       _localOverrides[roomId] = chat;
-      _overrideTimestamps[roomId] = DateTime.now().toUtc().toIso8601String(); // Catat KAPAN override ini dibuat
+      _overrideTimestamps[roomId] = newTime; // Catat KAPAN override ini dibuat dengan waktu baru agar tidak terhapus prematur saat fetchChats
       
       
       if (updateTimeAndPosition) {
@@ -888,8 +925,8 @@ Future<void> fetchChats() async {
         _chats[index] = chat;
         // Opsional: sort _chats jika ingin posisi langsung akurat saat pesan dihapus
         _chats.sort((a, b) {
-          final timeA = DateTime.tryParse(a.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final timeB = DateTime.tryParse(b.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final timeA = _parseTimeForSort(a.time);
+          final timeB = _parseTimeForSort(b.time);
           return timeB.compareTo(timeA);
         });
       }
@@ -1630,8 +1667,8 @@ Future<void> fetchMoreChats() async {
       
     final unpinned = filtered.where((c) => !c.isPinned).toList()
       ..sort((a, b) {
-        final timeA = DateTime.tryParse(a.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final timeB = DateTime.tryParse(b.time) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeA = _parseTimeForSort(a.time);
+        final timeB = _parseTimeForSort(b.time);
         return timeB.compareTo(timeA);
       });
       
