@@ -1040,6 +1040,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     }
                   }
 
+                  // FILTER: Skip pesan yang sudah dihapus oleh user
+                  if (newMsg.id.isNotEmpty && _deletedMessageIds.contains(newMsg.id)) {
+                    continue;
+                  }
+
                   // Cek apakah sudah ada di _messages
                   final exists = _messages.any(
                     (m) =>
@@ -2009,7 +2014,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       content: content,
       isMe: true,
       time: timeString,
-      rawTime: now.toIso8601String(),
+      rawTime: now.toUtc().toIso8601String(),
       status: MessageStatus.sent,
       repliedMessage: targetReplyMsg,
       ack: 1,
@@ -2525,7 +2530,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         content: '📄 ${file.name}',
         isMe: true,
         time: timeString,
-        rawTime: now.toIso8601String(),
+        rawTime: now.toUtc().toIso8601String(),
         status: MessageStatus.sent,
         messageType: MessageType.document,
         documentName: file.name,
@@ -2630,7 +2635,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       content: '📍 Lokasi saya\n$mapsUrl',
       isMe: true,
       time: timeString,
-      rawTime: now.toIso8601String(),
+      rawTime: now.toUtc().toIso8601String(),
       status: MessageStatus.sent,
       ack: 1,
     );
@@ -2736,7 +2741,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       content: '📷 Photo',
       isMe: true,
       time: timeString,
-      rawTime: now.toIso8601String(),
+      rawTime: now.toUtc().toIso8601String(),
       status: MessageStatus.sent,
       messageType: MessageType.image,
       imagePath: pickedFile.path,
@@ -2913,7 +2918,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         content: '',
         isMe: true,
         time: timeString,
-        rawTime: now.toIso8601String(),
+        rawTime: now.toUtc().toIso8601String(),
         status: MessageStatus.sent,
         messageType: MessageType.voice,
         audioPath: path,
