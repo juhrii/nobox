@@ -309,18 +309,29 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                                           ),
                                         ],
                                       ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (widget.message.repliedMessage != null)
-                                      _buildReplyPreview(context, isMe, isDarkMode),
-                                    Padding(
-                                      padding: (widget.message.repliedMessage != null && !isMedia)
-                                          ? const EdgeInsets.symmetric(horizontal: 10)
-                                          : EdgeInsets.zero,
-                                      child: _buildMessageContent(context, isMe, isDarkMode),
-                                    ),
-                                  ],
+                                child: Builder(
+                                  builder: (context) {
+                                    final content = Column(
+                                      crossAxisAlignment: widget.message.repliedMessage != null
+                                          ? CrossAxisAlignment.stretch
+                                          : CrossAxisAlignment.start,
+                                      children: [
+                                        if (widget.message.repliedMessage != null)
+                                          _buildReplyPreview(context, isMe, isDarkMode),
+                                        Padding(
+                                          padding: (widget.message.repliedMessage != null && !isMedia)
+                                              ? const EdgeInsets.symmetric(horizontal: 10)
+                                              : EdgeInsets.zero,
+                                          child: _buildMessageContent(context, isMe, isDarkMode),
+                                        ),
+                                      ],
+                                    );
+                                    
+                                    if (widget.message.repliedMessage != null) {
+                                      return IntrinsicWidth(child: content);
+                                    }
+                                    return content;
+                                  },
                                 ),
                               );
                             },
@@ -444,6 +455,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     return Container(
       margin: const EdgeInsets.only(left: 6, right: 6, bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      constraints: const BoxConstraints(minWidth: 140), // Mencegah kotak reply terlalu kecil/sempit
       decoration: BoxDecoration(
         color: isMe
             ? Colors.black.withOpacity(0.15) // Darker overlay for blue bubble
@@ -859,7 +871,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     
     final hasCaption = caption.isNotEmpty;
     final maxW = MediaQuery.of(context).size.width * 0.65; // 65% lebar layar
-    final maxH = 280.0; // tinggi maksimal 280px
+    final maxH = 400.0; // tinggi maksimal dinaikkan agar foto potret tidak gepeng/terpotong
 
     Widget _buildErrorImage(bool isMe, bool isDarkMode) {
       return Container(
@@ -957,11 +969,9 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                   maxWidth: maxW,
                   maxHeight: maxH,
                 ),
-                child: SizedBox(
-                  width: maxW,
-                  child: Builder(
-                    builder: (context) {
-                      final hasLocalPath = widget.message.imagePath != null && 
+                child: Builder(
+                  builder: (context) {
+                    final hasLocalPath = widget.message.imagePath != null && 
                                            widget.message.imagePath!.isNotEmpty && 
                                            File(widget.message.imagePath!).existsSync();
                       
@@ -991,7 +1001,6 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
               ),
             ),
           ),
-        ),
         if (hasCaption) ...[
           const SizedBox(height: 6),
           Container(

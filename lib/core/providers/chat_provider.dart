@@ -21,7 +21,7 @@ class ChatProvider with ChangeNotifier {
   String? _error;
 
   // Pagination state
-  static const int _pageSize = 20;
+  static const int _pageSize = 100;
   int _currentSkip = 0;
   bool _isLoadingMore = false;
   bool _hasMore = true;

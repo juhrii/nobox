@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
@@ -45,6 +46,9 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
 
   // Infinite scroll
   final ScrollController _scrollController = ScrollController();
+  
+  // Debounce for search
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -86,6 +90,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _searchController.dispose();
@@ -247,8 +252,13 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                       : null,
                 ),
                 onChanged: (value) {
-                  context.read<ChatProvider>().setSearchQuery(value);
-                  setState(() {});
+                  if (_debounce?.isActive ?? false) _debounce!.cancel();
+                  _debounce = Timer(const Duration(milliseconds: 300), () {
+                    if (mounted) {
+                      context.read<ChatProvider>().setSearchQuery(value);
+                      setState(() {});
+                    }
+                  });
                 },
               )
             : const Text(
@@ -384,16 +394,34 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
           final chats = chatProvider.chats;
 
           if (chats.isEmpty) {
+            final isSearching = chatProvider.searchQuery.isNotEmpty;
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+                  Icon(
+                    isSearching ? Icons.search_off : Icons.chat_bubble_outline, 
+                    size: 64, 
+                    color: Colors.grey[400]
+                  ),
                   const SizedBox(height: 16),
                   Text(
-                    'No chats found',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    isSearching 
+                        ? 'Kontak tidak ditemukan' 
+                        : 'Belum ada obrolan',
+                    style: TextStyle(
+                      fontSize: 16, 
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
+                  if (isSearching) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Coba cari dengan kata kunci lain',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                    ),
+                  ],
                   if (chatProvider.error != null) ...[
                     const SizedBox(height: 8),
                     Text(
