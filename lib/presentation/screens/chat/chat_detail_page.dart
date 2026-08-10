@@ -3963,68 +3963,79 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     onPressed: () async {
                       Navigator.pop(ctx);
 
+                      // Tampilkan indikator loading agar aman dari interaksi prematur
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctxL) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                      );
+
                       final selectedMsgs = _messages
                           .where((m) => _selectedMessageKeys.contains(_getMessageKey(m)))
                           .toList();
 
                       bool hasError = false;
                       String errorMessage = '';
-                      final Set<String> processedIds = {};
+                      final List<String> successIds = [];
+                      final List<Message> localPendingMsgs = [];
 
-                      for (final msg in selectedMsgs) {
+                      // Eksekusi penghapusan secara paralel (Concurrent) agar super cepat
+                      final futures = selectedMsgs.map((msg) async {
                         final msgId = msg.id;
                         if (msgId.isNotEmpty) {
-                          _deletedMessageIds.add(msgId);
-                          if (processedIds.contains(msgId)) {
-                            setState(() {
-                              _messages.removeWhere((m) => m.id == msgId);
-                            });
-                            continue;
-                          }
-                          processedIds.add(msgId);
-
                           try {
                             final resp = await _chatService.deleteMessage(msgId);
                             if (resp.isError) {
                               final errText = resp.error ?? 'Unknown error';
                               if (errText.contains('EntityNotFound') ||
                                   errText.contains('Record not found')) {
-                                debugPrint('Pesan $msgId sudah tidak ada di server. Dihapus dari UI.');
+                                successIds.add(msgId);
                                 if (mounted) {
                                   Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
                                 }
-                                setState(() {
-                                  _messages.removeWhere((m) => m.id == msgId);
-                                });
                               } else {
                                 hasError = true;
                                 errorMessage = errText;
                               }
                             } else {
+                              successIds.add(msgId);
                               if (mounted) {
                                 Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
                               }
-                              setState(() {
-                                _messages.removeWhere((m) => m.id == msgId);
-                              });
                             }
                           } catch (e) {
                             hasError = true;
                             errorMessage = 'Error: $e';
                           }
                         } else {
-                          setState(() {
-                            _messages.removeWhere((m) => identical(m, msg) || (_getMessageKey(m) == _getMessageKey(msg)));
-                          });
+                          localPendingMsgs.add(msg);
                         }
-                        
-                        // Bersihkan juga dari local sent cache!
-                        if (_localSentCache[chat.id] != null) {
-                          _localSentCache[chat.id]!.removeWhere((c) => identical(c.message, msg) || (msgId.isNotEmpty && c.message.id == msgId) || (_getMessageKey(c.message) == _getMessageKey(msg)));
-                        }
-                      }
+                      });
 
-                      // Segera simpan status penghapusan dan blacklist ke SharedPreferences
+                      await Future.wait(futures);
+
+                      if (mounted) Navigator.pop(context); // Tutup loading dialog
+
+                      // Hapus dari UI SEKALI GUS (Langsung hilang semuanya)
+                      setState(() {
+                        _deletedMessageIds.addAll(successIds);
+                        
+                        _messages.removeWhere((m) => 
+                          successIds.contains(m.id) || 
+                          localPendingMsgs.any((pending) => identical(pending, m) || _getMessageKey(pending) == _getMessageKey(m))
+                        );
+
+                        if (_localSentCache[chat.id] != null) {
+                          _localSentCache[chat.id]!.removeWhere((c) => 
+                            successIds.contains(c.message.id) || 
+                            localPendingMsgs.any((pending) => identical(pending, c.message) || _getMessageKey(pending) == _getMessageKey(c.message))
+                          );
+                        }
+
+                        _isSelectionMode = false;
+                        _selectedMessageKeys.clear();
+                      });
+
                       _savePersistentMessages();
 
                       if (hasError && mounted) {
@@ -4042,11 +4053,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           ),
                         );
                       }
-
-                      setState(() {
-                        _isSelectionMode = false;
-                        _selectedMessageKeys.clear();
-                      });
 
                       // Update Last Message di Chat List (agar tidak menampilkan pesan yang sudah dihapus)
                       if (_messages.isNotEmpty) {
