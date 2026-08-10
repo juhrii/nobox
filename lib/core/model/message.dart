@@ -157,6 +157,7 @@ enum MessageType { text, voice, image, video, document, sticker }
 // =====================================================================
 class Message {
   final String id;
+  final String? idAlias;
   final String content;
   final bool isMe;
   final String time;
@@ -179,6 +180,7 @@ class Message {
 
   Message({
     this.id = '',
+    this.idAlias,
     required this.content,
     required this.isMe,
     required this.time,
@@ -226,10 +228,12 @@ class Message {
   // FUNGSI: Mengubah response JSON list messages API menjadi objek Message
   factory Message.fromJson(Map<String, dynamic> json, String currentUserEmail, {String? tenantId}) {
     String id = json['Id']?.toString() ?? '';
+    final rawIdAlias = json['IdAlias']?.toString() ?? '';
+    final parsedIdAlias = (rawIdAlias.isNotEmpty && rawIdAlias != '0') ? rawIdAlias : null;
+
     if (id == '0' || id.isEmpty) {
-      final idAlias = json['IdAlias']?.toString() ?? '';
-      if (idAlias.isNotEmpty && idAlias != '0') {
-        id = idAlias;
+      if (parsedIdAlias != null) {
+        id = parsedIdAlias;
       } else {
         final timeStr = json['In']?.toString() ?? '';
         final contentStr = json['Msg']?.toString() ?? '';
@@ -740,6 +744,7 @@ class Message {
 
     return Message(
       id: id,
+      idAlias: parsedIdAlias,
       content: content,
       isMe: isMe,
       time: formattedTime,

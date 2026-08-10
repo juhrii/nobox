@@ -315,7 +315,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                                     if (widget.message.repliedMessage != null)
                                       _buildReplyPreview(context, isMe, isDarkMode),
                                     Padding(
-                                      padding: widget.message.repliedMessage != null
+                                      padding: (widget.message.repliedMessage != null && !isMedia)
                                           ? const EdgeInsets.symmetric(horizontal: 10)
                                           : EdgeInsets.zero,
                                       child: _buildMessageContent(context, isMe, isDarkMode),
@@ -464,6 +464,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.reply,
@@ -578,16 +579,20 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     final hasReply = widget.message.repliedMessage != null;
 
     if (hasReply) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      return IntrinsicWidth(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           _buildTextWithLinks(cleanMessage, isMe, isDarkMode),
           const SizedBox(height: 2),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _buildTimestampRow(isMe),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _buildTimestampRow(isMe),
+            ],
           ),
         ],
+        ),
       );
     }
 
@@ -887,9 +892,9 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                          File(widget.message.imagePath!).existsSync();
 
     if ((imageUrl == null || imageUrl.isEmpty) && !hasLocalPath) {
-      return Column(
-        crossAxisAlignment:
-            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      return IntrinsicWidth(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
             width: 200,
@@ -915,15 +920,20 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          _buildTimestampRow(isMe),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _buildTimestampRow(isMe),
+            ],
+          ),
         ],
+        ),
       );
     }
 
-    return Column(
-      crossAxisAlignment:
-          isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+    return IntrinsicWidth(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
@@ -1004,8 +1014,17 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
           ),
         ],
         const SizedBox(height: 4),
-        _buildTimestampRow(isMe),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 4.0, bottom: 2.0),
+              child: _buildTimestampRow(isMe),
+            ),
+          ],
+        ),
       ],
+      ),
     );
   }
 

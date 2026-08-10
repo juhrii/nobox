@@ -2052,7 +2052,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     String? finalReplyType;
 
     if (targetReplyMsg != null) {
-      finalReplyId = targetReplyMsg.id;
+      // Prioritaskan idAlias (ID asli dari channel eksternal seperti Telegram/WA) untuk ReplyId.
+      finalReplyId = (targetReplyMsg.idAlias != null && targetReplyMsg.idAlias!.isNotEmpty) 
+          ? targetReplyMsg.idAlias 
+          : targetReplyMsg.id;
       finalReplyMsg = targetReplyMsg.content;
       finalReplyFrom = targetReplyMsg.fromId;
       if (finalReplyFrom == null || finalReplyFrom.isEmpty) {
@@ -3963,96 +3966,64 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     onPressed: () async {
                       Navigator.pop(ctx);
 
-                      // Tampilkan indikator loading agar aman dari interaksi prematur
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (ctxL) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                      );
-
                       final selectedMsgs = _messages
                           .where((m) => _selectedMessageKeys.contains(_getMessageKey(m)))
                           .toList();
 
-                      bool hasError = false;
-                      String errorMessage = '';
-                      final List<String> successIds = [];
-                      final List<Message> localPendingMsgs = [];
-
-                      // Eksekusi penghapusan secara paralel (Concurrent) agar super cepat
-                      final futures = selectedMsgs.map((msg) async {
-                        final msgId = msg.id;
-                        if (msgId.isNotEmpty) {
-                          try {
-                            final resp = await _chatService.deleteMessage(msgId);
-                            if (resp.isError) {
-                              final errText = resp.error ?? 'Unknown error';
-                              if (errText.contains('EntityNotFound') ||
-                                  errText.contains('Record not found')) {
-                                successIds.add(msgId);
-                                if (mounted) {
-                                  Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
-                                }
-                              } else {
-                                hasError = true;
-                                errorMessage = errText;
-                              }
-                            } else {
-                              successIds.add(msgId);
-                              if (mounted) {
-                                Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
-                              }
-                            }
-                          } catch (e) {
-                            hasError = true;
-                            errorMessage = 'Error: $e';
-                          }
-                        } else {
-                          localPendingMsgs.add(msg);
-                        }
-                      });
-
-                      await Future.wait(futures);
-
-                      if (mounted) Navigator.pop(context); // Tutup loading dialog
-
-                      // Hapus dari UI SEKALI GUS (Langsung hilang semuanya)
+                      // OPTIMISTIC UI UPDATE: Langsung sembunyikan pesan dari layar seketika tanpa loading!
+                      final List<String> attemptingIds = [];
+                      for (var m in selectedMsgs) {
+                        if (m.id.isNotEmpty) attemptingIds.add(m.id);
+                      }
+                      
                       setState(() {
-                        _deletedMessageIds.addAll(successIds);
-                        
-                        _messages.removeWhere((m) => 
-                          successIds.contains(m.id) || 
-                          localPendingMsgs.any((pending) => identical(pending, m) || _getMessageKey(pending) == _getMessageKey(m))
-                        );
-
+                        _deletedMessageIds.addAll(attemptingIds);
+                        _messages.removeWhere((m) => selectedMsgs.contains(m) || attemptingIds.contains(m.id));
                         if (_localSentCache[chat.id] != null) {
-                          _localSentCache[chat.id]!.removeWhere((c) => 
-                            successIds.contains(c.message.id) || 
-                            localPendingMsgs.any((pending) => identical(pending, c.message) || _getMessageKey(pending) == _getMessageKey(c.message))
-                          );
+                          _localSentCache[chat.id]!.removeWhere((c) => selectedMsgs.contains(c.message) || attemptingIds.contains(c.message.id));
                         }
-
                         _isSelectionMode = false;
                         _selectedMessageKeys.clear();
                       });
-
+                      
                       _savePersistentMessages();
 
-                      if (hasError && mounted) {
-                        showDialog(
-                          context: context,
-                          builder: (ctxErr) => AlertDialog(
-                            title: const Text('Gagal Menghapus Beberapa Pesan'),
-                            content: Text('Terjadi kendala saat menghapus sebagian pesan di server: $errorMessage'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctxErr),
-                                child: const Text('OK'),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
+                      // Eksekusi penghapusan di latar belakang (Fire and Forget)
+                      Future(() async {
+                        bool hasError = false;
+                        String errorMessage = '';
+                        
+                        final futures = selectedMsgs.map((msg) async {
+                          final msgId = msg.id;
+                          if (msgId.isNotEmpty) {
+                            try {
+                              final resp = await _chatService.deleteMessage(msgId);
+                              if (resp.isError) {
+                                final errText = resp.error ?? 'Unknown error';
+                                if (!errText.contains('EntityNotFound') && !errText.contains('Record not found')) {
+                                  hasError = true;
+                                  errorMessage = errText;
+                                }
+                              } else {
+                                if (mounted) {
+                                  Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
+                                }
+                              }
+                            } catch (e) {
+                              hasError = true;
+                              errorMessage = 'Error: $e';
+                            }
+                          }
+                        });
+
+                        await Future.wait(futures);
+
+                        if (hasError && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Beberapa pesan gagal dihapus di server: $errorMessage')),
+                          );
+                        }
+                      });
 
                       // Update Last Message di Chat List (agar tidak menampilkan pesan yang sudah dihapus)
                       if (_messages.isNotEmpty) {
@@ -4112,12 +4083,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           updateTimeAndPosition: false,
                         );
                       }
-                      _showTopToast(
-                        hasError
-                            ? 'Gagal dihapus: $errorMessage'
-                            : 'Pesan berhasil dihapus',
-                        isError: hasError,
-                      );
+                      _showTopToast('Pesan dihapus', isError: false);
                     },
                     child: const Text(
                       'Hapus',

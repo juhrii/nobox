@@ -650,7 +650,6 @@ class SignalRService {
     String? replyFiles,
   }) async {
     try {
-      // Helper function to safely parse integer or return null (never return empty string or zero for ID)
       int? parseIntSafe(dynamic val) {
         if (val == null) return null;
         final str = val.toString().replaceAll(RegExp(r'[^0-9]'), '');
@@ -658,6 +657,13 @@ class SignalRService {
         final valInt = int.tryParse(str);
         if (valInt == 0) return null;
         return valInt;
+      }
+
+      dynamic safeNumOrString(dynamic val) {
+        if (val == null) return null;
+        final str = val.toString().trim();
+        if (str.isEmpty) return null;
+        return int.tryParse(str) ?? str;
       }
 
       final msgMap = <String, dynamic>{
@@ -670,10 +676,10 @@ class SignalRService {
       msgMap["Files"] = null;
 
       if (replyId != null && replyId.toString().trim().isNotEmpty) {
-        msgMap["ReplyId"] = replyId.toString().trim();
+        msgMap["ReplyId"] = safeNumOrString(replyId);
         msgMap["ReplyMsg"] = replyMsg ?? "";
-        msgMap["ReplyFrom"] = replyFrom?.toString() ?? "";
-        msgMap["ReplyType"] = replyType ?? "0";
+        msgMap["ReplyFrom"] = safeNumOrString(replyFrom);
+        msgMap["ReplyType"] = safeNumOrString(replyType ?? "0");
         msgMap["ReplyFiles"] = replyFiles;
       }
 
