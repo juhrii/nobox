@@ -1717,7 +1717,11 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             } else if (filename.isNotEmpty) {
               docName = (targetMap['Filename']?.toString() ?? targetMap['url']?.toString() ?? 'Dokumen').split('/').last;
             }
-            displayMessage = '📄 $docName';
+            if (caption.isNotEmpty && !caption.startsWith('{') && !caption.startsWith('[')) {
+              displayMessage = '📎 $caption';
+            } else {
+              displayMessage = '📄 $docName';
+            }
             parsedAsMedia = true;
           } else if (isAudio) {
             displayMessage = '🎤 Pesan Suara';
@@ -1750,25 +1754,19 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
               } else if (filename.isNotEmpty) {
                 docName = (targetMap['Filename']?.toString() ?? targetMap['url']?.toString() ?? 'Lampiran').split('/').last;
               }
-              
-              if (docName.toLowerCase().contains('document(empty)')) {
+              if (caption.isNotEmpty && !caption.startsWith('{') && !caption.startsWith('[')) {
+                displayMessage = '📎 $caption';
+              } else if (docName.toLowerCase().contains('document(empty)')) {
                  final rawText = targetMap['Msg']?.toString() ?? targetMap['Body']?.toString() ?? targetMap['Message']?.toString() ?? targetMap['Content']?.toString() ?? '';
                  if (rawText.isNotEmpty && !rawText.startsWith('{') && !rawText.startsWith('[')) {
                     displayMessage = rawText;
                  } else {
                     displayMessage = '📎 Lampiran';
                  }
-                 parsedAsMedia = true; // Set to true so it doesn't get overridden by fallback logic
               } else {
-                // DEBUG: Tampilkan isi mentah dari pesan agar kita bisa melihat bentuk data JSON-nya
-                if (trimmedMsg.isNotEmpty) {
-                  final preview = trimmedMsg.length > 35 ? '${trimmedMsg.substring(0, 35)}...' : trimmedMsg;
-                  displayMessage = '📎 RAW: $preview';
-                } else {
-                  displayMessage = '📎 $docName';
-                }
-                parsedAsMedia = true;
+                 displayMessage = '📎 $docName';
               }
+              parsedAsMedia = true;
             } // Close the `else` block from line 1495
             parsedAsMedia = true;
           }
@@ -1902,7 +1900,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
         parsedAsMedia = true;
       }
       // Jika ada ekstensi file apapun (generic file detection)
-      else if (RegExp(r'\.[a-zA-Z0-9]{2,5}$').hasMatch(lower) && !lower.contains(' ') && lower.length < 100) {
+      else if (RegExp(r'\.[a-zA-Z0-9]{2,5}$').hasMatch(lower) && !lower.contains(' ') && !lower.contains('@') && !lower.startsWith('http') && lower.length < 100) {
         displayMessage = '📎 Lampiran';
         parsedAsMedia = true;
       }

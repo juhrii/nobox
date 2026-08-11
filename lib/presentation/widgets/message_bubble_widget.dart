@@ -687,6 +687,10 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     final ext = fileName.contains('.')
         ? '.${fileName.split('.').last.toLowerCase()}'
         : '';
+        
+    final cleanMessage = _cleanContent(widget.message.content);
+    // Jika content bukan nama file (alias pesan email/teks), kita tampilkan sebagai caption
+    final hasCaption = cleanMessage.isNotEmpty && !cleanMessage.contains(fileName) && !cleanMessage.startsWith('📄 ');
 
     return Column(
       crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -768,6 +772,16 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
             ],
           ),
         ),
+        if (hasCaption) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.75,
+            ),
+            child: _buildTextWithLinks(cleanMessage, isMe, isDarkMode),
+          ),
+        ],
         const SizedBox(height: 4),
         _buildTimestampRow(isMe),
       ],

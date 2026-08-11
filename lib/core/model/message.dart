@@ -251,7 +251,10 @@ class Message {
       content = rawMsg;
     } else if (rawMsg is Map) {
       content = rawMsg['msg']?.toString() ?? rawMsg.toString();
-    } else {
+    }
+    
+    // Jika content masih kosong atau hanya berupa string object/array kosong, coba ambil dari field lain
+    if (content.isEmpty || content.trim() == '{}' || content.trim() == '[]' || content == 'null') {
       content = json['Body']?.toString() ?? json['Message']?.toString() ?? json['message']?.toString() ?? json['Content']?.toString() ?? '';
     }
 
@@ -558,7 +561,7 @@ class Message {
         msgType = MessageType.document;
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
         docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-        content = '📄 $docName';
+        if (content.isEmpty) content = '📄 $docName';
       } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
         msgType = MessageType.video;
         videoUrl = filePath.startsWith('http') 
@@ -606,7 +609,7 @@ class Message {
         } else {
           msgType = MessageType.document;
           docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-          content = '📄 $docName';
+          if (content.isEmpty) content = '📄 $docName';
         }
       }
     } else if (json['File'] != null && json['File'].toString().isNotEmpty) {
@@ -641,7 +644,7 @@ class Message {
         } else {
           msgType = MessageType.document;
           docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-          content = '📄 $docName';
+          if (content.isEmpty) content = '📄 $docName';
         }
       } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
         msgType = MessageType.video;
@@ -677,7 +680,7 @@ class Message {
         } else {
           msgType = MessageType.document;
           docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
-          content = '📄 $docName';
+          if (content.isEmpty) content = '📄 $docName';
         }
       }
     } else if (typeVal == '2' || content.contains('🎵 Voice Note')) {
