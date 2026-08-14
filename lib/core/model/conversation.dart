@@ -309,10 +309,17 @@ class Conversation {
     // kosong "" mengembalikan "" (bukan null), yang akan memblokir fallback ?? 
     // dan mencegah penggunaan field selanjutnya seperti LinkImg.
     final candidates = [
-      json['CtImg'],      // Diatur setelah Contact/Update
-      json['LinkImg'],    // Foto profil dari Instagram/Tokopedia/dll
+      json['Photo'],      // Field utama untuk avatar contact (dari DetailRoom/API)
+      json['photo'],
+      json['CtImg'],      // Prioritas 2: Info Contact yang diupdate
+      json['LinkImg'],    // Prioritas 3: Link Image bawaan channel (sering dipakai backend)
+      json['Img'],
       json['AvatarUrl'],
       json['avatar_url'],
+      json['ProfilePic'],
+      json['profile_pic'],
+      json['Picture'],
+      json['picture'],
     ];
 
     String? raw;

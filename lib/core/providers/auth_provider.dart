@@ -44,6 +44,18 @@ class AuthProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isAuthenticating => _isAuthenticating;
 
+  // FITUR: Safe Read Secure Storage
+  // Mencegah aplikasi gagal login jika keystore OS rusak/mengalami error
+  Future<String?> _safeRead(String key, SharedPreferences prefs) async {
+    try {
+      final val = await _secureStorage.read(key: key);
+      if (val != null) return val;
+    } catch (e) {
+      debugPrint('SecureStorage Error ($key): $e');
+    }
+    return prefs.getString(key);
+  }
+
   // FITUR: Cek Status Autentikasi
   // FUNGSI: Memeriksa apakah user sudah login atau belum saat aplikasi pertama dibuka
   // [ACTION: AUTH_CHECK] - Memeriksa token saat aplikasi pertama kali dibuka
@@ -51,26 +63,18 @@ class AuthProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _currentUser = prefs.getString(_userEmailKey);
     
-    // Baca token dari secure storage
-    _token = await _secureStorage.read(key: _secureTokenKey);
+    // Baca token secara aman (fallback ke SharedPreferences jika keystore error)
+    _token = await _safeRead(_secureTokenKey, prefs);
     
-    // Migrasi token otomatis jika ada di SharedPreferences tetapi tidak di secure storage
-    if (_token == null) {
-      final oldToken = prefs.getString(_secureTokenKey); // sebelumnya menggunakan kunci yang sama
-      if (oldToken != null) {
-        // Migrasi ke secure storage
-        await _secureStorage.write(key: _secureTokenKey, value: oldToken);
-        // Hapus dari SharedPreferences demi keamanan
-        await prefs.remove(_secureTokenKey);
-        _token = oldToken;
-        debugPrint('AuthProvider: Migrated token from SharedPreferences to Secure Storage');
-      }
+    // Pastikan _currentUser terisi jika token ada
+    if (_token != null && _currentUser == null) {
+      _currentUser = await _safeRead(AppConfig.lastUsernameKey, prefs);
     }
     
     // Jika tidak ada token tapi ada saved credentials → silent re-login
     if (_token == null) {
-      final savedUsername = await _secureStorage.read(key: AppConfig.lastUsernameKey);
-      final savedPassword = await _secureStorage.read(key: AppConfig.lastPasswordKey);
+      final savedUsername = await _safeRead(AppConfig.lastUsernameKey, prefs);
+      final savedPassword = await _safeRead(AppConfig.lastPasswordKey, prefs);
       if (savedUsername != null && savedPassword != null) {
         debugPrint('AuthProvider: No token but credentials found, attempting silent re-login...');
         final result = await tryAutoReLogin();
@@ -123,12 +127,15 @@ class AuthProvider with ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_userEmailKey, email);
         
-        // Simpan token di secure storage, bukan di SharedPreferences
+        // Simpan token di secure storage & SharedPreferences (sebagai fallback di OS tertentu)
         await _secureStorage.write(key: _secureTokenKey, value: response.data!);
+        await prefs.setString(_secureTokenKey, response.data!);
         
         // Simpan credentials untuk auto re-login saat token expired
         await _secureStorage.write(key: AppConfig.lastUsernameKey, value: email);
         await _secureStorage.write(key: AppConfig.lastPasswordKey, value: password);
+        await prefs.setString(AppConfig.lastUsernameKey, email);
+        await prefs.setString(AppConfig.lastPasswordKey, password);
         debugPrint('AuthProvider: ✅ Credentials saved for auto re-login');
         
         _currentUser = email;
@@ -156,8 +163,9 @@ class AuthProvider with ChangeNotifier {
   /// Return true jika berhasil, false jika gagal.
   Future<bool> tryAutoReLogin() async {
     try {
-      final savedUsername = await _secureStorage.read(key: AppConfig.lastUsernameKey);
-      final savedPassword = await _secureStorage.read(key: AppConfig.lastPasswordKey);
+      final prefs = await SharedPreferences.getInstance();
+      final savedUsername = await _secureStorage.read(key: AppConfig.lastUsernameKey) ?? prefs.getString(AppConfig.lastUsernameKey);
+      final savedPassword = await _secureStorage.read(key: AppConfig.lastPasswordKey) ?? prefs.getString(AppConfig.lastPasswordKey);
 
       if (savedUsername == null || savedPassword == null) {
         debugPrint('AuthProvider: tryAutoReLogin - No saved credentials');
@@ -174,6 +182,7 @@ class AuthProvider with ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_userEmailKey, savedUsername);
         await _secureStorage.write(key: _secureTokenKey, value: response.data!);
+        await prefs.setString(_secureTokenKey, response.data!);
 
         _currentUser = savedUsername;
         _token = response.data;
@@ -209,8 +218,9 @@ class AuthProvider with ChangeNotifier {
     }
     await prefs.remove(_userEmailKey);
     
-    // Hapus token dari secure storage
+    // Hapus token dari secure storage & fallback
     await _secureStorage.delete(key: _secureTokenKey);
+    await prefs.remove(_secureTokenKey);
     
     // JANGAN hapus last_username & last_password saat logout
     // agar user bisa auto re-login saat buka app lagi

@@ -5,6 +5,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../widgets/searchable_dropdown.dart';
 import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/providers/chat_provider.dart';
 import '../../../core/providers/auth_provider.dart';
@@ -1388,7 +1390,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                               radius: 24,
                               backgroundColor: Colors.grey.shade300,
                               backgroundImage: chat.avatarUrl != null && chat.avatarUrl!.isNotEmpty
-                                  ? NetworkImage(chat.avatarUrl!)
+                                  ? CachedNetworkImageProvider(chat.avatarUrl!) as ImageProvider
                                   : null,
                               child: chat.avatarUrl == null || chat.avatarUrl!.isEmpty
                                   // Logika pengecekan: Jika chat adalah Group, gunakan ikon grup berombongan (Icons.group)
@@ -1620,7 +1622,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
       displayMessage = '📷 Foto';
       parsedAsMedia = true;
     } else if (exactVideoLabels.contains(lowerTrimmed)) {
-      displayMessage = '🎥 Video';
+      displayMessage = '🎬 Video';
       parsedAsMedia = true;
     }
 
@@ -1691,7 +1693,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
 
           final isWebLink = _isWebLink(filename) || _isWebLink(originalName) || _isWebLink(trimmedMsg);
 
-          final isAudio = !isWebLink && (isPtt || typeVal == '2' || 
+          final isAudio = !isWebLink && (isPtt || 
+                         (typeVal == '2' && (filename.isNotEmpty || originalName.isNotEmpty || isPtt)) || 
                          (!isDocument && (['.ogg', '.oga', '.mp3', '.wav', '.m4a', '.opus', '.aac', '.weba', '.amr'].any((ext) => filename.contains(ext) || originalName.contains(ext)) ||
                           originalName.contains('voice note') || originalName.contains('voice_') || filename.contains('voice_'))));
           
@@ -1730,7 +1733,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             displayMessage = '📷 Foto${caption.isNotEmpty ? ' $caption' : ''}';
             parsedAsMedia = true;
           } else if (isVideo) {
-            displayMessage = '🎥 Video${caption.isNotEmpty ? ' $caption' : ''}';
+            displayMessage = '🎬 Video${caption.isNotEmpty ? ' $caption' : ''}';
             parsedAsMedia = true;
           } else if (isLocation) {
             displayMessage = '📍 Lokasi';
@@ -1746,7 +1749,7 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
             } else if (overrideType.contains('image') || overrideType.contains('photo')) {
               displayMessage = '📷 Foto${caption.isNotEmpty ? ' $caption' : ''}';
             } else if (overrideType.contains('video')) {
-              displayMessage = '🎥 Video${caption.isNotEmpty ? ' $caption' : ''}';
+              displayMessage = '🎬 Video${caption.isNotEmpty ? ' $caption' : ''}';
             } else {
               String docName = 'Lampiran';
               if (originalName.isNotEmpty) {
@@ -1777,7 +1780,8 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
     }
     
     // 2. Jika tidak berhasil diparse sebagai media JSON secara spesifik, cek lastMessageType dari backend
-    if (!parsedAsMedia && chat.lastMessageType != null && chat.lastMessageType!.isNotEmpty) {
+    final isLikelyPlainText = !trimmedMsg.startsWith('{') && !trimmedMsg.startsWith('[') && trimmedMsg.isNotEmpty && !exactAudioLabels.contains(lowerTrimmed) && !exactPhotoLabels.contains(lowerTrimmed) && !exactVideoLabels.contains(lowerTrimmed) && !lowerTrimmed.contains('sticker');
+    if (!parsedAsMedia && !isLikelyPlainText && chat.lastMessageType != null && chat.lastMessageType!.isNotEmpty) {
       final overrideType = chat.lastMessageType!.toLowerCase();
       
       if (overrideType.contains('voice note') || overrideType.contains('audio') || overrideType == '2') {
@@ -1786,11 +1790,11 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
         final cleaned = displayMessage.replaceAll('📷', '').replaceAll('Photo', '').replaceAll('Foto', '').trim();
         displayMessage = '📷 Foto${cleaned.isNotEmpty ? ' $cleaned' : ''}';
       } else if (overrideType.contains('video') || overrideType == '4') {
-        final cleaned = displayMessage.replaceAll('🎥', '').replaceAll('📹', '').replaceAll('Video', '').trim();
+        final cleaned = displayMessage.replaceAll('🎥', '').replaceAll('📹', '').replaceAll('🎬', '').replaceAll('Video', '').trim();
         if (displayMessage.toLowerCase().contains('.webm') || displayMessage.toLowerCase().contains('.tgs') || displayMessage.toLowerCase().contains('sticker')) {
-          displayMessage = '🌟 Sticker';
+          displayMessage = '🎬 Sticker';
         } else {
-          displayMessage = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+          displayMessage = '🎬 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
         }
       } else if (overrideType == '16' || overrideType.contains('sticker')) {
         displayMessage = '🌟 Sticker';
@@ -1879,13 +1883,17 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
       }
       // Deteksi stiker (WhatsApp webp, atau animasi webm/tgs)
       else if (['.webp', '.webm', '.tgs'].any((ext) => lower.endsWith(ext)) || lower.startsWith('stk-')) {
-        displayMessage = '🌟 Sticker';
+        if (lower.endsWith('.webm') || lower.endsWith('.tgs')) {
+          displayMessage = '🎬 Sticker';
+        } else {
+          displayMessage = '🌟 Sticker';
+        }
         parsedAsMedia = true;
       }
       // Deteksi ekstensi video
       else if (['.mp4', '.avi', '.mov', '.3gp', '.mkv'].any((ext) => lower.endsWith(ext)) || 
                lower.startsWith('vid-') || lower.startsWith('vid_')) {
-        displayMessage = '🎥 Video';
+        displayMessage = '🎬 Video';
         parsedAsMedia = true;
       }
       // Deteksi ekstensi audio/voice note

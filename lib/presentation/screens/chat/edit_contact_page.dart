@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:country_state_city/country_state_city.dart' as csc;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/providers/chat_provider.dart';
 import '../../../core/model/message.dart';
 
@@ -28,6 +29,7 @@ class _EditContactPageState extends State<EditContactPage> {
   late TextEditingController _postalCodeController;
   
   File? _profileImage;
+  String? _currentAvatarUrl;
   final ImagePicker _imagePicker = ImagePicker();
 
   String _selectedCategory = 'WhatsAppBusiness';
@@ -64,6 +66,7 @@ class _EditContactPageState extends State<EditContactPage> {
   void initState() {
     super.initState();
     _filteredCategories = _categories;
+    _currentAvatarUrl = widget.chat.avatarUrl;
     _nameController = TextEditingController(text: widget.chat.sender);
     _addressController = TextEditingController();
     _postalCodeController = TextEditingController();
@@ -104,6 +107,15 @@ class _EditContactPageState extends State<EditContactPage> {
 
           final city = contact['City']?.toString() ?? contact['Cty']?.toString() ?? '';
           if (city.isNotEmpty) _selectedCityName = city;
+
+          final photo = contact['Photo']?.toString() ?? room['CtImg']?.toString() ?? room['LinkImg']?.toString() ?? '';
+          if (photo.isNotEmpty) {
+            if (photo.startsWith('http')) {
+              _currentAvatarUrl = photo;
+            } else {
+              _currentAvatarUrl = 'https://id.nobox.ai/upload/$photo';
+            }
+          }
 
           // Fallback: gunakan data lokasi lokal jika server tidak punya data
           final localLocation = chatProvider.getSavedContactLocation(widget.chat.id);
@@ -311,8 +323,12 @@ class _EditContactPageState extends State<EditContactPage> {
                           CircleAvatar(
                             radius: 48,
                             backgroundColor: Colors.blue.shade400,
-                            backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
-                            child: _profileImage == null
+                            backgroundImage: _profileImage != null 
+                                ? FileImage(_profileImage!) as ImageProvider
+                                : (_currentAvatarUrl != null && _currentAvatarUrl!.isNotEmpty 
+                                    ? CachedNetworkImageProvider(_currentAvatarUrl!) as ImageProvider 
+                                    : null),
+                            child: _profileImage == null && (_currentAvatarUrl == null || _currentAvatarUrl!.isEmpty)
                                 ? Text(
                                     initial,
                                     style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),

@@ -840,8 +840,15 @@ Future<void> fetchChats() async {
       try {
         final response = await _chatService.getMessageHistory(roomId, '');
         if (!response.isError && response.data != null && response.data!.isNotEmpty) {
+          
+          // Ambil daftar pesan yang dihapus secara lokal dari SharedPreferences
+          final chat = _chats.firstWhere((c) => c.id == roomId);
+          final prefs = await SharedPreferences.getInstance();
+          final deletedIds = prefs.getStringList('deleted_ids_$roomId') ?? <String>[];
+
           // Find the most recent message that is NOT a deleted message placeholder or system notification
           final validMessages = response.data!.where((m) {
+            if (m.id.isNotEmpty && deletedIds.contains(m.id)) return false;
             if (m.content == 'Site.Inbox.DeletedMessage' || m.isSystemMessage) return false;
             final lower = m.content.toLowerCase();
             if (lower.contains('site.inbox.') || lower.contains('percakapan di-assign') || lower.contains('percakapan diselesaikan') || lower.contains('pemberitahuan sistem')) return false;
@@ -1012,8 +1019,19 @@ Future<void> fetchChats() async {
               final serverTime = DateTime.tryParse(serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z');
               
               final isIgnored = _isTimeIgnored(chat.id, serverTimeStr);
-              final serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored && chat.lastMessage != 'Site.Inbox.DeletedMessage');
+              bool serverIsNewer = (localTime != null && serverTime != null && serverTime.isAfter(localTime) && !isIgnored && chat.lastMessage != 'Site.Inbox.DeletedMessage');
               
+              if (serverIsNewer && localTime != null) {
+                final age = DateTime.now().toUtc().difference(localTime).inSeconds;
+                // _getTopSortTime() memberikan waktu +1 detik di masa depan.
+                // Jika override ini baru dibuat kurang dari 10 detik yang lalu, 
+                // tahan dan hiraukan balasan server yang mungkin lambat tersinkronisasi
+                // agar chat tidak berubah kembali (revert) ke pesan lama (misal "Sticker").
+                if (age > -10 && age < 10) {
+                   serverIsNewer = false;
+                }
+              }
+
               if (serverIsNewer) {
                 // Ada pesan baru sungguhan, hapus override dan terima data server
                 _localOverrides.remove(chat.id);

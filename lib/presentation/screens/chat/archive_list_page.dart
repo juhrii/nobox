@@ -306,7 +306,7 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
       } else if (lower.contains('.jpg') || lower.contains('.png') || lower.contains('.jpeg') || lower.contains('photo') || lower.contains('foto')) {
         displayMessage = '📷 Foto';
       } else if (lower.contains('.mp4') || lower.contains('video')) {
-        displayMessage = '🎥 Video';
+        displayMessage = '🎬 Video';
       } else {
         displayMessage = '📎 Lampiran';
       }
@@ -314,19 +314,23 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
 
     // Deteksi nama file mentah (non-JSON) berdasarkan ekstensi/pola nama
     bool isDocumentAlready = displayMessage.startsWith('📄');
-    if (!displayMessage.startsWith('📷') && !displayMessage.startsWith('🎥') && 
+    if (!displayMessage.startsWith('📷') && !displayMessage.startsWith('🎬') && 
         !displayMessage.startsWith('🎤') && !isDocumentAlready &&
         !displayMessage.startsWith('📎') && !displayMessage.startsWith('📍') &&
         !displayMessage.startsWith('👤') && !displayMessage.startsWith('🌟')) {
       final lower = displayMessage.toLowerCase().trim();
       if (['.webm', '.tgs', '.webp'].any((ext) => lower.endsWith(ext)) || lower.contains('sticker') || lower.contains('stiker')) {
-        displayMessage = '🌟 Sticker';
+        if (lower.endsWith('.webm') || lower.endsWith('.tgs')) {
+          displayMessage = '🎬 Sticker';
+        } else {
+          displayMessage = '🌟 Sticker';
+        }
       } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp'].any((ext) => lower.endsWith(ext)) || 
           lower.startsWith('img-') || lower.startsWith('img_') || lower.startsWith('photo')) {
         displayMessage = '📷 Foto';
       } else if (['.mp4', '.avi', '.mov', '.3gp', '.mkv'].any((ext) => lower.endsWith(ext)) || 
                  lower.startsWith('vid-') || lower.startsWith('vid_')) {
-        displayMessage = '🎥 Video';
+        displayMessage = '🎬 Video';
       } else if (['.ogg', '.opus', '.mp3', '.wav', '.m4a', '.aac', '.amr', '.weba'].any((ext) => lower.endsWith(ext)) || 
                  lower.startsWith('voice_') || lower.startsWith('ptt-') || lower.startsWith('aud-')) {
         displayMessage = '🎤 Pesan Suara';

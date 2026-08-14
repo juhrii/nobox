@@ -531,10 +531,8 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
 
   bool _isStickerMessage(Message msg) {
     if (msg.messageType == MessageType.sticker) return true;
-    final cLower = msg.content.toLowerCase();
-    if (cLower.contains('sticker') || cLower.contains('stiker')) return true;
     final url = (msg.imageUrl ?? msg.videoUrl ?? msg.documentUrl ?? msg.imagePath ?? msg.documentName ?? '').toLowerCase();
-    if (url.isNotEmpty && (url.contains('.webm') || url.contains('.tgs') || url.contains('.webp') || url.contains('.ezgif') || url.contains('sticker') || url.contains('stiker'))) {
+    if (url.isNotEmpty && (url.contains('.webm') || url.contains('.tgs') || url.contains('.webp') || url.contains('.ezgif'))) {
       return true;
     }
     return false;
@@ -552,8 +550,8 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     }
 
     // Video detection: check content text, messageType, AND URL extension (tanpa .webm stiker)
-    if (widget.message.content.contains('🎥 Video') ||
-        widget.message.content.contains('📹 Video') ||
+    if (widget.message.content.contains('🎬 Video') ||
+        widget.message.content.contains('🎬 Video') ||
         widget.message.content.contains('🎬 Video') ||
         widget.message.messageType == MessageType.video ||
         _hasVideoUrl(widget.message)) {
@@ -1064,6 +1062,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
         .replaceAll('🎥 Video', '')
         .replaceAll('🎬 Video', '')
         .replaceAll('🌟 Sticker', '')
+        .replaceAll('🎬 Sticker', '')
         .trim();
     final hasCaption = caption.isNotEmpty;
     final maxWidth = MediaQuery.of(context).size.width * 0.7;
@@ -1173,7 +1172,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(isSticker ? Icons.animation : Icons.videocam, color: Colors.white, size: 14),
+                          Icon(isSticker ? Icons.animation : Icons.movie, color: Colors.white, size: 14),
                           const SizedBox(width: 4),
                           Text(
                             isSticker ? 'Sticker' : 'Video',

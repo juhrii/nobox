@@ -417,7 +417,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
               color: Colors.black,
               child: Row(
                 children: [
-                  Icon(Icons.videocam, color: Colors.grey[400], size: 18),
+                  Icon(Icons.movie, color: Colors.grey[400], size: 18),
                   const SizedBox(width: 8),
                   Text(
                     'Video Preview',

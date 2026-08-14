@@ -1035,7 +1035,7 @@ class ChatService {
     
     try {
       final String cleanRoomStr = roomId.contains('_') ? roomId.split('_').last : roomId;
-      final int? numericRoomId = int.tryParse(cleanRoomStr.replaceAll(RegExp(r'[^0-9]'), ''));
+      final int? numericRoomId = int.tryParse(cleanRoomStr.replaceAll(RegExp(r'[^0-9\-]'), ''));
 
       final payload = {
         'Take': isTelegram ? 9999 : take,
@@ -1092,8 +1092,10 @@ class ChatService {
         if (contactId.isNotEmpty && contactId != roomId) fallbackIds.add(contactId);
         if (link.isNotEmpty && link != roomId) fallbackIds.add(link);
         
-        final numericRoomId = roomId.replaceAll(RegExp(r'[^0-9]'), '');
-        if (numericRoomId.isNotEmpty && numericRoomId != roomId) fallbackIds.add(numericRoomId);
+        if (roomId.isNotEmpty && roomId != '0' && roomId != 'null') {
+          final numericRoomId = roomId.replaceAll(RegExp(r'[^0-9\-]'), '');
+          if (numericRoomId.isNotEmpty && numericRoomId != roomId) fallbackIds.add(numericRoomId);
+        }
 
         if (roomId.contains('_')) {
            final afterUnderscore = roomId.split('_').last;

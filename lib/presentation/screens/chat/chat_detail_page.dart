@@ -962,13 +962,22 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 final cContent = cached.message.content.trim().toLowerCase();
                 final cTime = cached.message.time;
 
-                // Cari 1-to-1 match dengan pesan dari server (cek teks & jam yang sama)
+                // Cari 1-to-1 match dengan pesan dari server (cek teks & jam yang sama, dengan toleransi 2 menit)
                 int matchIdx = _messages.indexWhere((m) {
                   int idx = _messages.indexOf(m);
-                  return !serverMatchedIndices.contains(idx) &&
-                      m.isMe &&
-                      m.content.trim().toLowerCase() == cContent &&
-                      m.time == cTime;
+                  if (serverMatchedIndices.contains(idx)) return false;
+                  if (!m.isMe || m.content.trim().toLowerCase() != cContent) return false;
+                  if (m.time == cTime || (cached.message.id.isNotEmpty && m.id == cached.message.id)) return true;
+                  
+                  // Toleransi perbedaan waktu (delay server)
+                  if (m.rawTime.isNotEmpty && cached.message.rawTime.isNotEmpty) {
+                    try {
+                      final mt = DateTime.parse(m.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z'));
+                      final ct = DateTime.parse(cached.message.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z'));
+                      if (mt.difference(ct).inMinutes.abs() <= 2) return true;
+                    } catch (_) {}
+                  }
+                  return false;
                 });
 
                 if (matchIdx != -1) {
@@ -1118,11 +1127,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 newContent = '🎵 Voice Note';
               } else if (lastMsg.messageType == MessageType.video) {
                 final cleaned = newContent
+                    .replaceAll('🎬', '')
                     .replaceAll('🎥', '')
                     .replaceAll('📹', '')
                     .replaceAll('Video', '')
                     .trim();
-                newContent = '🎥 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+                newContent = '🎬 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
               } else if (lastMsg.messageType == MessageType.document) {
                 if (!newContent.contains('📄') && !newContent.contains('📁')) {
                   newContent = '📄 $newContent';
@@ -1488,9 +1498,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       final linkVal = messageData['Link']?.toString() ?? '';
       final ctRealIdVal = messageData['CtRealId']?.toString() ?? '';
 
-      final numericChatId = chat.id.replaceAll(RegExp(r'[^0-9]'), '');
+      final numericChatId = chat.id.replaceAll(RegExp(r'[^0-9\-]'), '');
       final numericIncomingId = incomingRoomId.replaceAll(
-        RegExp(r'[^0-9]'),
+        RegExp(r'[^0-9\-]'),
         '',
       );
 
@@ -1560,7 +1570,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       if (isEchoBack) {
         final echoAck = messageData['Ack'] ?? messageData['ack'];
         final echoId = messageData['Id']?.toString() ?? '';
-        final echoMsg = messageData['Msg']?.toString() ?? '';
+        
+        final rawMsg = messageData['Msg'];
+        String echoMsg = '';
+        if (rawMsg is String) {
+          echoMsg = rawMsg;
+        } else if (rawMsg is Map) {
+          echoMsg = rawMsg['msg']?.toString() ?? rawMsg['text']?.toString() ?? rawMsg.toString();
+        } else {
+          echoMsg = rawMsg?.toString() ?? '';
+        }
+        if (echoMsg.isEmpty || echoMsg.trim() == '{}' || echoMsg.trim() == '[]') {
+          echoMsg = messageData['Body']?.toString() ?? messageData['Message']?.toString() ?? messageData['Content']?.toString() ?? '';
+        }
+
         int newAck = 1;
         if (echoAck is int) {
           newAck = echoAck;
@@ -1581,11 +1604,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             }
             // 2. Cadangan (Fallback): cocokkan berdasarkan isi konten untuk pesan yang belum punya ID (baru saja dikirim)
             if (matchIdx == -1 && echoMsg.isNotEmpty) {
+              final cleanEcho = echoMsg.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
               for (int i = _messages.length - 1; i >= 0; i--) {
                 if (_messages[i].isMe && _messages[i].id.isEmpty) {
                   // Cek apakah konten sama (abaikan spasi/trim)
-                  if (_messages[i].content.trim() == echoMsg.trim() ||
-                      _messages[i].content == echoMsg) {
+                  final cleanMsg = _messages[i].content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                  if (cleanMsg == cleanEcho || _messages[i].content.trim() == echoMsg.trim()) {
                     matchIdx = i;
                     break;
                   }
@@ -1619,6 +1643,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         // TAPI jika TIDAK ditemukan (misal: dikirim dari Web Dashboard/Platform lain), jangan di-return!
         // Biarkan proses lanjut ke bawah agar pesan ini ditambahkan ke antarmuka aplikasi.
         if (messageFoundLocally) {
+          if (mounted && chat.id.isNotEmpty && _localSentCache.containsKey(chat.id)) {
+            final cacheList = _localSentCache[chat.id]!;
+            final idxToRemove = cacheList.indexWhere((c) => c.message.content.trim() == echoMsg.trim());
+            if (idxToRemove != -1) cacheList.removeAt(idxToRemove);
+          }
           return; // Don't add as a new message
         }
       }
@@ -1627,13 +1656,26 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       final incomingId = messageData['Id']?.toString() ?? '';
 
       // Guard duplikasi: cek apakah pesan ini sudah ada di list (berdasarkan ID)
-      final alreadyExists = _messages.any((m) {
+      int existingIdx = _messages.indexWhere((m) {
         if (incomingId.isNotEmpty && m.id == incomingId) return true;
         return false;
       });
 
-      if (alreadyExists) {
-        debugPrint('SignalR: ⚠️ Pesan duplikat diabaikan. ID=$incomingId');
+      if (existingIdx != -1) {
+        debugPrint('SignalR: ⚠️ Pesan duplikat terdeteksi. ID=$incomingId. Updating status if needed.');
+        if (mounted) {
+          setState(() {
+            final existingMsg = _messages[existingIdx];
+            // Jika ini pesan yang masuk kembali (duplicate), berarti sudah terkirim & diterima server
+            final updatedAck = existingMsg.ack < 3 ? 3 : existingMsg.ack;
+            if (existingMsg.ack != updatedAck) {
+               _messages[existingIdx] = existingMsg.copyWith(
+                 ack: updatedAck,
+                 status: updatedAck >= 3 ? MessageStatus.delivered : MessageStatus.sent,
+               );
+            }
+          });
+        }
         return;
       }
 
@@ -1658,19 +1700,38 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           setState(() {
             // GUARD AKHIR ANTI-DUPLIKAT (Khusus pesan kita/keluar yang lolos dari pengecekan di atas)
             if (newMessage.isMe) {
-              final isDup = _messages.any((m) {
+              int matchIdx = _messages.indexWhere((m) {
                 if (newMessage.id.isNotEmpty && m.id == newMessage.id)
                   return true;
-                if (m.isMe &&
-                    m.id.isEmpty &&
-                    m.content.trim() == newMessage.content.trim())
-                  return true;
+                if (m.isMe && m.id.isEmpty) {
+                  final cleanM = m.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                  final cleanNew = newMessage.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                  if (cleanM.isNotEmpty && cleanM == cleanNew) {
+                    return true;
+                  }
+                }
                 return false;
               });
-              if (isDup) {
+              if (matchIdx != -1) {
                 debugPrint(
                   'SignalR: 🛑 Prevented duplicate isMe message at final add guard.',
                 );
+                
+                final existingMsg = _messages[matchIdx];
+                final updatedAck = (newMessage.ack >= 3) ? newMessage.ack : (existingMsg.ack < 3 ? 3 : existingMsg.ack);
+                final updatedId = newMessage.id.isNotEmpty ? newMessage.id : existingMsg.id;
+                
+                _messages[matchIdx] = existingMsg.copyWith(
+                  id: updatedId.isNotEmpty ? updatedId : null,
+                  ack: updatedAck,
+                  status: updatedAck >= 3 ? MessageStatus.delivered : MessageStatus.sent,
+                );
+
+                if (chat.id.isNotEmpty && _localSentCache.containsKey(chat.id)) {
+                  final cacheList = _localSentCache[chat.id]!;
+                  final idxToRemove = cacheList.indexWhere((c) => c.message.content.trim() == newMessage.content.trim());
+                  if (idxToRemove != -1) cacheList.removeAt(idxToRemove);
+                }
                 return;
               }
             }
@@ -4058,7 +4119,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                               MessageType.document) {
                             newLastContent = '📄 Dokumen';
                           } else if (lastMsg.messageType == MessageType.video) {
-                            newLastContent = '🎥 Video';
+                            newLastContent = '🎬 Video';
                           }
                         }
                         Provider.of<ChatProvider>(
@@ -5693,7 +5754,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 onTap: _pickAndSendImage,
               ),
               _buildAttachmentOption(
-                icon: Icons.videocam,
+                icon: Icons.movie,
                 label: 'Video',
                 onTap: _pickAndSendVideo,
               ),

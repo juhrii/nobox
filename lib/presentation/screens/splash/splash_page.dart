@@ -5,7 +5,6 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/providers/chat_settings_provider.dart';
 import '../../../core/services/signalr_service.dart';
-import '../../../core/services/chat_service.dart';
 import '../../../core/utils/app_routes.dart';
 
 // =====================================================================
@@ -43,7 +42,7 @@ class _SplashPageState extends State<SplashPage> {
         auth.checkAuth(),
         theme.loadTheme(),
         chatSettings.loadSettings(),
-      ]).timeout(const Duration(seconds: 5), onTimeout: () {
+      ]).timeout(const Duration(seconds: 12), onTimeout: () {
         debugPrint('SplashPage: Initialization timed out');
         return [];
       });

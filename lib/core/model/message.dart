@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 // =====================================================================
@@ -536,6 +535,18 @@ class Message {
       return false;
     }
 
+    bool isAnimated(dynamic fileData, String filePath, String originalName, String content) {
+      final fLower = filePath.toLowerCase();
+      final oLower = originalName.toLowerCase();
+      if (fLower.contains('.webm') || oLower.contains('.webm') || fLower.contains('.tgs') || oLower.contains('.tgs') || content.toLowerCase().contains('bergerak') || content.toLowerCase().contains('animated')) return true;
+      try {
+        final rawFileStr = fileData != null ? jsonEncode(fileData).toLowerCase() : '';
+        final rawJsonStr = jsonEncode(json).toLowerCase();
+        if (rawFileStr.contains('"isanimated":true') || rawFileStr.contains('"isanimatedsticker":true') || rawFileStr.contains('video/webm') || rawFileStr.contains('animated') || rawJsonStr.contains('"isanimated":true') || rawJsonStr.contains('"isanimatedsticker":true') || rawJsonStr.contains('video/webm') || rawJsonStr.contains('animated sticker') || rawJsonStr.contains('stiker bergerak')) return true;
+      } catch (_) {}
+      return false;
+    }
+
     String? docName;
     String? docUrl;
 
@@ -546,10 +557,8 @@ class Message {
       // Deteksi stiker MUTLAK PERTAMA — baik stiker diam maupun bergerak (.webm/.tgs/.webp) dari semua channel
       if (isAbsoluteSticker(firstFile, typeVal, filePath, originalName, content)) {
         msgType = MessageType.sticker;
-        final url = filePath.startsWith('http') ? filePath : (filePath.isNotEmpty ? 'https://id.nobox.ai/upload/$filePath' : '');
-        imgUrl = url;
-        videoUrl = url;
-        content = '🌟 Sticker';
+        imgUrl = filePath.startsWith('http') || filePath.isEmpty ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        content = isAnimated(firstFile, filePath, originalName, content) ? '🎬 Sticker' : '🌟 Sticker';
       } else if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(firstFile) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath)) {
         // Voice note: cek ekstensi audio ATAU flag Ptt:true ATAU nama file mengandung voice note — SEBELUM cek document (type 5)
         // Server NoBox kadang mengembalikan Type=5 untuk voice notes
@@ -567,7 +576,7 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        content = '📹 Video';
+        content = '🎬 Video';
       } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -588,7 +597,7 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        content = '📹 Video';
+        content = '🎬 Video';
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -618,10 +627,8 @@ class Message {
       // Deteksi stiker MUTLAK PERTAMA — baik stiker diam maupun bergerak (.webm/.tgs/.webp) dari semua channel
       if (isAbsoluteSticker(json['File'], typeVal, filePath, originalName, content)) {
         msgType = MessageType.sticker;
-        final url = filePath.startsWith('http') ? filePath : (filePath.isNotEmpty ? 'https://id.nobox.ai/upload/$filePath' : '');
-        imgUrl = url;
-        videoUrl = url;
-        content = '🌟 Sticker';
+        imgUrl = filePath.startsWith('http') || filePath.isEmpty ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        content = isAnimated(json['File'], filePath, originalName, content) ? '🎬 Sticker' : '🌟 Sticker';
       } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath)) {
         // Voice note: cek typeVal=='2', ekstensi audio, nama file, ATAU flag Ptt:true — sebelum cek document (type 5)
         if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath) || (content.trim().isEmpty && !_isWebLink(filePath) && filePath.isNotEmpty)) {
@@ -651,7 +658,7 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        content = '📹 Video';
+        content = '🎬 Video';
       } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
@@ -660,7 +667,7 @@ class Message {
         videoUrl = filePath.startsWith('http') 
             ? filePath 
             : 'https://id.nobox.ai/upload/$filePath';
-        content = '📹 Video';
+        content = '🎬 Video';
       } else if (typeVal == '3') {
         msgType = MessageType.image;
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';

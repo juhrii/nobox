@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../app_config.dart';
 
 // =====================================================================
@@ -47,12 +48,13 @@ class ApiClient {
       onRequest: (options, handler) async {
         debugPrint('ApiClient: ${options.method} ${options.path}');
         
-        // Pengamanan (Failsafe): muat token dari secure storage jika tidak ada di memori
+        // Pengamanan (Failsafe): muat token dari secure storage atau fallback jika tidak ada di memori
         if (_token == null) {
           const secureStorage = FlutterSecureStorage();
-          _token = await secureStorage.read(key: AppConfig.tokenKey);
+          final prefs = await SharedPreferences.getInstance();
+          _token = await secureStorage.read(key: AppConfig.tokenKey) ?? prefs.getString(AppConfig.tokenKey);
           if (_token != null) {
-            debugPrint('ApiClient: Token restored from secure storage');
+            debugPrint('ApiClient: Token restored from persistent storage');
           }
         }
 
@@ -129,8 +131,9 @@ class ApiClient {
 
     try {
       const secureStorage = FlutterSecureStorage();
-      final savedUsername = await secureStorage.read(key: AppConfig.lastUsernameKey);
-      final savedPassword = await secureStorage.read(key: AppConfig.lastPasswordKey);
+      final prefs = await SharedPreferences.getInstance();
+      final savedUsername = await secureStorage.read(key: AppConfig.lastUsernameKey) ?? prefs.getString(AppConfig.lastUsernameKey);
+      final savedPassword = await secureStorage.read(key: AppConfig.lastPasswordKey) ?? prefs.getString(AppConfig.lastPasswordKey);
 
       if (savedUsername == null || savedPassword == null) {
         debugPrint('ApiClient: No saved credentials found, cannot auto re-login');
