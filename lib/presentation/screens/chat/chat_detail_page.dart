@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -3760,21 +3761,34 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             // Avatar
             Hero(
               tag: 'avatar_${chat.id}',
-              child: CircleAvatar(
-                radius: 20,
-                backgroundColor: Colors.blue.shade300,
-                backgroundImage:
-                    chat.avatarUrl != null && chat.avatarUrl!.isNotEmpty
-                    ? NetworkImage(chat.avatarUrl!)
-                    : null,
-                child: chat.avatarUrl == null || chat.avatarUrl!.isEmpty
-                    ? Icon(
+              child: (chat.avatarUrl != null && chat.avatarUrl!.isNotEmpty)
+                  ? ClipOval(
+                      child: CachedNetworkImage(
+                        imageUrl: chat.avatarUrl!,
+                        width: 40,
+                        height: 40,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Colors.blue.shade300,
+                          child: Icon(chat.isGroup ? Icons.groups : Icons.person, color: Colors.white, size: 22),
+                        ),
+                        errorWidget: (context, url, error) => CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Colors.blue.shade300,
+                          child: Icon(chat.isGroup ? Icons.groups : Icons.person, color: Colors.white, size: 22),
+                        ),
+                      ),
+                    )
+                  : CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Colors.blue.shade300,
+                      child: Icon(
                         chat.isGroup ? Icons.groups : Icons.person,
                         color: Colors.white,
                         size: 22,
-                      )
-                    : null,
-              ),
+                      ),
+                    ),
             ),
             const SizedBox(width: 10),
             // Name & subtitle
