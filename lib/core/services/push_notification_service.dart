@@ -248,13 +248,16 @@ class PushNotificationService {
         debugPrint('⚠️ Detail error: $e');
       }
 
-      await showChatNotification(
+      // 🔕 FIX DOUBLE NOTIFICATION: Dihapus karena jika aplikasi dalam state Foreground,
+      // SignalR sudah pasti menangkap event ReceiveMessage dan men-trigger notifikasinya.
+      // Jika dibiarkan, akan terjadi notifikasi ganda antara FCM dan SignalR!
+      /* await showChatNotification(
         roomId: roomId,
         roomName: roomName,
         senderName: actualSenderName,
         message: messageText,
         profileImageUrl: profileImage,
-      );
+      ); */
     }
   }
 

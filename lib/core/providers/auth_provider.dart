@@ -47,13 +47,19 @@ class AuthProvider with ChangeNotifier {
   // FITUR: Safe Read Secure Storage
   // Mencegah aplikasi gagal login jika keystore OS rusak/mengalami error
   Future<String?> _safeRead(String key, SharedPreferences prefs) async {
+    String? val;
     try {
-      final val = await _secureStorage.read(key: key);
-      if (val != null) return val;
+      val = await _secureStorage.read(key: key);
+      debugPrint('AuthProvider: SecureStorage read [$key] = ${val != null ? "FOUND" : "NULL"}');
     } catch (e) {
-      debugPrint('SecureStorage Error ($key): $e');
+      debugPrint('AuthProvider: SecureStorage Error ($key): $e');
     }
-    return prefs.getString(key);
+    
+    if (val == null || val.isEmpty) {
+      val = prefs.getString(key);
+      debugPrint('AuthProvider: SharedPreferences fallback read [$key] = ${val != null ? "FOUND" : "NULL"}');
+    }
+    return val;
   }
 
   // FITUR: Cek Status Autentikasi
@@ -164,8 +170,10 @@ class AuthProvider with ChangeNotifier {
   Future<bool> tryAutoReLogin() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedUsername = await _secureStorage.read(key: AppConfig.lastUsernameKey) ?? prefs.getString(AppConfig.lastUsernameKey);
-      final savedPassword = await _secureStorage.read(key: AppConfig.lastPasswordKey) ?? prefs.getString(AppConfig.lastPasswordKey);
+      
+      // GUNAKAN _safeRead agar tidak crash jika keystore OS rusak!
+      final savedUsername = await _safeRead(AppConfig.lastUsernameKey, prefs);
+      final savedPassword = await _safeRead(AppConfig.lastPasswordKey, prefs);
 
       if (savedUsername == null || savedPassword == null) {
         debugPrint('AuthProvider: tryAutoReLogin - No saved credentials');

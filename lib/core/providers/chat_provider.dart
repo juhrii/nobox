@@ -6,6 +6,7 @@ import '../services/chat_service.dart';
 import '../services/signalr_service.dart';
 import '../model/conversation.dart';
 import '../model/api_response.dart';
+import '../services/push_notification_service.dart';
 import 'package:flutter/foundation.dart';
 
 // =====================================================================
@@ -51,6 +52,14 @@ class ChatProvider with ChangeNotifier {
   Set<String> _readIds = {};
   Set<String> _starredMessageIds = {};
   final List<Map<String, dynamic>> _starredMessages = [];
+
+  bool _isDisposed = false;
+
+  // FIX: Unread Override Shield
+  // Backend kadang mereturn UnreadCount = 0 pada API/SignalR jika aplikasi sedang berjalan di foreground,
+  // padahal User belum membuka room tersebut. Map ini memaksa nilai unread count lokal tetap eksis 
+  // sampai User benar-benar meng-klik/membuka (markAsRead) room tersebut.
+  final Map<String, int> _localUnreadOverrides = {};
 
   static const String _pinnedKey = 'pinned_chats';
   static const String _archivedKey = 'archived_chats';
@@ -410,6 +419,7 @@ Future<void> fetchChats() async {
           if (isNewMessage) {
             // Pesan baru tiba! Hapus dari daftar terbaca agar badge muncul
             _readIds.remove(chat.id);
+            _localUnreadOverrides.remove(chat.id);
             _saveReadState();
           }
 
@@ -569,7 +579,7 @@ Future<void> fetchChats() async {
           return chat.copyWith(
             isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
             isArchived: _archivedIds.contains(chat.id),
-            unreadCount: _readIds.contains(chat.id) ? 0 : chat.unreadCount,
+            unreadCount: _readIds.contains(chat.id) ? 0 : (_localUnreadOverrides[chat.id] ?? chat.unreadCount),
           );
         }).toList();
 
@@ -767,6 +777,7 @@ Future<void> fetchChats() async {
       // Jika ada pesan baru yang masuk (unreadCount > 0 dan bukan dari kita), hapus blokir readIds!
       if (uc > 0 && sdrMsg.toLowerCase() != 'you' && _readIds.contains(roomId)) {
         _readIds.remove(roomId);
+        _localUnreadOverrides.remove(roomId);
         _saveReadState();
       }
 
@@ -800,7 +811,7 @@ Future<void> fetchChats() async {
       _chats[index] = existing.copyWith(
         lastMessage: lastMsg,
         lastMessageType: updatedType,
-        unreadCount: uc,
+        unreadCount: _localUnreadOverrides[roomId] ?? uc,
         time: timeMsg,
         needReply: isNeedReply,
         isLastMessageFromMe: sdrMsg.toLowerCase() == 'you',
@@ -822,6 +833,7 @@ Future<void> fetchChats() async {
     if (roomId.isEmpty) return;
     if (_readIds.contains(roomId)) {
       _readIds.remove(roomId);
+      _localUnreadOverrides.remove(roomId);
       _saveReadState();
     }
     final index = _chats.indexWhere((c) => c.id == roomId);
@@ -829,6 +841,16 @@ Future<void> fetchChats() async {
       debugPrint('ChatProvider: 🚨 Room $roomId missing on TerimaPesan! Triggering fallback refresh.');
       refreshFirstPage();
     } else {
+      // FIX UNREAD COUNT: Selalu increment unread count LOKAL jika kita BUKAN berada di dalam room tersebut!
+      // Karena server kadang telat / mengembalikan Uc:0 padahal ini chat masuk baru.
+      if (PushNotificationService.currentRoomId != roomId) {
+        final currentUc = _chats[index].unreadCount;
+        final forcedUc = (_localUnreadOverrides[roomId] ?? currentUc) + 1;
+        _localUnreadOverrides[roomId] = forcedUc;
+        _chats[index] = _chats[index].copyWith(unreadCount: forcedUc);
+        debugPrint('ChatProvider: 📈 Incremented Unread Count locally for room $roomId. New Uc: ${_chats[index].unreadCount}');
+      }
+      
       // Jika ada pesan baru masuk via TerimaPesan, picu pembaruan UI agar badge unread/posisi teratas ter-render
       notifyListeners();
     }
@@ -987,7 +1009,7 @@ Future<void> fetchChats() async {
           chat = chat.copyWith(
             isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
             isArchived: _archivedIds.contains(chat.id),
-            unreadCount: _readIds.contains(chat.id) ? 0 : chat.unreadCount,
+            unreadCount: _readIds.contains(chat.id) ? 0 : (_localUnreadOverrides[chat.id] ?? chat.unreadCount),
           );
 
           final idx = _chats.indexWhere((c) => c.id == chat.id);
@@ -1172,7 +1194,7 @@ Future<void> fetchChats() async {
               return chat.copyWith(
                 isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
                 isArchived: _archivedIds.contains(chat.id),
-                unreadCount: _readIds.contains(chat.id) ? 0 : chat.unreadCount,
+                unreadCount: _readIds.contains(chat.id) ? 0 : (_localUnreadOverrides[chat.id] ?? chat.unreadCount),
               );
             }).toList();
 
@@ -1247,7 +1269,7 @@ Future<void> fetchMoreChats() async {
             return chat.copyWith(
               isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
               isArchived: _archivedIds.contains(chat.id),
-              unreadCount: _readIds.contains(chat.id) ? 0 : chat.unreadCount,
+              unreadCount: _readIds.contains(chat.id) ? 0 : (_localUnreadOverrides[chat.id] ?? chat.unreadCount),
             );
           }).where((chat) => !existingIds.contains(chat.id)).toList();
 
@@ -1700,6 +1722,7 @@ Future<void> fetchMoreChats() async {
   }
 
   void markAsRead(String chatId) {
+    _localUnreadOverrides.remove(chatId);
     final index = _chats.indexWhere((chat) => chat.id == chatId);
     if (index != -1 && _chats[index].unreadCount > 0) {
       _readIds.add(_chats[index].id);

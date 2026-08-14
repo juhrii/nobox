@@ -490,14 +490,16 @@ class SignalRService {
         return;
       }
 
-      // Tampilkan notifikasi
-      debugPrint('SignalR: 🔔 Showing notification from SubSpv | room=$roomId | sender=$contactName | msg=$lastMsg');
-      PushNotificationService.showChatNotification(
+      // 🔕 FIX DOUBLE NOTIFICATION: Dimatikan karena event "ReceiveMessage" 
+      // sudah terlebih dahulu men-trigger notifikasi ini! Jika dihidupkan,
+      // akan muncul 2 notifikasi dari SignalR sendiri.
+      debugPrint('SignalR: 🔔 (SUPPRESSED) Notification from SubSpv | room=$roomId | sender=$contactName | msg=$lastMsg');
+      /* PushNotificationService.showChatNotification(
         roomId: roomId,
         roomName: contactName,
         senderName: contactName,
         message: lastMsg,
-      );
+      ); */
     } catch (e) {
       debugPrint('SignalR: ❌ Error in SubSpv notification: $e');
     }
