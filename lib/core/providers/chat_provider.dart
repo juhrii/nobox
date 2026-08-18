@@ -893,15 +893,9 @@ Future<void> fetchChats() async {
              debugPrint('ChatProvider: 📈 Incremented Unread (via TerimaSubSpv) for room $roomId. New Uc: $forcedUc');
            }
 
-           // TRIGGER NOTIFIKASI
-           debugPrint('ChatProvider: 🔔 Triggering showChatNotification for room $roomId');
-           PushNotificationService.showChatNotification(
-              roomId: roomId,
-              roomName: roomData['CtRealNm']?.toString() ?? roomData['Ct']?.toString() ?? roomData['Name']?.toString() ?? 'Chat',
-              senderName: roomData['CtRealNm']?.toString() ?? roomData['Ct']?.toString() ?? roomData['Name']?.toString() ?? 'Pesan Baru',
-              message: lastMsg,
-              profileImageUrl: roomData['CtImg']?.toString() ?? roomData['LinkImg']?.toString(),
-           );
+           // 🔕 PANGGILAN NOTIFIKASI DIHAPUS DARI SINI:
+           // Evaluasi serverTimeParsed terlalu rawan error (pesan masuk tidak selalu memiliki waktu > existingTime jika waktunya sangat cepat).
+           // Tugas notifikasi DIBALIKKAN KEMBALI ke signalr_service.dart di event TerimaSubSpv.
         }
       } else if (isSmartMeFallback || PushNotificationService.currentRoomId == roomId) {
         // Jika pesan balasan dari kita sendiri ATAU kita sedang di dalam room, hapus perlindungan unread!

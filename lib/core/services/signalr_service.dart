@@ -487,16 +487,17 @@ class SignalRService {
         return;
       }
 
-      // 🔕 FIX DOUBLE NOTIFICATION: Dimatikan karena event "ReceiveMessage" 
-      // sudah terlebih dahulu men-trigger notifikasi ini! Jika dihidupkan,
-      // akan muncul 2 notifikasi dari SignalR sendiri.
-      debugPrint('SignalR: 🔔 (SUPPRESSED) Notification from SubSpv | room=$roomId | sender=$contactName | msg=$lastMsg');
-      /* PushNotificationService.showChatNotification(
+      // 🔔 NOTIFIKASI DIHIDUPKAN KEMBALI DI SINI
+      // Pemanggilan notifikasi di ChatProvider terlalu mudah error karena pengecekan waktu,
+      // sehingga menyebabkan notifikasi Android mati/hilang. Di sini tempat yang paling aman.
+      debugPrint('SignalR: 🔔 Notification from SubSpv | room=$roomId | sender=$contactName | msg=$lastMsg');
+      PushNotificationService.showChatNotification(
         roomId: roomId,
         roomName: contactName,
         senderName: contactName,
         message: lastMsg,
-      ); */
+        profileImageUrl: roomData['CtImg']?.toString() ?? roomData['LinkImg']?.toString(),
+      );
     } catch (e) {
       debugPrint('SignalR: ❌ Error in SubSpv notification: $e');
     }
