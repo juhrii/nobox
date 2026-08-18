@@ -434,11 +434,11 @@ Future<void> fetchChats() async {
             final isServerTimeDifferent = serverTimeParsed != null && oldTimeParsed != null && serverTimeParsed.difference(oldTimeParsed).inSeconds.abs() > 2;
             final isMessageDifferent = chat.lastMessage.trim() != oldChat.lastMessage.trim() && chat.lastMessage != 'Site.Inbox.DeletedMessage';
             
-            if ((isServerNewer || isServerTimeDifferent || isMessageDifferent) && chat.needReply && PushNotificationService.currentRoomId != chat.id) {
+            if ((isServerNewer || isServerTimeDifferent || isMessageDifferent) && !chat.isLastMessageFromMe && PushNotificationService.currentRoomId != chat.id) {
               isNewMessage = true;
               forcedUnread = (_localUnreadOverrides[chat.id] ?? oldChat.unreadCount) + 1;
-            } else if ((isServerNewer || isServerTimeDifferent || isMessageDifferent) && !chat.needReply) {
-              // Jika ada pesan baru tapi TIDAK butuh balasan, ini 100% balasan dari Agen!
+            } else if ((isServerNewer || isServerTimeDifferent || isMessageDifferent) && chat.isLastMessageFromMe) {
+              // Jika ada pesan baru dan itu balasan dari Agen (isLastMessageFromMe = true):
               // Hapus override angka indikator dan tandai sebagai terbaca (0).
               _localUnreadOverrides.remove(chat.id);
               if (!_readIds.contains(chat.id)) _readIds.add(chat.id);
@@ -884,7 +884,12 @@ Future<void> fetchChats() async {
 
         if (serverTimeParsed != null && (existingTimeParsed == null || serverTimeParsed.isAfter(existingTimeParsed) || lastMsg.trim() != existing.lastMessage.trim())) {
            
-           final isFromAgent = !isNeedReply || sdrMsg.toLowerCase() == 'you' || sdrMsg.toLowerCase() == 'system';
+           // FIX: Backend NoBox mengembalikan IsNeedReply = false secara keliru untuk pesan masuk dari Telegram.
+           // Hapus ketergantungan pada IsNeedReply secara total di sini.
+           // Hanya anggap balasan agen JIKA sdrMsg = 'you'/'system' ATAU isSmartMeFallback true.
+           final isFromAgent = sdrMsg.toLowerCase() == 'you' || 
+                               sdrMsg.toLowerCase() == 'system' ||
+                               isSmartMeFallback;
            
            if (isFromAgent) {
              // FIX: Jika pesan balasan dari agen (atau tidak butuh balasan),
@@ -935,7 +940,7 @@ Future<void> fetchChats() async {
 
   // [ACTION: SYNC_LOCAL] - Fallback jika TerimaSubSpv telat/gagal.
   // Method ini dipanggil saat event TerimaPesan (Pesan Tunggal) muncul
-  void handleTerimaPesanSync(String roomId, {bool isMe = false}) {
+  void handleTerimaPesanSync(String roomId, {bool isMe = false, String msgText = ''}) {
     if (roomId.isEmpty) return;
     
     // Jika kita yang membalas, kita reset unread count dan batalkan perlindungan unread.
@@ -955,11 +960,24 @@ Future<void> fetchChats() async {
       refreshFirstPage();
     } else {
       if (PushNotificationService.currentRoomId != roomId && !isMe) {
-        // KITA HAPUS increment di sini untuk mencegah double-increment (2x tambah untuk 1 pesan)!
-        // Event TerimaPesan (tunggal) dan TerimaSubSpv (room) dari NoBox tertembak bersamaan.
-        // Biarkan updateRoomFromSignalR (TerimaSubSpv) saja yang bertanggung jawab menambah unread count!
+        // INSTANT FEEDBACK: Naikkan unread langsung saat TerimaPesan agar titik biru tidak delay!
+        _localUnreadOverrides[roomId] = (_localUnreadOverrides[roomId] ?? _chats[index].unreadCount) + 1;
+        _readIds.remove(roomId); // FIX: Wajib hapus dari _readIds agar tidak dipaksa jadi 0 lagi!
+        _saveReadState();
       } else if (isMe) {
         _chats[index] = _chats[index].copyWith(unreadCount: 0);
+      }
+      
+      // Update pesan terakhir secara instan agar UI (termasuk preview pesan) langsung terupdate.
+      // Ini juga otomatis mencegah TerimaSubSpv melakukan double-increment karena pesan sudah terupdate.
+      if (msgText.isNotEmpty) {
+        _chats[index] = _chats[index].copyWith(
+          lastMessage: msgText,
+          time: DateTime.now().toUtc().toIso8601String(), // Set time to now to prevent older server time from triggering double-increment
+          unreadCount: _localUnreadOverrides[roomId] ?? _chats[index].unreadCount,
+          isLastMessageFromMe: isMe, // FIX: Sangat krusial agar isSmartMeFallback di TerimaSubSpv tidak false-positive!
+        );
+        _chats.sort((a, b) => _parseTimeForSort(b.time).compareTo(_parseTimeForSort(a.time)));
       }
       
       // Jika ada pesan baru masuk via TerimaPesan, picu pembaruan UI agar badge unread/posisi teratas ter-render

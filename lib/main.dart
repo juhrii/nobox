@@ -156,7 +156,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // FIX: Panggil sinkronisasi fallback jika backend lupa mengirim TerimaSubSpv (Sering terjadi pada Grup)
       try {
         final chatProvider = context.read<ChatProvider>();
-        chatProvider.handleTerimaPesanSync(roomId, isMe: isMe);
+        chatProvider.handleTerimaPesanSync(roomId, isMe: isMe, msgText: msgText);
       } catch (e) {
         debugPrint('Main: Could not sync from TerimaPesan: $e');
       }

@@ -65,9 +65,9 @@ class _CachedSentMessage {
   _CachedSentMessage(this.message, this.addedAt);
 
   Map<String, dynamic> toMap() => {
-        'message': message.toMap(),
-        'addedAt': addedAt.toIso8601String(),
-      };
+    'message': message.toMap(),
+    'addedAt': addedAt.toIso8601String(),
+  };
 
   factory _CachedSentMessage.fromMap(Map<String, dynamic> map) {
     return _CachedSentMessage(
@@ -186,10 +186,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   Set<String> _getPersistenceKeys() {
     final keys = <String>{};
     if (chat.id.isNotEmpty && chat.id != 'null') keys.add(chat.id);
-    if (chat.contactId.isNotEmpty && chat.contactId != '0' && chat.contactId != 'null') keys.add(chat.contactId);
-    if (chat.ctRealId.isNotEmpty && chat.ctRealId != '0' && chat.ctRealId != 'null') keys.add(chat.ctRealId);
-    if (chat.link.isNotEmpty && chat.link != '0' && chat.link != 'null') keys.add(chat.link);
-    if (chat.sender.isNotEmpty && chat.sender != 'null') keys.add(chat.sender.trim().toLowerCase());
+    if (chat.contactId.isNotEmpty &&
+        chat.contactId != '0' &&
+        chat.contactId != 'null')
+      keys.add(chat.contactId);
+    if (chat.ctRealId.isNotEmpty &&
+        chat.ctRealId != '0' &&
+        chat.ctRealId != 'null')
+      keys.add(chat.ctRealId);
+    if (chat.link.isNotEmpty && chat.link != '0' && chat.link != 'null')
+      keys.add(chat.link);
+    if (chat.sender.isNotEmpty && chat.sender != 'null')
+      keys.add(chat.sender.trim().toLowerCase());
     final phoneOnly = chat.sender.replaceAll(RegExp(r'[^0-9]'), '');
     if (phoneOnly.isNotEmpty && phoneOnly.length >= 8) keys.add(phoneOnly);
     if (keys.isEmpty) keys.add('default_chat_${chat.hashCode}');
@@ -199,17 +207,23 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void _savePersistentMessages() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final List<Map<String, dynamic>> mapList =
-          _messages.map((m) => m.toMap()).toList();
+      final List<Map<String, dynamic>> mapList = _messages
+          .map((m) => m.toMap())
+          .toList();
       final jsonStr = jsonEncode(mapList);
       final keys = _getPersistenceKeys();
 
       for (final key in keys) {
         await prefs.setString('persist_msgs_$key', jsonStr);
-        await prefs.setStringList('deleted_ids_$key', _deletedMessageIds.toList());
+        await prefs.setStringList(
+          'deleted_ids_$key',
+          _deletedMessageIds.toList(),
+        );
       }
-      
-      final cacheList = (_localSentCache[chat.id] ?? []).map((c) => c.toMap()).toList();
+
+      final cacheList = (_localSentCache[chat.id] ?? [])
+          .map((c) => c.toMap())
+          .toList();
       if (cacheList.isNotEmpty) {
         final cacheJsonStr = jsonEncode(cacheList);
         for (final key in keys) {
@@ -221,7 +235,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         }
       }
       debugPrint(
-          'ChatDetail: 💾 Saved ${_messages.length} messages and ${_deletedMessageIds.length} deleted IDs to SharedPreferences using keys: $keys (Hot Restart Protection)');
+        'ChatDetail: 💾 Saved ${_messages.length} messages and ${_deletedMessageIds.length} deleted IDs to SharedPreferences using keys: $keys (Hot Restart Protection)',
+      );
     } catch (e) {
       debugPrint('ChatDetail: ❌ Error saving persistent messages: $e');
     }
@@ -247,7 +262,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               .where((m) => m.id.isEmpty || !_deletedMessageIds.contains(m.id))
               .toList();
           if (restored.isNotEmpty) {
-            debugPrint('ChatDetail: ⚡ Restored ${restored.length} messages from key persist_msgs_$key');
+            debugPrint(
+              'ChatDetail: ⚡ Restored ${restored.length} messages from key persist_msgs_$key',
+            );
             break;
           }
         }
@@ -258,7 +275,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           _messages = restored!;
         });
         debugPrint(
-            'ChatDetail: ⚡ IMMEDIATELY RESTORED ${_messages.length} persistent messages across Hot Restart!');
+          'ChatDetail: ⚡ IMMEDIATELY RESTORED ${_messages.length} persistent messages across Hot Restart!',
+        );
       }
 
       for (final key in keys) {
@@ -267,11 +285,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           final decodedSent = jsonDecode(sentJson) as List;
           final loaded = decodedSent
               .map((c) => _CachedSentMessage.fromMap(c as Map<String, dynamic>))
-              .where((c) => c.message.id.isEmpty || !_deletedMessageIds.contains(c.message.id))
+              .where(
+                (c) =>
+                    c.message.id.isEmpty ||
+                    !_deletedMessageIds.contains(c.message.id),
+              )
               .toList();
           _localSentCache[chat.id] = loaded;
           debugPrint(
-              'ChatDetail: ⚡ RESTORED ${_localSentCache[chat.id]!.length} _localSentCache items from key sent_cache_$key');
+            'ChatDetail: ⚡ RESTORED ${_localSentCache[chat.id]!.length} _localSentCache items from key sent_cache_$key',
+          );
           break;
         }
       }
@@ -279,6 +302,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       debugPrint('ChatDetail: ❌ Error restoring persistent messages: $e');
     }
   }
+
   bool _isLoadingMessages = true;
   Message? _repliedMessage;
   ChatStatusProvider? _statusProvider;
@@ -844,11 +868,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               _debugApiState = 'API Error: ${response.error}';
             } else {
               if (response.data == null || response.data!.isEmpty) {
-                _debugApiState = 'Kamar obrolan terhubung (Riwayat percakapan masih kosong).';
+                _debugApiState =
+                    'Kamar obrolan terhubung (Riwayat percakapan masih kosong).';
                 if (_messages.isEmpty) {
                   _messages = [];
                 } else {
-                  debugPrint('ChatDetail: 🛡️ Server API mengembalikan 0 pesan, mempertahankan ${_messages.length} pesan lokal persisten (Hot Restart Protection)');
+                  debugPrint(
+                    'ChatDetail: 🛡️ Server API mengembalikan 0 pesan, mempertahankan ${_messages.length} pesan lokal persisten (Hot Restart Protection)',
+                  );
                 }
               } else {
                 _debugApiState =
@@ -914,43 +941,64 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 final existingLocal = List<Message>.from(_messages);
                 final List<Message> mergedList = [];
                 final Set<String> seenApiKeys = {};
-                
+
                 for (final msg in sortedList) {
                   // Tambahkan sedikit salt dari time/content untuk mencegah penimpaan pesan yang dikirim sangat cepat
-                  final k = msg.id.isNotEmpty && msg.id != '0' 
-                      ? '${msg.id}_${msg.content.hashCode}' 
+                  final k = msg.id.isNotEmpty && msg.id != '0'
+                      ? '${msg.id}_${msg.content.hashCode}'
                       : 'api_${msg.rawTime}_${msg.content.hashCode}';
-                      
+
                   if (!seenApiKeys.contains(k)) {
                     seenApiKeys.add(k);
                     mergedList.add(msg);
                   }
                 }
-                
+
                 for (final localMsg in existingLocal) {
-                  final isOnServer = sortedList.any((s) =>
-                      (s.id.isNotEmpty && s.id == localMsg.id) ||
-                      (s.isMe == localMsg.isMe && s.content.trim().toLowerCase() == localMsg.content.trim().toLowerCase() && (s.rawTime == localMsg.rawTime || s.id.isEmpty)));
-                      
+                  final isOnServer = sortedList.any(
+                    (s) =>
+                        (s.id.isNotEmpty && s.id == localMsg.id) ||
+                        (s.isMe == localMsg.isMe &&
+                            s.content.trim().toLowerCase() ==
+                                localMsg.content.trim().toLowerCase() &&
+                            (s.rawTime == localMsg.rawTime || s.id.isEmpty)),
+                  );
+
                   if (!isOnServer) {
                     mergedList.add(localMsg);
-                    debugPrint('ChatDetail: 🛡️ Mencegah overwrite pesan lokal oleh API: "${localMsg.content}"');
+                    debugPrint(
+                      'ChatDetail: 🛡️ Mencegah overwrite pesan lokal oleh API: "${localMsg.content}"',
+                    );
                   }
                 }
                 final finalSorted = mergedList;
                 finalSorted.sort((a, b) {
                   if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
                   try {
-                    String ta = a.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z');
-                    String tb = b.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z');
-                    if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
-                    if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                    String ta = a.rawTime
+                        .replaceFirst(' ', 'T')
+                        .replaceAll('ZZ', 'Z');
+                    String tb = b.rawTime
+                        .replaceFirst(' ', 'T')
+                        .replaceAll('ZZ', 'Z');
+                    if (!ta.endsWith('Z') &&
+                        !ta.contains('+') &&
+                        ta.length >= 19)
+                      ta += 'Z';
+                    if (!tb.endsWith('Z') &&
+                        !tb.contains('+') &&
+                        tb.length >= 19)
+                      tb += 'Z';
                     return DateTime.parse(ta).compareTo(DateTime.parse(tb));
                   } catch (_) {
                     return 0;
                   }
                 });
-                _messages = finalSorted.where((m) => m.id.isEmpty || !_deletedMessageIds.contains(m.id)).toList();
+                _messages = finalSorted
+                    .where(
+                      (m) => m.id.isEmpty || !_deletedMessageIds.contains(m.id),
+                    )
+                    .toList();
               }
               // *** MERGE LOCAL SENT CACHE ***
               // Tambahkan pesan yang sudah dikirim tapi belum dikonfirmasi server
@@ -962,8 +1010,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               // Bersihkan cache yang sudah > 2 jam atau sudah dihapus user
               final activeCache = cache
                   .where(
-                    (c) => DateTime.now().difference(c.addedAt).inHours < 2 &&
-                           (c.message.id.isEmpty || !_deletedMessageIds.contains(c.message.id)),
+                    (c) =>
+                        DateTime.now().difference(c.addedAt).inHours < 2 &&
+                        (c.message.id.isEmpty ||
+                            !_deletedMessageIds.contains(c.message.id)),
                   )
                   .toList();
 
@@ -978,14 +1028,25 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 int matchIdx = _messages.indexWhere((m) {
                   int idx = _messages.indexOf(m);
                   if (serverMatchedIndices.contains(idx)) return false;
-                  if (!m.isMe || m.content.trim().toLowerCase() != cContent) return false;
-                  if (m.time == cTime || (cached.message.id.isNotEmpty && m.id == cached.message.id)) return true;
-                  
+                  if (!m.isMe || m.content.trim().toLowerCase() != cContent)
+                    return false;
+                  if (m.time == cTime ||
+                      (cached.message.id.isNotEmpty &&
+                          m.id == cached.message.id))
+                    return true;
+
                   // Toleransi perbedaan waktu (delay server)
-                  if (m.rawTime.isNotEmpty && cached.message.rawTime.isNotEmpty) {
+                  if (m.rawTime.isNotEmpty &&
+                      cached.message.rawTime.isNotEmpty) {
                     try {
-                      final mt = DateTime.parse(m.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z'));
-                      final ct = DateTime.parse(cached.message.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z'));
+                      final mt = DateTime.parse(
+                        m.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z'),
+                      );
+                      final ct = DateTime.parse(
+                        cached.message.rawTime
+                            .replaceFirst(' ', 'T')
+                            .replaceAll('ZZ', 'Z'),
+                      );
                       if (mt.difference(ct).inMinutes.abs() <= 2) return true;
                     } catch (_) {}
                   }
@@ -1049,10 +1110,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
                   // FILTER: Strict Account Isolation untuk Injeksi SignalR
                   if (chat.accountId.isNotEmpty && !isTelegram) {
-                    if (newMsg.roomId.isEmpty || (newMsg.roomId != chat.id && int.tryParse(newMsg.roomId) == null)) {
+                    if (newMsg.roomId.isEmpty ||
+                        (newMsg.roomId != chat.id &&
+                            int.tryParse(newMsg.roomId) == null)) {
                       final fromStr = newMsg.fromId?.toString() ?? '';
                       final toStr = newMsg.toId?.toString() ?? '';
-                      if (fromStr != chat.accountId && toStr != chat.accountId) {
+                      if (fromStr != chat.accountId &&
+                          toStr != chat.accountId) {
                         debugPrint(
                           'ChatDetail: 🛡️ Blocked SignalR cache message ${newMsg.id} from another channel!',
                         );
@@ -1062,7 +1126,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   }
 
                   // FILTER: Skip pesan yang sudah dihapus oleh user
-                  if (newMsg.id.isNotEmpty && _deletedMessageIds.contains(newMsg.id)) {
+                  if (newMsg.id.isNotEmpty &&
+                      _deletedMessageIds.contains(newMsg.id)) {
                     continue;
                   }
 
@@ -1113,9 +1178,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             // HACK/FIX: Sinkronisasi ikon media ke ChatProvider agar list obrolan memunculkan icon media
             // yang benar dan tidak hilang saat polling (/Chatrooms/List). Saring pesan sistem agar tidak menimpa obrolan asli!
             final realMessages = _messages.where((m) {
-              if (m.isSystemMessage || m.content == 'Site.Inbox.DeletedMessage') return false;
+              if (m.isSystemMessage || m.content == 'Site.Inbox.DeletedMessage')
+                return false;
               final lower = m.content.toLowerCase();
-              return !lower.contains('site.inbox.') && !lower.contains('percakapan di-assign') && !lower.contains('percakapan diselesaikan') && !lower.contains('pemberitahuan sistem');
+              return !lower.contains('site.inbox.') &&
+                  !lower.contains('percakapan di-assign') &&
+                  !lower.contains('percakapan diselesaikan') &&
+                  !lower.contains('pemberitahuan sistem');
             }).toList();
 
             if (realMessages.isNotEmpty) {
@@ -1133,7 +1202,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       .replaceAll('📷', '')
                       .replaceAll('Photo', '')
                       .trim();
-                  newContent = '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+                  newContent =
+                      '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
                 }
               } else if (lastMsg.messageType == MessageType.voice) {
                 newContent = '🎵 Voice Note';
@@ -1300,7 +1370,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       return true;
                     }
                   }
-                } else if (oldMsg.messageType == MessageType.video || oldMsg.messageType == MessageType.sticker) {
+                } else if (oldMsg.messageType == MessageType.video ||
+                    oldMsg.messageType == MessageType.sticker) {
                   final checkUrl = oldMsg.videoUrl ?? oldMsg.imageUrl;
                   if (checkUrl != null) {
                     final localFileName = checkUrl.split('/').last;
@@ -1423,10 +1494,89 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           });
 
           for (final msg in sortedList) {
-            if (msg.id.isNotEmpty && (_deletedMessageIds.contains(msg.id) || !updatedCurrentIds.contains(msg.id))) {
-              if (_deletedMessageIds.contains(msg.id)) continue;
-              // Dihapus: Guard pendingLocalContents (Mencegah bug pesan kembar dibuang)
-              
+            if (msg.id.isNotEmpty &&
+                (_deletedMessageIds.contains(msg.id) ||
+                    !updatedCurrentIds.contains(msg.id))) {
+              // FIX: Hindari bug duplikasi dari backend (dua pesan identik dengan ID berbeda dikembalikan oleh API)
+              bool isBackendDuplicate = false;
+              if (msg.isMe) {
+                final cleanNew = msg.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                final duplicateIdx = _messages.indexWhere((m) {
+                  if (!m.isMe || m.id.isEmpty || m.id.startsWith('temp_')) return false;
+                  final cleanM = m.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                  if (cleanM == cleanNew) {
+                    if (m.rawTime.isNotEmpty && msg.rawTime.isNotEmpty) {
+                      try {
+                        final mt = DateTime.parse(m.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z'));
+                        final nt = DateTime.parse(msg.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z'));
+                        if (mt.difference(nt).inSeconds.abs() <= 10) return true; // Sangat berdekatan = duplikat backend
+                      } catch (_) {}
+                    }
+                  }
+                  return false;
+                });
+                
+                if (duplicateIdx != -1) {
+                  debugPrint('AckPolling: 🚫 Mengabaikan pesan duplikat dari backend! ID: ${msg.id}');
+                  isBackendDuplicate = true;
+                  updatedCurrentIds.add(msg.id); // Anggap sudah diproses
+                }
+              }
+              if (isBackendDuplicate) continue;
+
+              // FIX: Cocokkan dengan pesan lokal yang belum punya ID nyata (kosong atau 'temp_')
+              // Mencegah duplikasi ganda ketika TerimaPesan memberikan ID temp_ lalu AckPolling memberikan ID asli
+              bool matchedPending = false;
+              if (msg.isMe) {
+                final cleanNew = msg.content.trim().toLowerCase().replaceAll(
+                  RegExp(r'\s+'),
+                  '',
+                );
+                final matchIdx = _messages.indexWhere((m) {
+                  if (!m.isMe || (!m.id.isEmpty && !m.id.startsWith('temp_')))
+                    return false;
+                  final cleanM = m.content.trim().toLowerCase().replaceAll(
+                    RegExp(r'\s+'),
+                    '',
+                  );
+                  return cleanM == cleanNew;
+                });
+
+                if (matchIdx != -1) {
+                  _messages[matchIdx] = _messages[matchIdx].copyWith(
+                    id: msg.id,
+                    ack: msg.ack,
+                    status: msg.ack >= 3
+                        ? MessageStatus.delivered
+                        : MessageStatus.sent,
+                  );
+                  matchedPending = true;
+                  updatedCurrentIds.add(
+                    msg.id,
+                  ); // Tandai sudah diproses agar else-if block di bawah bekerja dengan baik
+                  debugPrint(
+                    'AckPolling: ✅ Matched local message! Assigned ID ${msg.id}',
+                  );
+                } else {
+                  // LOG WHY IT FAILED
+                  debugPrint(
+                    'AckPolling: ❌ Failed to match local message for content: "${msg.content}"',
+                  );
+                  for (final m in _messages.where(
+                    (m) => m.isMe && (m.id.isEmpty || m.id.startsWith('temp_')),
+                  )) {
+                    final cleanM = m.content.trim().toLowerCase().replaceAll(
+                      RegExp(r'\s+'),
+                      '',
+                    );
+                    debugPrint('   -> Compared with local: "${m.content}"');
+                    debugPrint('   -> Clean API: "$cleanNew"');
+                    debugPrint('   -> Clean Local: "$cleanM"');
+                  }
+                }
+              }
+              if (matchedPending) continue;
+
               debugPrint(
                 'AckPolling ADDING NEW MESSAGE: ID=${msg.id}, Content=${msg.content}, Type=${msg.messageType}, IsMe=${msg.isMe}',
               );
@@ -1464,6 +1614,44 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 return 0;
               }
             });
+
+            // FIX: Aggressive deduplication pasca-polling
+            // Hapus duplikat yang mungkin lolos (pesan terkirim dengan teks sama dan waktu berdekatan)
+            final uniqueMessages = <Message>[];
+            for (final m in _messages) {
+              if (m.isMe && m.messageType == MessageType.text && m.content.isNotEmpty) {
+                final cleanM = m.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                final isDuplicate = uniqueMessages.any((existing) {
+                  if (!existing.isMe || existing.messageType != MessageType.text) return false;
+                  final cleanExisting = existing.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                  if (cleanM == cleanExisting) {
+                    // Cek kedekatan waktu
+                    if (m.rawTime.isNotEmpty && existing.rawTime.isNotEmpty) {
+                      try {
+                        final mt = DateTime.parse(m.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z'));
+                        final et = DateTime.parse(existing.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z'));
+                        if (mt.difference(et).inSeconds.abs() <= 15) return true; // Sangat berdekatan = hapus
+                      } catch (_) {}
+                    }
+                  }
+                  return false;
+                });
+                if (isDuplicate) {
+                  debugPrint('AckPolling Cleanup: 🗑️ Menghapus duplikat agresif -> ${m.content}');
+                  continue; // Jangan masukkan ke uniqueMessages
+                }
+              }
+              uniqueMessages.add(m);
+            }
+            _messages = uniqueMessages;
+
+            if (mounted) {
+              setState(() {
+                // UI update trigger
+              });
+              _savePersistentMessages();
+            }
+
             _scrollToBottom();
             // Send read receipt
             try {
@@ -1538,12 +1726,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       }
 
       // 🚨 AUTO-REPAIR CHAT ID DI REALTIME 🚨
-      if ((chat.id.isEmpty || chat.id == '0' || chat.id == 'null') && incomingRoomId.isNotEmpty && incomingRoomId != '0' && incomingRoomId != 'null') {
+      if ((chat.id.isEmpty || chat.id == '0' || chat.id == 'null') &&
+          incomingRoomId.isNotEmpty &&
+          incomingRoomId != '0' &&
+          incomingRoomId != 'null') {
         chat = chat.copyWith(id: incomingRoomId);
         try {
           context.read<ChatProvider>().updateLocalChat(chat);
         } catch (_) {}
-        debugPrint('SignalR: 🛠️ REPAIRED EMPTY CHAT ID in Realtime from 0 to $incomingRoomId');
+        debugPrint(
+          'SignalR: 🛠️ REPAIRED EMPTY CHAT ID in Realtime from 0 to $incomingRoomId',
+        );
       }
 
       // Pesan pantulan (echo-back) dari pesan yang kita kirim sendiri (AgentId ada = dikirim oleh agen/kita)
@@ -1574,18 +1767,27 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       if (isEchoBack) {
         final echoAck = messageData['Ack'] ?? messageData['ack'];
         final echoId = messageData['Id']?.toString() ?? '';
-        
+
         final rawMsg = messageData['Msg'];
         String echoMsg = '';
         if (rawMsg is String) {
           echoMsg = rawMsg;
         } else if (rawMsg is Map) {
-          echoMsg = rawMsg['msg']?.toString() ?? rawMsg['text']?.toString() ?? rawMsg.toString();
+          echoMsg =
+              rawMsg['msg']?.toString() ??
+              rawMsg['text']?.toString() ??
+              rawMsg.toString();
         } else {
           echoMsg = rawMsg?.toString() ?? '';
         }
-        if (echoMsg.isEmpty || echoMsg.trim() == '{}' || echoMsg.trim() == '[]') {
-          echoMsg = messageData['Body']?.toString() ?? messageData['Message']?.toString() ?? messageData['Content']?.toString() ?? '';
+        if (echoMsg.isEmpty ||
+            echoMsg.trim() == '{}' ||
+            echoMsg.trim() == '[]') {
+          echoMsg =
+              messageData['Body']?.toString() ??
+              messageData['Message']?.toString() ??
+              messageData['Content']?.toString() ??
+              '';
         }
 
         int newAck = 1;
@@ -1608,12 +1810,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             }
             // 2. Cadangan (Fallback): cocokkan berdasarkan isi konten untuk pesan yang belum punya ID (baru saja dikirim)
             if (matchIdx == -1 && echoMsg.isNotEmpty) {
-              final cleanEcho = echoMsg.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+              final cleanEcho = echoMsg.trim().toLowerCase().replaceAll(
+                RegExp(r'\s+'),
+                '',
+              );
               for (int i = _messages.length - 1; i >= 0; i--) {
-                if (_messages[i].isMe && _messages[i].id.isEmpty) {
+                if (_messages[i].isMe &&
+                    (_messages[i].id.isEmpty ||
+                        _messages[i].id.startsWith('temp_'))) {
                   // Cek apakah konten sama (abaikan spasi/trim)
-                  final cleanMsg = _messages[i].content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
-                  if (cleanMsg == cleanEcho || _messages[i].content.trim() == echoMsg.trim()) {
+                  final cleanMsg = _messages[i].content
+                      .trim()
+                      .toLowerCase()
+                      .replaceAll(RegExp(r'\s+'), '');
+                  if (cleanMsg == cleanEcho ||
+                      _messages[i].content.trim() == echoMsg.trim()) {
                     matchIdx = i;
                     break;
                   }
@@ -1647,9 +1858,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         // TAPI jika TIDAK ditemukan (misal: dikirim dari Web Dashboard/Platform lain), jangan di-return!
         // Biarkan proses lanjut ke bawah agar pesan ini ditambahkan ke antarmuka aplikasi.
         if (messageFoundLocally) {
-          if (mounted && chat.id.isNotEmpty && _localSentCache.containsKey(chat.id)) {
+          if (mounted &&
+              chat.id.isNotEmpty &&
+              _localSentCache.containsKey(chat.id)) {
             final cacheList = _localSentCache[chat.id]!;
-            final idxToRemove = cacheList.indexWhere((c) => c.message.content.trim() == echoMsg.trim());
+            final idxToRemove = cacheList.indexWhere(
+              (c) => c.message.content.trim() == echoMsg.trim(),
+            );
             if (idxToRemove != -1) cacheList.removeAt(idxToRemove);
           }
           return; // Don't add as a new message
@@ -1666,17 +1881,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       });
 
       if (existingIdx != -1) {
-        debugPrint('SignalR: ⚠️ Pesan duplikat terdeteksi. ID=$incomingId. Updating status if needed.');
+        debugPrint(
+          'SignalR: ⚠️ Pesan duplikat terdeteksi. ID=$incomingId. Updating status if needed.',
+        );
         if (mounted) {
           setState(() {
             final existingMsg = _messages[existingIdx];
             // Jika ini pesan yang masuk kembali (duplicate), berarti sudah terkirim & diterima server
             final updatedAck = existingMsg.ack < 3 ? 3 : existingMsg.ack;
             if (existingMsg.ack != updatedAck) {
-               _messages[existingIdx] = existingMsg.copyWith(
-                 ack: updatedAck,
-                 status: updatedAck >= 3 ? MessageStatus.delivered : MessageStatus.sent,
-               );
+              _messages[existingIdx] = existingMsg.copyWith(
+                ack: updatedAck,
+                status: updatedAck >= 3
+                    ? MessageStatus.delivered
+                    : MessageStatus.sent,
+              );
             }
           });
         }
@@ -1707,33 +1926,72 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               int matchIdx = _messages.indexWhere((m) {
                 if (newMessage.id.isNotEmpty && m.id == newMessage.id)
                   return true;
-                if (m.isMe && m.id.isEmpty) {
-                  final cleanM = m.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
-                  final cleanNew = newMessage.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                // UPDATE: Coba cocokkan jika ID lokal kosong ATAU berawalan 'temp_'
+                if (m.isMe && (m.id.isEmpty || m.id.startsWith('temp_'))) {
+                  final cleanM = m.content.trim().toLowerCase().replaceAll(
+                    RegExp(r'\s+'),
+                    '',
+                  );
+                  final cleanNew = newMessage.content
+                      .trim()
+                      .toLowerCase()
+                      .replaceAll(RegExp(r'\s+'), '');
                   if (cleanM.isNotEmpty && cleanM == cleanNew) {
                     return true;
                   }
                 }
                 return false;
               });
+
+              if (matchIdx == -1) {
+                // LOG WHY IT FAILED
+                debugPrint(
+                  'TerimaPesan Guard: ❌ Failed to match local message for content: "${newMessage.content}"',
+                );
+                for (final m in _messages.where(
+                  (m) => m.isMe && (m.id.isEmpty || m.id.startsWith('temp_')),
+                )) {
+                  final cleanM = m.content.trim().toLowerCase().replaceAll(
+                    RegExp(r'\s+'),
+                    '',
+                  );
+                  final cleanNew = newMessage.content
+                      .trim()
+                      .toLowerCase()
+                      .replaceAll(RegExp(r'\s+'), '');
+                  debugPrint('   -> Compared with local: "${m.content}"');
+                  debugPrint('   -> Clean API: "$cleanNew"');
+                  debugPrint('   -> Clean Local: "$cleanM"');
+                }
+              }
               if (matchIdx != -1) {
                 debugPrint(
                   'SignalR: 🛑 Prevented duplicate isMe message at final add guard.',
                 );
-                
+
                 final existingMsg = _messages[matchIdx];
-                final updatedAck = (newMessage.ack >= 3) ? newMessage.ack : (existingMsg.ack < 3 ? 3 : existingMsg.ack);
-                final updatedId = newMessage.id.isNotEmpty ? newMessage.id : existingMsg.id;
-                
+                final updatedAck = (newMessage.ack >= 3)
+                    ? newMessage.ack
+                    : (existingMsg.ack < 3 ? 3 : existingMsg.ack);
+                final updatedId = newMessage.id.isNotEmpty
+                    ? newMessage.id
+                    : existingMsg.id;
+
                 _messages[matchIdx] = existingMsg.copyWith(
                   id: updatedId.isNotEmpty ? updatedId : null,
                   ack: updatedAck,
-                  status: updatedAck >= 3 ? MessageStatus.delivered : MessageStatus.sent,
+                  status: updatedAck >= 3
+                      ? MessageStatus.delivered
+                      : MessageStatus.sent,
                 );
 
-                if (chat.id.isNotEmpty && _localSentCache.containsKey(chat.id)) {
+                if (chat.id.isNotEmpty &&
+                    _localSentCache.containsKey(chat.id)) {
                   final cacheList = _localSentCache[chat.id]!;
-                  final idxToRemove = cacheList.indexWhere((c) => c.message.content.trim() == newMessage.content.trim());
+                  final idxToRemove = cacheList.indexWhere(
+                    (c) =>
+                        c.message.content.trim() == newMessage.content.trim(),
+                  );
                   if (idxToRemove != -1) cacheList.removeAt(idxToRemove);
                 }
                 return;
@@ -2118,13 +2376,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     if (targetReplyMsg != null) {
       // Prioritaskan idAlias (ID asli dari channel eksternal seperti Telegram/WA) untuk ReplyId.
-      finalReplyId = (targetReplyMsg.idAlias != null && targetReplyMsg.idAlias!.isNotEmpty) 
-          ? targetReplyMsg.idAlias 
+      finalReplyId =
+          (targetReplyMsg.idAlias != null && targetReplyMsg.idAlias!.isNotEmpty)
+          ? targetReplyMsg.idAlias
           : targetReplyMsg.id;
       finalReplyMsg = targetReplyMsg.content;
       finalReplyFrom = targetReplyMsg.fromId;
       if (finalReplyFrom == null || finalReplyFrom.isEmpty) {
-        finalReplyFrom = chat.accountId.isNotEmpty && chat.accountId != '0' ? chat.accountId : "0";
+        finalReplyFrom = chat.accountId.isNotEmpty && chat.accountId != '0'
+            ? chat.accountId
+            : "0";
       }
       finalReplyType = "0";
     }
@@ -2144,22 +2405,30 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     // FIX: Jika pengiriman via SignalR gagal (karena koneksi atau validasi ID), lakukan fallback ke REST API Inbox/Send
     if (!isSuccess) {
-      debugPrint('ChatDetail: ⚠️ SignalR send failed ($errorMsg), attempting fallback via REST API Inbox/Send...');
+      debugPrint(
+        'ChatDetail: ⚠️ SignalR send failed ($errorMsg), attempting fallback via REST API Inbox/Send...',
+      );
       try {
         final resp = await _chatService.sendMessage(
           MessageRequest(
-            receiver: chat.id.isNotEmpty && chat.id != '0' ? chat.id : (chat.ctRealId.isNotEmpty ? chat.ctRealId : chat.contactId),
+            receiver: chat.id.isNotEmpty && chat.id != '0'
+                ? chat.id
+                : (chat.ctRealId.isNotEmpty ? chat.ctRealId : chat.contactId),
             content: finalContent,
             accountId: chat.accountId,
             contactId: chat.contactId.isNotEmpty ? chat.contactId : chat.link,
-            extId: chat.sender.replaceAll(RegExp(r'[^0-9]'), '').length >= 9 ? chat.sender : null,
+            extId: chat.sender.replaceAll(RegExp(r'[^0-9]'), '').length >= 9
+                ? chat.sender
+                : null,
             channelId: chat.chId,
           ),
         );
         if (!resp.isError) {
           isSuccess = true;
           errorMsg = null;
-          debugPrint('ChatDetail: ✅ Pesan berhasil terkirim via REST API fallback!');
+          debugPrint(
+            'ChatDetail: ✅ Pesan berhasil terkirim via REST API fallback!',
+          );
         } else {
           errorMsg = resp.error ?? 'Gagal mengirim via SignalR & REST API';
           debugPrint('ChatDetail: ❌ REST API fallback failed: $errorMsg');
@@ -2381,9 +2650,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     final pLower = pickedFile.path.toLowerCase();
     final nLower = pickedFile.name.toLowerCase();
-    final isStickerFile = pLower.endsWith('.webp') || pLower.endsWith('.webm') || pLower.endsWith('.tgs') || pLower.endsWith('.gif') ||
-                          nLower.endsWith('.webp') || nLower.endsWith('.webm') || nLower.endsWith('.tgs') || nLower.endsWith('.gif') ||
-                          nLower.contains('sticker') || nLower.contains('stiker');
+    final isStickerFile =
+        pLower.endsWith('.webp') ||
+        pLower.endsWith('.webm') ||
+        pLower.endsWith('.tgs') ||
+        pLower.endsWith('.gif') ||
+        nLower.endsWith('.webp') ||
+        nLower.endsWith('.webm') ||
+        nLower.endsWith('.tgs') ||
+        nLower.endsWith('.gif') ||
+        nLower.contains('sticker') ||
+        nLower.contains('stiker');
 
     final newMessage = Message(
       content: isStickerFile ? '🌟 Sticker' : '🎬 Video',
@@ -3961,7 +4238,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           onPressed: () {
             if (_selectedMessageKeys.length == 1) {
               final targetKey = _selectedMessageKeys.first;
-              final msg = _messages.firstWhere((m) => _getMessageKey(m) == targetKey, orElse: () => _messages.first);
+              final msg = _messages.firstWhere(
+                (m) => _getMessageKey(m) == targetKey,
+                orElse: () => _messages.first,
+              );
               setState(() {
                 _repliedMessage = msg;
                 _isSelectionMode = false;
@@ -3986,7 +4266,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           icon: const Icon(Icons.copy, color: Colors.white),
           onPressed: () {
             final buffer = StringBuffer();
-            final selectedMsgs = _messages.where((m) => _selectedMessageKeys.contains(_getMessageKey(m))).toList();
+            final selectedMsgs = _messages
+                .where((m) => _selectedMessageKeys.contains(_getMessageKey(m)))
+                .toList();
             for (final msg in selectedMsgs) {
               buffer.writeln(msg.content);
             }
@@ -4022,7 +4304,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       Navigator.pop(ctx);
 
                       final selectedMsgs = _messages
-                          .where((m) => _selectedMessageKeys.contains(_getMessageKey(m)))
+                          .where(
+                            (m) => _selectedMessageKeys.contains(
+                              _getMessageKey(m),
+                            ),
+                          )
                           .toList();
 
                       // OPTIMISTIC UI UPDATE: Langsung sembunyikan pesan dari layar seketika tanpa loading!
@@ -4030,38 +4316,52 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       for (var m in selectedMsgs) {
                         if (m.id.isNotEmpty) attemptingIds.add(m.id);
                       }
-                      
+
                       setState(() {
                         _deletedMessageIds.addAll(attemptingIds);
-                        _messages.removeWhere((m) => selectedMsgs.contains(m) || attemptingIds.contains(m.id));
+                        _messages.removeWhere(
+                          (m) =>
+                              selectedMsgs.contains(m) ||
+                              attemptingIds.contains(m.id),
+                        );
                         if (_localSentCache[chat.id] != null) {
-                          _localSentCache[chat.id]!.removeWhere((c) => selectedMsgs.contains(c.message) || attemptingIds.contains(c.message.id));
+                          _localSentCache[chat.id]!.removeWhere(
+                            (c) =>
+                                selectedMsgs.contains(c.message) ||
+                                attemptingIds.contains(c.message.id),
+                          );
                         }
                         _isSelectionMode = false;
                         _selectedMessageKeys.clear();
                       });
-                      
+
                       _savePersistentMessages();
 
                       // Eksekusi penghapusan di latar belakang (Fire and Forget)
                       Future(() async {
                         bool hasError = false;
                         String errorMessage = '';
-                        
+
                         final futures = selectedMsgs.map((msg) async {
                           final msgId = msg.id;
                           if (msgId.isNotEmpty) {
                             try {
-                              final resp = await _chatService.deleteMessage(msgId);
+                              final resp = await _chatService.deleteMessage(
+                                msgId,
+                              );
                               if (resp.isError) {
                                 final errText = resp.error ?? 'Unknown error';
-                                if (!errText.contains('EntityNotFound') && !errText.contains('Record not found')) {
+                                if (!errText.contains('EntityNotFound') &&
+                                    !errText.contains('Record not found')) {
                                   hasError = true;
                                   errorMessage = errText;
                                 }
                               } else {
                                 if (mounted) {
-                                  Provider.of<ChatProvider>(context, listen: false).ignoreServerTime(chat.id, msg.rawTime);
+                                  Provider.of<ChatProvider>(
+                                    context,
+                                    listen: false,
+                                  ).ignoreServerTime(chat.id, msg.rawTime);
                                 }
                               }
                             } catch (e) {
@@ -4075,7 +4375,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
                         if (hasError && mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Beberapa pesan gagal dihapus di server: $errorMessage')),
+                            SnackBar(
+                              content: Text(
+                                'Beberapa pesan gagal dihapus di server: $errorMessage',
+                              ),
+                            ),
                           );
                         }
                       });
@@ -4240,19 +4544,31 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void _markAsResolved() async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
 
-    debugPrint('🔍 [DEBUG] _markAsResolved called with chat.id="${chat.id}", chat.contactId="${chat.contactId}", chat.ctRealId="${chat.ctRealId}", chat.link="${chat.link}"');
+    debugPrint(
+      '🔍 [DEBUG] _markAsResolved called with chat.id="${chat.id}", chat.contactId="${chat.contactId}", chat.ctRealId="${chat.ctRealId}", chat.link="${chat.link}"',
+    );
 
     String resolveId = chat.id;
-    if (resolveId.isEmpty || resolveId == '0' || resolveId == 'null' || int.tryParse(resolveId.replaceAll(RegExp(r'[^0-9]'), '')) == null) {
-      if (int.tryParse(chat.contactId.replaceAll(RegExp(r'[^0-9]'), '')) != null && chat.contactId != '0') {
+    if (resolveId.isEmpty ||
+        resolveId == '0' ||
+        resolveId == 'null' ||
+        int.tryParse(resolveId.replaceAll(RegExp(r'[^0-9]'), '')) == null) {
+      if (int.tryParse(chat.contactId.replaceAll(RegExp(r'[^0-9]'), '')) !=
+              null &&
+          chat.contactId != '0') {
         resolveId = chat.contactId;
-      } else if (int.tryParse(chat.link.replaceAll(RegExp(r'[^0-9]'), '')) != null && chat.link != '0') {
+      } else if (int.tryParse(chat.link.replaceAll(RegExp(r'[^0-9]'), '')) !=
+              null &&
+          chat.link != '0') {
         resolveId = chat.link;
       }
     }
 
     try {
-      final response = await _chatService.resolveConversation(resolveId, accountId: chat.accountId);
+      final response = await _chatService.resolveConversation(
+        resolveId,
+        accountId: chat.accountId,
+      );
       if (mounted) {
         if (!response.isError) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -4357,7 +4673,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
           // Index 0: Status footer (if applicable, positioned below the latest messages/day)
           if (hasStatusFooter && index == 0) {
-            return _buildStatusDivider(isResolved: isResolved && !chat.isArchived);
+            return _buildStatusDivider(
+              isResolved: isResolved && !chat.isArchived,
+            );
           }
 
           // Adjust index for status footer offset
@@ -4449,8 +4767,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   /// Status divider widget — shown once at the bottom of archived or resolved chat messages
   Widget _buildStatusDivider({required bool isResolved}) {
-    final textLabel = isResolved ? 'Percakapan ini telah diselesaikan' : 'Agent archived this conversation';
-    final dateLabel = isResolved ? _formatBubbleTime(chat.time) : _archivedDateLabel;
+    final textLabel = isResolved
+        ? 'Percakapan ini telah diselesaikan'
+        : 'Agent archived this conversation';
+    final dateLabel = isResolved
+        ? _formatBubbleTime(chat.time)
+        : _archivedDateLabel;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -4938,7 +5260,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     final allChats = chatProvider.chats;
 
     // Simpan list pesan yang di-select secara urut waktu
-    final selectedMessages = _messages.where((m) => _selectedMessageKeys.contains(_getMessageKey(m))).toList();
+    final selectedMessages = _messages
+        .where((m) => _selectedMessageKeys.contains(_getMessageKey(m)))
+        .toList();
 
     showDialog(
       context: context,
