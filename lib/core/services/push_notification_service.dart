@@ -36,7 +36,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     if (roomId != null) {
       // Inisialisasi plugin khusus untuk background isolate ini
       final localNotifications = FlutterLocalNotificationsPlugin();
-      const androidInitSettings = AndroidInitializationSettings('launcher_icon');
+      const androidInitSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
       const iosInitSettings = DarwinInitializationSettings();
       const initSettings = InitializationSettings(android: androidInitSettings, iOS: iosInitSettings);
       await localNotifications.initialize(initSettings);
@@ -119,7 +119,7 @@ class PushNotificationService {
   }
 
   static Future<void> _initializeLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings('launcher_icon');
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -344,17 +344,13 @@ class PushNotificationService {
       }
 
       final messages = _notificationMessages[roomId]!;
-      final messagingStyle = MessagingStyleInformation(
-        const Person(name: 'Me', key: 'me'),
-        conversationTitle: senderName,
-        groupConversation: false,
-        messages: messages.map((msg) {
-          return Message(
-            msg['message']!,
-            DateTime.fromMillisecondsSinceEpoch(int.parse(msg['timestamp']!)),
-            Person(name: msg['sender']!, key: msg['sender']!),
-          );
-        }).toList(),
+      final bigTextStyle = BigTextStyleInformation(
+        message,
+        htmlFormatBigText: true,
+        contentTitle: senderName,
+        htmlFormatContentTitle: true,
+        summaryText: roomName,
+        htmlFormatSummaryText: true,
       );
 
       final androidDetails = AndroidNotificationDetails(
@@ -367,10 +363,10 @@ class PushNotificationService {
         enableVibration: true,
         enableLights: true,
         color: const Color(0xFF3B82F6),
-        icon: 'launcher_icon',
         largeIcon: largeIcon,
-        styleInformation: messagingStyle,
+        styleInformation: bigTextStyle,
         groupKey: 'chat_$roomId',
+        icon: '@mipmap/ic_launcher',
       );
 
       const iosDetails = DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true);

@@ -1386,21 +1386,32 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 size: 28,
                               ),
                             )
-                          : CircleAvatar(
-                              radius: 24,
-                              backgroundColor: Colors.grey.shade300,
-                              backgroundImage: chat.avatarUrl != null && chat.avatarUrl!.isNotEmpty
-                                  ? CachedNetworkImageProvider(chat.avatarUrl!) as ImageProvider
-                                  : null,
-                              child: chat.avatarUrl == null || chat.avatarUrl!.isEmpty
-                                  // Logika pengecekan: Jika chat adalah Group, gunakan ikon grup berombongan (Icons.group)
-                                  // Jika personal, gunakan ikon orang tunggal (Icons.person)
-                                  ? Icon(
-                                      chat.isGroup ? Icons.groups : Icons.person,
-                                      color: Colors.grey.shade600,
-                                      size: 28,
-                                    )
-                                  : null,
+                          : ClipOval(
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                color: Colors.grey.shade300,
+                                child: (chat.avatarUrl != null && chat.avatarUrl!.isNotEmpty)
+                                    ? CachedNetworkImage(
+                                        imageUrl: chat.avatarUrl!,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => Icon(
+                                          chat.isGroup ? Icons.groups : Icons.person,
+                                          color: Colors.grey.shade500,
+                                          size: 28,
+                                        ),
+                                        errorWidget: (context, url, error) => Icon(
+                                          chat.isGroup ? Icons.groups : Icons.person,
+                                          color: Colors.grey.shade600,
+                                          size: 28,
+                                        ),
+                                      )
+                                    : Icon(
+                                        chat.isGroup ? Icons.groups : Icons.person,
+                                        color: Colors.grey.shade600,
+                                        size: 28,
+                                      ),
+                              ),
                             ),
                     ),
                     const SizedBox(width: 12),

@@ -103,6 +103,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     debugPrint('Main: App lifecycle state = $state');
 
     if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      // Pastikan notifikasi tidak disembunyikan/ditelan jika aplikasi berada di background!
+      PushNotificationService.setCurrentRoom(null);
+      
       // Mark that we went to background
       if (!_wasInBackground) {
         _wasInBackground = true;
@@ -145,12 +148,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       final msgText = message['Msg']?.toString() ?? '';
       final senderName = sender?['Name']?.toString() ?? 'Pesan Baru';
 
-      debugPrint('Main: TerimaPesan | room=$roomId | sender=$senderName | msg=$msgText');
+      // FIX: Cek isMe dari payload
+      final isMe = message['IsMe'] == true || message['LastIsMe'] == true || senderName.toLowerCase() == 'you';
+
+      debugPrint('Main: TerimaPesan | room=$roomId | sender=$senderName | msg=$msgText | isMe=$isMe');
       
       // FIX: Panggil sinkronisasi fallback jika backend lupa mengirim TerimaSubSpv (Sering terjadi pada Grup)
       try {
         final chatProvider = context.read<ChatProvider>();
-        chatProvider.handleTerimaPesanSync(roomId);
+        chatProvider.handleTerimaPesanSync(roomId, isMe: isMe);
       } catch (e) {
         debugPrint('Main: Could not sync from TerimaPesan: $e');
       }

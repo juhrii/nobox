@@ -369,13 +369,13 @@ class SignalRService {
     Map<String, dynamic>? senderData,
   ) {
     try {
-      final agentId = messageData['AgentId'];
       final msgText = messageData['Msg']?.toString() ?? '';
       final senderName = senderData?['Name']?.toString() ?? 'Pesan Baru';
+      final isMe = messageData['IsMe'] == true || messageData['LastIsMe'] == true || senderName.toLowerCase() == 'you';
 
-      // Skip notifikasi untuk pesan dari agent (termasuk pesan sendiri)
-      if (agentId != null && agentId != 0 && agentId.toString() != '0') {
-        debugPrint('SignalR: 🔕 Skip notification (agent message) room=$roomId');
+      // Skip notifikasi untuk pesan dari kita sendiri
+      if (isMe) {
+        debugPrint('SignalR: 🔕 Skip notification (own message) room=$roomId');
         return;
       }
 
@@ -392,16 +392,13 @@ class SignalRService {
         return;
       }
 
-      // Tampilkan notifikasi
-      debugPrint('SignalR: 🔔 Showing notification for room=$roomId sender=$senderName');
-      PushNotificationService.showChatNotification(
-        roomId: roomId,
-        roomName: senderName,
-        senderName: senderName,
-        message: msgText,
-      );
+      // Tampilkan notifikasi (DIPINDAHKAN KE chat_provider.dart)
+      // SignalR service tidak bisa secara akurat membedakan pesan dari diri sendiri (akibat bug backend NoBox).
+      // Oleh karena itu, tugas memanggil PushNotificationService.showChatNotification dipindahkan
+      // ke dalam ChatProvider -> updateRoomFromSignalR yang memiliki pencocokan teks (isMeFallback).
+      debugPrint('SignalR: 🔔 Delegating notification to ChatProvider for room=$roomId sender=$senderName');
     } catch (e) {
-      debugPrint('SignalR: ❌ Error showing notification: $e');
+      debugPrint('SignalR: ❌ Error delegating notification: $e');
     }
   }
 

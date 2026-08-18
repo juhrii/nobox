@@ -222,7 +222,6 @@ class Conversation {
       isBlocked: json['CtIsBlock'] == 1 || json['CtIsBlock'] == true,
       isLastMessageFromMe: json['IsMe'] == true ||
           json['LastIsMe'] == true ||
-          json['AgentId'] != null ||
           getValue(['is_last_message_from_me', 'IsMeLast']) == true,
       needReply: json['NeedReply'] == 1 || 
           json['NeedReply'] == true || 
@@ -337,6 +336,15 @@ class Conversation {
     if (raw == null) return null;
     // Jika sudah berupa URL penuh, gunakan apa adanya
     if (raw.startsWith('http')) return raw;
+    
+    // Bersihkan slash di depan jika ada
+    if (raw.startsWith('/')) raw = raw.substring(1);
+    
+    // Jika string dari server sudah mengandung path upload, jangan ditambahkan lagi
+    if (raw.toLowerCase().startsWith('upload/')) {
+       return 'https://id.nobox.ai/$raw';
+    }
+    
     // Tambahkan awalan base upload URL untuk path relatif
     return 'https://id.nobox.ai/upload/$raw';
   }

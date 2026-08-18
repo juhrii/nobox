@@ -405,23 +405,60 @@ Future<void> fetchChats() async {
           final oldChat = oldChatsMap[chat.id];
 
           bool isNewMessage = false;
+          int forcedUnread = 0;
+          
           if (oldChat != null) {
+            // FIX: Pewarisan isLastMessageFromMe dari cache lokal
+            // Karena backend NoBox sering tidak menyertakan IsMe=true untuk balasan kita di endpoint List.
+            // Jika pesan teksnya mirip/sama (atau media), kita wariskan statusnya agar tidak memicu unread palsu.
+            if (!chat.isLastMessageFromMe && oldChat.isLastMessageFromMe) {
+              final newLower = chat.lastMessage.toLowerCase().trim();
+              final oldLower = oldChat.lastMessage.toLowerCase().trim();
+              final isMediaJSON = newLower.startsWith('{') || newLower.startsWith('[');
+              final oldHasMediaLabel = ['photo', 'foto', 'video', 'voice', 'suara', 'audio', 'file', 'document', 'sticker', 'location', 'lokasi', 'media'].any((lbl) => oldLower.contains(lbl));
+              if (newLower == oldLower || (isMediaJSON && oldHasMediaLabel)) {
+                 chat = chat.copyWith(isLastMessageFromMe: true);
+              }
+            }
+            
             // Jika chat sudah ada sebelumnya, kita cek apakah waktu pesannya berubah (lebih baru)
-            if (chat.time != oldChat.time && chat.unreadCount > 0) {
+            final serverTimeParsed = DateTime.tryParse(chat.time.endsWith('Z') ? chat.time : chat.time + 'Z');
+            final oldTimeParsed = DateTime.tryParse(oldChat.time.endsWith('Z') ? oldChat.time : oldChat.time + 'Z');
+            
+            final isServerNewer = serverTimeParsed != null && (oldTimeParsed == null || serverTimeParsed.isAfter(oldTimeParsed));
+            
+            final isServerTimeDifferent = serverTimeParsed != null && oldTimeParsed != null && serverTimeParsed.difference(oldTimeParsed).inSeconds.abs() > 2;
+            final isMessageDifferent = chat.lastMessage.trim() != oldChat.lastMessage.trim() && chat.lastMessage != 'Site.Inbox.DeletedMessage';
+            
+            if ((isServerNewer || isServerTimeDifferent || isMessageDifferent) && chat.needReply && PushNotificationService.currentRoomId != chat.id) {
+              isNewMessage = true;
+              forcedUnread = (_localUnreadOverrides[chat.id] ?? oldChat.unreadCount) + 1;
+            } else if ((isServerNewer || isServerTimeDifferent || isMessageDifferent) && !chat.needReply) {
+              // Jika ada pesan baru tapi TIDAK butuh balasan, ini 100% balasan dari Agen!
+              // Hapus override angka indikator dan tandai sebagai terbaca (0).
+              _localUnreadOverrides.remove(chat.id);
+              if (!_readIds.contains(chat.id)) _readIds.add(chat.id);
+            } else if (isMessageDifferent && chat.unreadCount > 0) {
               isNewMessage = true;
             }
           } else if (chat.unreadCount > 0) {
-            // Jika ini chat baru/hot restart dan server merespons unreadCount > 0,
-            // hormati status dari server agar badge nomor tidak tertutup oleh cache lokal kuno!
+            // Jika aplikasi baru dibuka/restart dan server API merespons unreadCount > 0,
+            // paksa anggap sebagai pesan baru agar riwayat '_readIds' dihapus.
             isNewMessage = true;
           }
-
           if (isNewMessage) {
             // Pesan baru tiba! Hapus dari daftar terbaca agar badge muncul
             _readIds.remove(chat.id);
-            _localUnreadOverrides.remove(chat.id);
-            _saveReadState();
+            if (forcedUnread > 0) {
+               _localUnreadOverrides[chat.id] = forcedUnread;
+               chat = chat.copyWith(unreadCount: forcedUnread);
+               debugPrint('ChatProvider: 📈 Incremented Unread (via fetchConversations) for room ${chat.id}. New Uc: $forcedUnread');
+            }
+          } else {
+             // Chat dari cache yang tidak di-increment. 
+             chat = chat.copyWith(unreadCount: _localUnreadOverrides[chat.id] ?? chat.unreadCount);
           }
+          _saveReadState();
 
           // Cek override lokal (agar override tidak tertimpa kecuali ada pesan yang BENAR-BENAR LEBIH BARU)
           final localOverride = _localOverrides[chat.id];
@@ -808,13 +845,78 @@ Future<void> fetchChats() async {
         }
       }
 
+      // FIX: Karena server NoBox sering salah mengirim SdrMsg (bukan 'You') untuk pesan kita sendiri,
+      // kita cek apakah pesan baru ini teksnya sama persis dengan pesan terakhir yang kita ketik lokal.
+      final bool isExistingMedia = existing.isLastMessageFromMe && 
+          (existing.lastMessage == '📷 Photo' || existing.lastMessage == '🎬 Video' || existing.lastMessage.startsWith('📄') || existing.lastMessage == '🎤 Pesan Suara' || existing.lastMessage.startsWith('📍 Lokasi'));
+      final bool isNewMedia = lastMsg.trim().startsWith('{') || lastMsg.trim().startsWith('[');
+      
+      bool isSmartMeFallback = (sdrMsg.toLowerCase() == 'you') || 
+                                (existing.isLastMessageFromMe && lastMsg.trim().toLowerCase() == existing.lastMessage.trim().toLowerCase()) ||
+                                (existing.isLastMessageFromMe && isExistingMedia && isNewMedia);
+      // Dihapus: Deteksi Cerdas Agen berdasarkan nama pengirim.
+      // SdrMsg dari API (khususnya Telegram) sangat tidak terduga dan bisa berisi nama bot atau null,
+      // sehingga menyebabkan pesan pelanggan dikira pesan agen (dan mematikan badge unread).
+                                
+      debugPrint('ChatProvider: 🛎 EVALUASI SIGNALR UNTUK ROOM $roomId');
+      debugPrint('   - isSmartMeFallback: $isSmartMeFallback');
+      debugPrint('   - PushNotificationService.currentRoomId: ${PushNotificationService.currentRoomId}');
+      debugPrint('   - timeMsg (server): $timeMsg');
+      debugPrint('   - existing.time (lokal): ${existing.time}');
+      
+      if (!isSmartMeFallback && PushNotificationService.currentRoomId != roomId) {
+        final serverTimeParsed = DateTime.tryParse(timeMsg.endsWith('Z') ? timeMsg : timeMsg + 'Z');
+        final existingTimeParsed = DateTime.tryParse(existing.time.endsWith('Z') ? existing.time : existing.time + 'Z');
+        
+        debugPrint('   - serverTimeParsed: $serverTimeParsed');
+        debugPrint('   - existingTimeParsed: $existingTimeParsed');
+        debugPrint('   - isAfter: ${serverTimeParsed?.isAfter(existingTimeParsed ?? DateTime.now())}');
+        debugPrint('   - lastMsg != existingMsg: ${lastMsg.trim() != existing.lastMessage.trim()}');
+
+        if (serverTimeParsed != null && (existingTimeParsed == null || serverTimeParsed.isAfter(existingTimeParsed) || lastMsg.trim() != existing.lastMessage.trim())) {
+           
+           if (!isNeedReply) {
+             // FIX: Jika pesan tidak butuh balasan, ini PASTI balasan dari agen! 
+             // (Entah balas dari Nobox Web, Desktop, atau API).
+             // Hapus semua angka indikator karena agen sendiri yang membalas!
+             _localUnreadOverrides.remove(roomId);
+             if (!_readIds.contains(roomId)) _readIds.add(roomId);
+             _saveReadState();
+             debugPrint('ChatProvider: 🧹 Cleared Unread (via TerimaSubSpv - Agent Reply) for room $roomId');
+           } else {
+             // Jika butuh balasan (isNeedReply = true), ini PASTI pesan pelanggan, naikkan Unread!
+             final currentUc = _localUnreadOverrides[roomId] ?? existing.unreadCount;
+             final forcedUc = currentUc + 1;
+             _localUnreadOverrides[roomId] = forcedUc;
+             _readIds.remove(roomId);
+             _saveReadState();
+             debugPrint('ChatProvider: 📈 Incremented Unread (via TerimaSubSpv) for room $roomId. New Uc: $forcedUc');
+           }
+
+           // TRIGGER NOTIFIKASI
+           debugPrint('ChatProvider: 🔔 Triggering showChatNotification for room $roomId');
+           PushNotificationService.showChatNotification(
+              roomId: roomId,
+              roomName: roomData['CtRealNm']?.toString() ?? roomData['Ct']?.toString() ?? roomData['Name']?.toString() ?? 'Chat',
+              senderName: roomData['CtRealNm']?.toString() ?? roomData['Ct']?.toString() ?? roomData['Name']?.toString() ?? 'Pesan Baru',
+              message: lastMsg,
+              profileImageUrl: roomData['CtImg']?.toString() ?? roomData['LinkImg']?.toString(),
+           );
+        }
+      } else if (isSmartMeFallback || PushNotificationService.currentRoomId == roomId) {
+        // Jika pesan balasan dari kita sendiri ATAU kita sedang di dalam room, hapus perlindungan unread!
+        _localUnreadOverrides.remove(roomId);
+        if (!_readIds.contains(roomId)) _readIds.add(roomId);
+        _saveReadState();
+      }
+
       _chats[index] = existing.copyWith(
         lastMessage: lastMsg,
         lastMessageType: updatedType,
-        unreadCount: _localUnreadOverrides[roomId] ?? uc,
+        unreadCount: (isSmartMeFallback || PushNotificationService.currentRoomId == roomId) ? 0 : (_localUnreadOverrides[roomId] ?? uc),
         time: timeMsg,
         needReply: isNeedReply,
-        isLastMessageFromMe: sdrMsg.toLowerCase() == 'you',
+        isLastMessageFromMe: isSmartMeFallback,
         isBlocked: resolvedIsBlocked,
       );
 
@@ -827,28 +929,33 @@ Future<void> fetchChats() async {
     }
   }
 
-  // FIX: Backend kadang tidak mengirim TerimaSubSpv untuk Group Chat.
-  // Jadi ketika TerimaPesan datang, kita periksa apakah room-nya ada. Jika tidak, paksa refresh!
-  void handleTerimaPesanSync(String roomId) {
+  // [ACTION: SYNC_LOCAL] - Fallback jika TerimaSubSpv telat/gagal.
+  // Method ini dipanggil saat event TerimaPesan (Pesan Tunggal) muncul
+  void handleTerimaPesanSync(String roomId, {bool isMe = false}) {
     if (roomId.isEmpty) return;
-    if (_readIds.contains(roomId)) {
+    
+    // Jika kita yang membalas, kita reset unread count dan batalkan perlindungan unread.
+    if (isMe) {
+      _localUnreadOverrides.remove(roomId);
+      if (!_readIds.contains(roomId)) _readIds.add(roomId);
+      _saveReadState();
+    } else if (_readIds.contains(roomId)) {
       _readIds.remove(roomId);
       _localUnreadOverrides.remove(roomId);
       _saveReadState();
     }
+    
     final index = _chats.indexWhere((c) => c.id == roomId);
     if (index == -1) {
       debugPrint('ChatProvider: 🚨 Room $roomId missing on TerimaPesan! Triggering fallback refresh.');
       refreshFirstPage();
     } else {
-      // FIX UNREAD COUNT: Selalu increment unread count LOKAL jika kita BUKAN berada di dalam room tersebut!
-      // Karena server kadang telat / mengembalikan Uc:0 padahal ini chat masuk baru.
-      if (PushNotificationService.currentRoomId != roomId) {
-        final currentUc = _chats[index].unreadCount;
-        final forcedUc = (_localUnreadOverrides[roomId] ?? currentUc) + 1;
-        _localUnreadOverrides[roomId] = forcedUc;
-        _chats[index] = _chats[index].copyWith(unreadCount: forcedUc);
-        debugPrint('ChatProvider: 📈 Incremented Unread Count locally for room $roomId. New Uc: ${_chats[index].unreadCount}');
+      if (PushNotificationService.currentRoomId != roomId && !isMe) {
+        // KITA HAPUS increment di sini untuk mencegah double-increment (2x tambah untuk 1 pesan)!
+        // Event TerimaPesan (tunggal) dan TerimaSubSpv (room) dari NoBox tertembak bersamaan.
+        // Biarkan updateRoomFromSignalR (TerimaSubSpv) saja yang bertanggung jawab menambah unread count!
+      } else if (isMe) {
+        _chats[index] = _chats[index].copyWith(unreadCount: 0);
       }
       
       // Jika ada pesan baru masuk via TerimaPesan, picu pembaruan UI agar badge unread/posisi teratas ter-render
@@ -1114,6 +1221,46 @@ Future<void> fetchChats() async {
               }
             }
 
+            // FIX: Pewarisan isLastMessageFromMe dari cache lokal
+            if (!chat.isLastMessageFromMe && oldChat.isLastMessageFromMe) {
+              final newLower = chat.lastMessage.toLowerCase().trim();
+              final oldLower = oldChat.lastMessage.toLowerCase().trim();
+              final isMediaJSON = newLower.startsWith('{') || newLower.startsWith('[');
+              final oldHasMediaLabel = ['photo', 'foto', 'video', 'voice', 'suara', 'audio', 'file', 'document', 'sticker', 'location', 'lokasi', 'media'].any((lbl) => oldLower.contains(lbl));
+              if (newLower == oldLower || (isMediaJSON && oldHasMediaLabel)) {
+                 chat = chat.copyWith(isLastMessageFromMe: true);
+              }
+            }
+
+            // FIX UNREAD COUNT DI API LIST:
+            // Polling API List sering mengembalikan Uc: 0 jika Backend NoBox mendeteksi websocket aktif.
+            // Jika waktu pesan ini lebih baru dan bukan dari kita, maka KITA HARUS MENG-INCREMENT UNREAD.
+            final serverTimeParsed = DateTime.tryParse(chat.time.endsWith('Z') ? chat.time : chat.time + 'Z');
+            final oldTimeParsed = DateTime.tryParse(oldChat.time.endsWith('Z') ? oldChat.time : oldChat.time + 'Z');
+            
+            if (serverTimeParsed != null && (oldTimeParsed == null || serverTimeParsed.isAfter(oldTimeParsed))) {
+               if (!chat.isLastMessageFromMe && PushNotificationService.currentRoomId != chat.id && chat.lastMessage != 'Site.Inbox.DeletedMessage') {
+                   final currentUc = _localUnreadOverrides[chat.id] ?? oldChat.unreadCount;
+                   final forcedUc = currentUc + 1;
+                   _localUnreadOverrides[chat.id] = forcedUc;
+                   chat = chat.copyWith(unreadCount: forcedUc);
+                   _readIds.remove(chat.id);
+                   _saveReadState();
+                   debugPrint('ChatProvider: 📈 Incremented Unread (via API List) for room ${chat.id}. New Uc: $forcedUc');
+               } else if (chat.isLastMessageFromMe) {
+                   // Jika pesan baru ini dari kita (misal kita balas dari web), reset unread
+                   _localUnreadOverrides.remove(chat.id);
+                   if (!_readIds.contains(chat.id)) _readIds.add(chat.id);
+                   chat = chat.copyWith(unreadCount: 0);
+                   _saveReadState();
+               }
+            } else {
+               // WAKTU SAMA (bukan pesan lebih baru).
+               // FIX: Hormati cache unread lokal! Karena Backend NoBox sering mereturn uc=0 pada saat waktu sama (bug online),
+               // Jika kita tidak menggunakan _localUnreadOverrides di sini, maka angka badge akan HILANG SECARA TIBA-TIBA (menjadi 0).
+               chat = chat.copyWith(unreadCount: _localUnreadOverrides[chat.id] ?? chat.unreadCount);
+            }
+
             _chats[idx] = chat;
           } else {
             // FIX: Bersihkan/Timpa dummy chat (yang dibuat lokal) jika contactId cocok
@@ -1191,6 +1338,10 @@ Future<void> fetchChats() async {
               } else if (chat.unreadCount > 0) {
                 _readIds.remove(chat.id);
               }
+
+              // Tidak boleh memaksa unreadCount = 1 untuk obrolan dari API List New,
+              // karena dapat menyebabkan obrolan lama yang sudah dibaca ikut muncul unread = 1.
+
               return chat.copyWith(
                 isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
                 isArchived: _archivedIds.contains(chat.id),
