@@ -23,6 +23,7 @@ import 'archive_list_page.dart';
 import '../../widgets/chat_list_skeleton.dart';
 import '../../widgets/connection_status_banner.dart';
 import '../../widgets/channel_icon.dart';
+import '../../widgets/authenticated_avatar.dart';
 
 // =====================================================================
 // FITUR: Halaman Utama Daftar Chat (Inbox)
@@ -1386,32 +1387,10 @@ class _ChatListPageState extends State<ChatListPage> with SingleTickerProviderSt
                                 size: 28,
                               ),
                             )
-                          : ClipOval(
-                              child: Container(
-                                width: 48,
-                                height: 48,
-                                color: Colors.grey.shade300,
-                                child: (chat.avatarUrl != null && chat.avatarUrl!.isNotEmpty)
-                                    ? CachedNetworkImage(
-                                        imageUrl: chat.avatarUrl!,
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) => Icon(
-                                          chat.isGroup ? Icons.groups : Icons.person,
-                                          color: Colors.grey.shade500,
-                                          size: 28,
-                                        ),
-                                        errorWidget: (context, url, error) => Icon(
-                                          chat.isGroup ? Icons.groups : Icons.person,
-                                          color: Colors.grey.shade600,
-                                          size: 28,
-                                        ),
-                                      )
-                                    : Icon(
-                                        chat.isGroup ? Icons.groups : Icons.person,
-                                        color: Colors.grey.shade600,
-                                        size: 28,
-                                      ),
-                              ),
+                          : AuthenticatedAvatar(
+                              imageUrl: chat.avatarUrl,
+                              size: 48,
+                              isGroup: chat.isGroup,
                             ),
                     ),
                     const SizedBox(width: 12),

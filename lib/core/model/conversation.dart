@@ -334,6 +334,11 @@ class Conversation {
     }
 
     if (raw == null) return null;
+
+    // BINGO: C# Backend sering mereturn Windows path backslash (\) seperti "80404711\Contacts\xxx.jpg"
+    // Ganti semua backslash menjadi forward slash agar URL valid
+    raw = raw.replaceAll('\\', '/');
+
     // Jika sudah berupa URL penuh, gunakan apa adanya
     if (raw.startsWith('http')) return raw;
     

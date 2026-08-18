@@ -8,6 +8,7 @@ import '../../../core/model/message.dart';
 import '../../widgets/channel_icon.dart';
 import '../../widgets/room_shimmer_widget.dart';
 import 'chat_detail_page.dart';
+import '../../widgets/authenticated_avatar.dart';
 
 // =====================================================================
 // FITUR: Halaman Daftar Arsip
@@ -423,19 +424,10 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
                                 size: 28,
                               ),
                             )
-                          : CircleAvatar(
-                              radius: 24,
-                              backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-                              backgroundImage: chat.avatarUrl != null && chat.avatarUrl!.isNotEmpty
-                                  ? NetworkImage(chat.avatarUrl!)
-                                  : null,
-                              child: chat.avatarUrl == null || chat.avatarUrl!.isEmpty
-                                  ? Icon(
-                                      chat.isGroup ? Icons.group : Icons.person,
-                                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
-                                      size: 28,
-                                    )
-                                  : null,
+                          : AuthenticatedAvatar(
+                              imageUrl: chat.avatarUrl,
+                              size: 48,
+                              isGroup: chat.isGroup,
                             ),
                     ),
                     const SizedBox(width: 12),

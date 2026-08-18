@@ -13,6 +13,7 @@ import '../../../core/model/filter_data_item.dart';
 import '../../../core/model/api_response.dart';
 import '../../widgets/searchable_dropdown.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../widgets/authenticated_avatar.dart';
 
 // =====================================================================
 // FITUR: Halaman Detail Kontak (Info)
@@ -95,14 +96,27 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
 
   // FITUR: Sinkronisasi Data Room & Kontak (API Call)
   // FUNGSI: Menarik data terbaru dari server mengenai obrolan ini, termasuk tag, funnel, notes, status bot, dsb.
-  Future<void> _loadDetailRoom() async {
+   Future<void> _loadDetailRoom() async {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     final data = await chatProvider.getDetailRoom(widget.chat.id, forceRefresh: true);
-      try {
-        File('d:/UBIG/Proyek/NoBox_Chat/nobox/room_data_dump.txt').writeAsStringSync(data.toString());
-      } catch(e) {
-        print("Error dump: $e");
-      }
+    // DEBUG: Cetak semua field yang berkaitan dengan foto ke konsol Flutter
+    if (data != null) {
+      final roomData = data['Data'] ?? data;
+      final room = roomData is Map ? (roomData['Room'] ?? {}) : {};
+      final contact = roomData is Map ? (roomData['ContactReal'] ?? roomData['Contact'] ?? {}) : {};
+      debugPrint('=== AVATAR DEBUG (RoomId=${widget.chat.id}) ===');
+      debugPrint('Room[CtImg]    = ${room['CtImg']}');
+      debugPrint('Room[LinkImg]  = ${room['LinkImg']}');
+      debugPrint('Room[Photo]    = ${room['Photo']}');
+      debugPrint('Ct[Photo]      = ${contact['Photo']}');
+      debugPrint('Ct[Img]        = ${contact['Img']}');
+      debugPrint('Ct[AvatarUrl]  = ${contact['AvatarUrl']}');
+      debugPrint('Ct[ProfilePic] = ${contact['ProfilePic']}');
+      debugPrint('Ct[Picture]    = ${contact['Picture']}');
+      debugPrint('Room keys      = ${room is Map ? room.keys.toList() : "not a map"}');
+      debugPrint('Contact keys   = ${contact is Map ? contact.keys.toList() : "not a map"}');
+      debugPrint('=== END AVATAR DEBUG ===');
+    }
     debugPrint('ContactInfo: DetailRoom response keys: ${data?.keys.toList()}');
     if (data != null && mounted) {
       // Debug: print semua data untuk lihat field yang tersedia
@@ -329,11 +343,14 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             
             final photo = contact['Photo']?.toString() ?? room['CtImg']?.toString() ?? room['LinkImg']?.toString() ?? '';
             if (photo.isNotEmpty) {
-              if (photo.startsWith('http')) {
-                _currentAvatarUrl = photo;
-              } else {
-                _currentAvatarUrl = 'https://id.nobox.ai/upload/$photo';
+              String resolvedPhoto = photo;
+              if (!photo.startsWith('http')) {
+                // Ganti backslash (Windows path) menjadi forward slash agar URL valid
+                resolvedPhoto = 'https://id.nobox.ai/upload/${photo.replaceAll('\\', '/')}';
               }
+              _currentAvatarUrl = resolvedPhoto;
+              // SIMPAN ke cache ChatProvider agar bisa dipakai di halaman daftar chat
+              chatProvider.saveCachedAvatarUrl(widget.chat.id, resolvedPhoto);
             }
           }
           
@@ -1602,15 +1619,10 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: Colors.grey.shade300,
-                    backgroundImage: _currentAvatarUrl != null && _currentAvatarUrl!.isNotEmpty
-                        ? NetworkImage(_currentAvatarUrl!)
-                        : null,
-                    child: (_currentAvatarUrl == null || _currentAvatarUrl!.isEmpty)
-                        ? Icon(Icons.person, color: Colors.grey.shade600, size: 28)
-                        : null,
+                  AuthenticatedAvatar(
+                    imageUrl: _currentAvatarUrl,
+                    size: 48,
+                    isGroup: widget.chat.isGroup,
                   ),
                   const SizedBox(width: 14),
                   Expanded(

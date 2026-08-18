@@ -76,6 +76,8 @@ class ChatProvider with ChangeNotifier {
   static const String _savedAgentNamesKey = 'saved_agent_names';
   // Key untuk menyimpan status block/unblock lokal agar kontak baru tidak otomatis dianggap terblokir oleh backend NoBox
   static const String _savedBlockStatesKey = 'saved_block_states';
+  // Key untuk menyimpan cache avatar URL terbaru dari DetailRoom
+  static const String _cachedAvatarUrlsKey = 'cached_avatar_urls';
 
   // Map: roomId → nama kontak yang sudah disave (persisten melewati hot restart & refresh)
   Map<String, String> _savedContactNames = {};
@@ -85,6 +87,8 @@ class ChatProvider with ChangeNotifier {
   Map<String, String> _savedAgentNames = {};
   // Map: roomId → status blokir lokal (true=blocked, false=unblocked)
   Map<String, bool> _savedBlockStates = {};
+  // Map: roomId → URL avatar terbaru (diambil dari DetailRoom, untuk menggantikan URL stale dari list API)
+  Map<String, String> _cachedAvatarUrls = {};
 
   /// Mendapatkan status blokir yang akurat dan melindunginya dari nilai default keliru pada API NoBox untuk kontak baru
   bool resolveIsBlocked(String roomId, bool serverIsBlocked) {
@@ -808,7 +812,12 @@ Future<void> fetchChats() async {
           timeMsg += 'Z';
         }
       }
-      final isNeedReply = roomData['IsNeedReply'] == 1 || roomData['IsNeedReply'] == true;
+      final bool isNeedReply;
+      if (roomData.containsKey('IsNeedReply')) {
+        isNeedReply = roomData['IsNeedReply'] == 1 || roomData['IsNeedReply'] == true;
+      } else {
+        isNeedReply = existing.needReply;
+      }
       final sdrMsg = roomData['SdrMsg']?.toString() ?? '';
 
       // Jika ada pesan baru yang masuk (unreadCount > 0 dan bukan dari kita), hapus blokir readIds!
@@ -875,16 +884,17 @@ Future<void> fetchChats() async {
 
         if (serverTimeParsed != null && (existingTimeParsed == null || serverTimeParsed.isAfter(existingTimeParsed) || lastMsg.trim() != existing.lastMessage.trim())) {
            
-           if (!isNeedReply) {
-             // FIX: Jika pesan tidak butuh balasan, ini PASTI balasan dari agen! 
-             // (Entah balas dari Nobox Web, Desktop, atau API).
+           final isFromAgent = !isNeedReply || sdrMsg.toLowerCase() == 'you' || sdrMsg.toLowerCase() == 'system';
+           
+           if (isFromAgent) {
+             // FIX: Jika pesan balasan dari agen (atau tidak butuh balasan),
              // Hapus semua angka indikator karena agen sendiri yang membalas!
              _localUnreadOverrides.remove(roomId);
              if (!_readIds.contains(roomId)) _readIds.add(roomId);
              _saveReadState();
              debugPrint('ChatProvider: 🧹 Cleared Unread (via TerimaSubSpv - Agent Reply) for room $roomId');
            } else {
-             // Jika butuh balasan (isNeedReply = true), ini PASTI pesan pelanggan, naikkan Unread!
+             // Jika pesan pelanggan, naikkan Unread!
              final currentUc = _localUnreadOverrides[roomId] ?? existing.unreadCount;
              final forcedUc = currentUc + 1;
              _localUnreadOverrides[roomId] = forcedUc;
@@ -935,7 +945,7 @@ Future<void> fetchChats() async {
       _saveReadState();
     } else if (_readIds.contains(roomId)) {
       _readIds.remove(roomId);
-      _localUnreadOverrides.remove(roomId);
+      // Jangan hapus _localUnreadOverrides di sini agar tidak menghapus badge sebelum TerimaSubSpv memprosesnya
       _saveReadState();
     }
     
@@ -1531,6 +1541,18 @@ Future<void> fetchMoreChats() async {
           debugPrint('ChatProvider: ❌ Error decoding saved block states: $e');
         }
       }
+
+      // Load cache avatar URL terbaru dari DetailRoom
+      final savedAvatarsJson = prefs.getString(_cachedAvatarUrlsKey);
+      if (savedAvatarsJson != null) {
+        try {
+          final decoded = jsonDecode(savedAvatarsJson) as Map<String, dynamic>;
+          _cachedAvatarUrls = decoded.map((k, v) => MapEntry(k, v.toString()));
+          debugPrint('ChatProvider: ✅ Loaded ${_cachedAvatarUrls.length} cached avatar URLs');
+        } catch (e) {
+          debugPrint('ChatProvider: ❌ Error decoding cached avatar URLs: $e');
+        }
+      }
     } catch (e) {
       debugPrint('ChatProvider: ❌ Error loading persisted state: $e');
     }
@@ -1588,7 +1610,18 @@ Future<void> fetchMoreChats() async {
     return _savedContactLocations[roomId];
   }
 
+  /// Ambil URL avatar terbaru yang di-cache dari DetailRoom.
+  String? getCachedAvatarUrl(String roomId) {
+    return _cachedAvatarUrls[roomId];
+  }
 
+  /// Simpan URL avatar terbaru ke cache (dipanggil dari contact_info_page setelah dapat DetailRoom).
+  Future<void> saveCachedAvatarUrl(String roomId, String avatarUrl) async {
+    if (avatarUrl.isEmpty) return;
+    _cachedAvatarUrls[roomId] = avatarUrl;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_cachedAvatarUrlsKey, jsonEncode(_cachedAvatarUrls));
+  }
 
 
   // ── Getter Terkomputasi ──

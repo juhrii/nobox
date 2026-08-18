@@ -28,6 +28,7 @@ import '../../../core/model/quick_reply_model.dart';
 import '../../../core/providers/chat_settings_provider.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/chat_provider.dart';
+import '../../widgets/authenticated_avatar.dart';
 import 'contact_info_page.dart';
 import 'starred_messages_page.dart';
 import 'location_picker_page.dart';
@@ -3763,34 +3764,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             // Avatar
             Hero(
               tag: 'avatar_${chat.id}',
-              child: (chat.avatarUrl != null && chat.avatarUrl!.isNotEmpty)
-                  ? ClipOval(
-                      child: CachedNetworkImage(
-                        imageUrl: chat.avatarUrl!,
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => CircleAvatar(
-                          radius: 20,
-                          backgroundColor: Colors.blue.shade300,
-                          child: Icon(chat.isGroup ? Icons.groups : Icons.person, color: Colors.white, size: 22),
-                        ),
-                        errorWidget: (context, url, error) => CircleAvatar(
-                          radius: 20,
-                          backgroundColor: Colors.blue.shade300,
-                          child: Icon(chat.isGroup ? Icons.groups : Icons.person, color: Colors.white, size: 22),
-                        ),
-                      ),
-                    )
-                  : CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.blue.shade300,
-                      child: Icon(
-                        chat.isGroup ? Icons.groups : Icons.person,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
+              child: AuthenticatedAvatar(
+                imageUrl: chat.avatarUrl,
+                size: 40,
+                isGroup: chat.isGroup,
+              ),
             ),
             const SizedBox(width: 10),
             // Name & subtitle
