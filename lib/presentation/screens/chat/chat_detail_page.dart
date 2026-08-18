@@ -911,22 +911,32 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 // FIX HOT RESTART: Jangan timpa pesan yang sudah ter-restore di memori!
                 // Gabungkan sortedList dari server dengan pesan lokal di _messages.
                 final existingLocal = List<Message>.from(_messages);
-                final Map<String, Message> mergedMap = {};
+                final List<Message> mergedList = [];
+                final Set<String> seenApiKeys = {};
+                
                 for (final msg in sortedList) {
-                  final k = msg.id.isNotEmpty && msg.id != '0' ? msg.id : 'api_${msg.rawTime}_${msg.content.hashCode}';
-                  mergedMap[k] = msg;
+                  // Tambahkan sedikit salt dari time/content untuk mencegah penimpaan pesan yang dikirim sangat cepat
+                  final k = msg.id.isNotEmpty && msg.id != '0' 
+                      ? '${msg.id}_${msg.content.hashCode}' 
+                      : 'api_${msg.rawTime}_${msg.content.hashCode}';
+                      
+                  if (!seenApiKeys.contains(k)) {
+                    seenApiKeys.add(k);
+                    mergedList.add(msg);
+                  }
                 }
+                
                 for (final localMsg in existingLocal) {
                   final isOnServer = sortedList.any((s) =>
                       (s.id.isNotEmpty && s.id == localMsg.id) ||
-                      (s.isMe == localMsg.isMe && s.content.trim().toLowerCase() == localMsg.content.trim().toLowerCase()));
+                      (s.isMe == localMsg.isMe && s.content.trim().toLowerCase() == localMsg.content.trim().toLowerCase() && (s.rawTime == localMsg.rawTime || s.id.isEmpty)));
+                      
                   if (!isOnServer) {
-                    final k = localMsg.id.isNotEmpty && localMsg.id != '0' ? localMsg.id : 'local_${localMsg.rawTime}_${localMsg.content.hashCode}';
-                    mergedMap[k] = localMsg;
+                    mergedList.add(localMsg);
                     debugPrint('ChatDetail: 🛡️ Mencegah overwrite pesan lokal oleh API: "${localMsg.content}"');
                   }
                 }
-                final finalSorted = mergedMap.values.toList();
+                final finalSorted = mergedList;
                 finalSorted.sort((a, b) {
                   if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
                   try {
@@ -1414,16 +1424,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           for (final msg in sortedList) {
             if (msg.id.isNotEmpty && (_deletedMessageIds.contains(msg.id) || !updatedCurrentIds.contains(msg.id))) {
               if (_deletedMessageIds.contains(msg.id)) continue;
-              // Guard tambahan: jangan tambahkan jika kontennya ada di pending local (pesan kita yang baru dikirim belum dapat ID)
-              if (msg.isMe &&
-                  pendingLocalContents.contains(
-                    msg.content.trim().toLowerCase(),
-                  )) {
-                debugPrint(
-                  'AckPolling SKIP: Konten "${msg.content}" sudah ada di pending lokal, tidak ditambahkan.',
-                );
-                continue;
-              }
+              // Dihapus: Guard pendingLocalContents (Mencegah bug pesan kembar dibuang)
+              
               debugPrint(
                 'AckPolling ADDING NEW MESSAGE: ID=${msg.id}, Content=${msg.content}, Type=${msg.messageType}, IsMe=${msg.isMe}',
               );
