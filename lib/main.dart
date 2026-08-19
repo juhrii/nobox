@@ -148,8 +148,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       final msgText = message['Msg']?.toString() ?? '';
       final senderName = sender?['Name']?.toString() ?? 'Pesan Baru';
 
-      // FIX: Cek isMe dari payload
-      final isMe = message['IsMe'] == true || message['LastIsMe'] == true || senderName.toLowerCase() == 'you';
+      // FIX: Cek isMe secara komprehensif dari payload agar pesan keluar (outbound) tidak dianggap sebagai pesan masuk
+      final agentId = message['agent_id'] ?? message['AgentId'] ?? message['agentId'];
+      final isNobox = message['is_nobox'] ?? message['IsNobox'];
+      final dirStr = message['dir']?.toString().toLowerCase();
+      final isOutbound = message['IsOutbound'] ?? message['IsOutBound'] ?? message['Outbound'] ?? message['isOutbound'];
+      
+      final isEchoBack = (agentId != null && agentId != 0 && agentId.toString() != '0') ||
+          (isNobox == 1 || isNobox == '1' || isNobox == true) ||
+          (dirStr == '1' || dirStr == '2' || dirStr == 'out' || dirStr == 'outbound' || dirStr == 'true') ||
+          (isOutbound == true || isOutbound == 'true' || isOutbound == 1);
+
+      final isMe = isEchoBack || message['IsMe'] == true || message['LastIsMe'] == true || senderName.toLowerCase() == 'you';
 
       debugPrint('Main: TerimaPesan | room=$roomId | sender=$senderName | msg=$msgText | isMe=$isMe');
       
