@@ -457,7 +457,7 @@ class ChatProvider with ChangeNotifier {
                 'lokasi',
                 'media',
               ].any((lbl) => oldLower.contains(lbl));
-              final isTextMatch = oldLower.isNotEmpty && newLower.isNotEmpty && (newLower == oldLower || newLower.contains(oldLower) || oldLower.contains(newLower)); 
+              final isTextMatch = oldLower.isNotEmpty && newLower.isNotEmpty && newLower == oldLower; 
               if (isTextMatch || (isMediaJSON && oldHasMediaLabel)) {
                 chat = chat.copyWith(isLastMessageFromMe: true);
               }
@@ -1626,7 +1626,7 @@ class ChatProvider with ChangeNotifier {
                 'lokasi',
                 'media',
               ].any((lbl) => oldLower.contains(lbl));
-              final isTextMatch = oldLower.isNotEmpty && newLower.isNotEmpty && (newLower == oldLower || newLower.contains(oldLower) || oldLower.contains(newLower)); 
+              final isTextMatch = oldLower.isNotEmpty && newLower.isNotEmpty && newLower == oldLower; 
               if (isTextMatch || (isMediaJSON && oldHasMediaLabel)) {
                 chat = chat.copyWith(isLastMessageFromMe: true);
               }
