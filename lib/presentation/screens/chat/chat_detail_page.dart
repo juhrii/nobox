@@ -955,14 +955,22 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   }
                 }
 
+                // Buat daftar pesan server yang masih "bisa di-match" untuk 1-to-1 deduplikasi
+                final List<Message> serverMessagesToMatch = List.from(mergedList);
+
                 for (final localMsg in existingLocal) {
-                  final isOnServer = sortedList.any((s) {
-                    if (s.id.isNotEmpty && s.id == localMsg.id) return true;
+                  if (localMsg.id.isNotEmpty && localMsg.id != '0') {
+                    if (!mergedList.any((s) => s.id == localMsg.id)) {
+                      mergedList.add(localMsg);
+                    }
+                    continue;
+                  }
+
+                  // Cari 1 pesan server yang COCOK dan BELUM DI-MATCH
+                  int matchIdx = serverMessagesToMatch.indexWhere((s) {
                     if (s.isMe == localMsg.isMe &&
-                        s.content.trim().toLowerCase() ==
-                            localMsg.content.trim().toLowerCase()) {
+                        s.content.trim().toLowerCase() == localMsg.content.trim().toLowerCase()) {
                       if (s.rawTime == localMsg.rawTime || s.id.isEmpty) return true;
-                      // Cek rentang waktu toleransi (misal selisih max 1 menit)
                       try {
                         String ta = s.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z');
                         String tb = localMsg.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z');
@@ -970,7 +978,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
                         final dtA = DateTime.parse(ta);
                         final dtB = DateTime.parse(tb);
-                        if (dtA.difference(dtB).inMinutes.abs() <= 1) {
+                        if (dtA.difference(dtB).inMinutes.abs() <= 2) {
                           return true;
                         }
                       } catch (_) {}
@@ -978,11 +986,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     return false;
                   });
 
-                  if (!isOnServer) {
+                  if (matchIdx != -1) {
+                    // Ketemu! Pesan lokal ini sudah ada di server.
+                    // Hapus dari serverMessagesToMatch agar tidak di-match lagi oleh pesan lokal ganda lainnya.
+                    serverMessagesToMatch.removeAt(matchIdx);
+                  } else {
+                    // Tidak ketemu! Pesan lokal ini belum ada di server (atau gagal).
+                    // Pertahankan pesan lokal ini di UI!
                     mergedList.add(localMsg);
-                    debugPrint(
-                      'ChatDetail: 🛡️ Mencegah overwrite pesan lokal oleh API: "${localMsg.content}"',
-                    );
+                    debugPrint('ChatDetail: 🛡️ Mempertahankan pesan lokal: "${localMsg.content}"');
                   }
                 }
                 final finalSorted = mergedList;
