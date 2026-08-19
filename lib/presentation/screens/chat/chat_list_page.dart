@@ -107,8 +107,11 @@ class _ChatListPageState extends State<ChatListPage>
   // FUNGSI: Menampilkan AppBar khusus ketika pengguna memilih satu atau lebih chat, memungkinkan aksi massal seperti Archive atau Pin.
   PreferredSizeWidget _buildSelectionAppBar(BuildContext context) {
     final chatProvider = context.read<ChatProvider>();
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
+    
     return AppBar(
-      backgroundColor: Colors.blue.shade600,
+      backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue.shade600,
       elevation: 0,
       toolbarHeight: 64,
       leading: IconButton(
@@ -221,8 +224,8 @@ class _ChatListPageState extends State<ChatListPage>
       appBar: _selectedChats.isNotEmpty
           ? _buildSelectionAppBar(context)
           : AppBar(
-              backgroundColor: Colors.blue,
-              surfaceTintColor: Colors.blue,
+              backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue,
+              surfaceTintColor: isDark ? AppTheme.darkSurface : Colors.blue,
               elevation: 0,
               toolbarHeight: 64,
               iconTheme: const IconThemeData(color: Colors.white),

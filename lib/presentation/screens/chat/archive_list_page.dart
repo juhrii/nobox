@@ -39,8 +39,10 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
   // FUNGSI: Menggantikan AppBar normal ketika pengguna memilih satu atau lebih chat, memungkinkan untuk unarchive secara massal.
   PreferredSizeWidget _buildSelectionAppBar(BuildContext context) {
     final chatProvider = context.read<ChatProvider>();
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
     return AppBar(
-      backgroundColor: Colors.blue.shade600,
+      backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue.shade600,
       elevation: 0,
       toolbarHeight: 64,
       leading: IconButton(
@@ -122,9 +124,11 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
   // FITUR: Appbar Mode Normal
   // FUNGSI: Menampilkan judul standar halaman ketika tidak ada percakapan yang sedang dipilih.
   PreferredSizeWidget _buildNormalAppBar(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
     return AppBar(
-      backgroundColor: Colors.blue,
-      surfaceTintColor: Colors.blue,
+      backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue,
+      surfaceTintColor: isDark ? AppTheme.darkSurface : Colors.blue,
       iconTheme: const IconThemeData(color: Colors.white),
       elevation: 0,
       title: const Text(

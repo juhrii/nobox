@@ -4021,8 +4021,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     // ── ARCHIVED APP BAR ──
     if (chat.isArchived) {
       return AppBar(
-        backgroundColor: Colors.blue,
-        surfaceTintColor: Colors.blue,
+        backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue,
+        surfaceTintColor: isDark ? AppTheme.darkSurface : Colors.blue,
         iconTheme: const IconThemeData(color: Colors.white),
         leadingWidth: 30,
         titleSpacing: 12,
@@ -4063,8 +4063,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     // ── NORMAL APP BAR (non-archived) ──
     return AppBar(
-      backgroundColor: Colors.blue,
-      surfaceTintColor: Colors.blue,
+      backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue,
+      surfaceTintColor: isDark ? AppTheme.darkSurface : Colors.blue,
       iconTheme: const IconThemeData(color: Colors.white),
       leadingWidth: 30,
       titleSpacing: 8,
@@ -4250,7 +4250,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   PreferredSizeWidget _buildSelectionAppBar(bool isDark) {
     return AppBar(
-      backgroundColor: const Color(
+      backgroundColor: isDark ? AppTheme.darkSurface : const Color(
         0xFF1976D2,
       ), // Biru tua standar seperti di gambar referensi
       surfaceTintColor: Colors.transparent,
