@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../../core/theme/app_theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -6207,12 +6208,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             iconColorSelected: Colors.blue,
             iconColor: isDark ? Colors.grey[600]! : Colors.grey[400]!,
           ),
-          bottomActionBarConfig: const BottomActionBarConfig(
+          bottomActionBarConfig: BottomActionBarConfig(
             showBackspaceButton: true,
             showSearchViewButton: true,
-            backgroundColor: Colors.blue,
-            buttonColor: Colors.white,
-            buttonIconColor: Colors.white,
+            backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue,
+            buttonColor: isDark ? Colors.white70 : Colors.white,
+            buttonIconColor: isDark ? Colors.white70 : Colors.white,
           ),
           searchViewConfig: SearchViewConfig(
             backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
