@@ -320,16 +320,23 @@ class Message {
         isMe = true;
       } else if (dirStr == '1' || dirStr == '2' || dirStr == 'out' || dirStr == 'outbound' || dirStr == 'true') {
         isMe = true;
-      } else if (json['FromId'] != null && json['ChAccId'] != null && json['FromId'].toString() == json['ChAccId'].toString()) {
-        isMe = true;
-      } else if (json['SenderId'] != null && json['ChAccId'] != null && json['SenderId'].toString() == json['ChAccId'].toString()) {
-        isMe = true;
-      } else if (json['SenderId'] != null && json['FromId'] != null && json['SenderId'].toString() == json['FromId'].toString() && dirStr != 'in' && dirStr != '0') {
-        isMe = true;
       } else {
-        // Fallback: cek kecocokan email
-        final senderId = json['SenderId']?.toString() ?? json['FromId']?.toString() ?? json['sender_email'] ?? '';
-        isMe = senderId.isNotEmpty && senderId == currentUserEmail;
+        // Deteksi kuat: Jika pengirim sama dengan ID Akun Channel (ChAccId), maka ini pesan dari KITA (agen/bisnis)
+        final extFrom = json['From']?.toString() ?? json['FromId']?.toString() ?? json['IdAccount']?.toString() ?? '';
+        final extChAccId = json['ChAccId']?.toString() ?? '';
+        final extSenderId = json['SenderId']?.toString() ?? '';
+
+        if (extFrom.isNotEmpty && extChAccId.isNotEmpty && extFrom == extChAccId) {
+          isMe = true;
+        } else if (extSenderId.isNotEmpty && extChAccId.isNotEmpty && extSenderId == extChAccId) {
+          isMe = true;
+        } else if (extSenderId.isNotEmpty && extFrom.isNotEmpty && extSenderId == extFrom && dirStr != 'in' && dirStr != '0') {
+          isMe = true;
+        } else {
+          // Fallback: cek kecocokan email
+          final senderEmail = extSenderId.isNotEmpty ? extSenderId : (extFrom.isNotEmpty ? extFrom : (json['sender_email']?.toString() ?? ''));
+          isMe = senderEmail.isNotEmpty && senderEmail == currentUserEmail;
+        }
       }
     }
 
