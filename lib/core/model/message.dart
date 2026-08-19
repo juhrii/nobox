@@ -699,6 +699,37 @@ class Message {
         audioPath = '';
         content = '';
       }
+    } else if ((typeVal == '16' || typeVal == '3' || typeVal == '4' || typeVal == '5' || typeVal == '2') && (content.startsWith('{') || content.startsWith('['))) {
+      // Fallback: API NoBox sering mengirim URL media di dalam field Msg bukan di Files/File
+      final filePath = extractFilePath(content);
+      if (filePath.isNotEmpty) {
+        if (typeVal == '3' || _isImageFile(filePath)) {
+          msgType = MessageType.image;
+          imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '';
+        } else if (typeVal == '4' || isVideoFile(filePath)) {
+          msgType = MessageType.video;
+          videoUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '🎬 Video';
+        } else if (typeVal == '5') {
+          msgType = MessageType.document;
+          docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          docName = extractOriginalName(content);
+          if (docName.isEmpty) docName = filePath.split('/').last;
+          content = '📄 $docName';
+        } else if (typeVal == '2' || isAudioFile(filePath)) {
+          msgType = MessageType.voice;
+          audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '';
+        } else if (typeVal == '16') {
+          msgType = MessageType.sticker;
+          imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          content = '🌟 Sticker';
+        }
+      } else if (typeVal == '16' || typeVal == '3') {
+        msgType = MessageType.text;
+        content = '⚠️ Pesan ini tidak dapat ditampilkan. Buka WhatsApp di HP untuk melihat pesan ini.';
+      }
     } else if (typeVal == '16' || typeVal == '3') {
       // No Files/File data available
       msgType = MessageType.text;
