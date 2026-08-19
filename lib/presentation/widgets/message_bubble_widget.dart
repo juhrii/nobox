@@ -290,7 +290,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                                                     : AppTheme.otherMessageColor
                                                         .withOpacity(0.8)))
                                             : (isMe
-                                                ? AppTheme.primaryColor
+                                                ? (isDarkMode ? Colors.blue.withValues(alpha: 0.15) : AppTheme.primaryColor)
                                                 : (isDarkMode
                                                     ? AppTheme.darkSurface
                                                     : Colors.white)),
