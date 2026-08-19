@@ -956,14 +956,27 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 }
 
                 for (final localMsg in existingLocal) {
-                  final isOnServer = sortedList.any(
-                    (s) =>
-                        (s.id.isNotEmpty && s.id == localMsg.id) ||
-                        (s.isMe == localMsg.isMe &&
-                            s.content.trim().toLowerCase() ==
-                                localMsg.content.trim().toLowerCase() &&
-                            (s.rawTime == localMsg.rawTime || s.id.isEmpty)),
-                  );
+                  final isOnServer = sortedList.any((s) {
+                    if (s.id.isNotEmpty && s.id == localMsg.id) return true;
+                    if (s.isMe == localMsg.isMe &&
+                        s.content.trim().toLowerCase() ==
+                            localMsg.content.trim().toLowerCase()) {
+                      if (s.rawTime == localMsg.rawTime || s.id.isEmpty) return true;
+                      // Cek rentang waktu toleransi (misal selisih max 1 menit)
+                      try {
+                        String ta = s.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z');
+                        String tb = localMsg.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z');
+                        if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19) ta += 'Z';
+                        if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19) tb += 'Z';
+                        final dtA = DateTime.parse(ta);
+                        final dtB = DateTime.parse(tb);
+                        if (dtA.difference(dtB).inMinutes.abs() <= 1) {
+                          return true;
+                        }
+                      } catch (_) {}
+                    }
+                    return false;
+                  });
 
                   if (!isOnServer) {
                     mergedList.add(localMsg);
