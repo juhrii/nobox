@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -142,8 +144,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // Notifikasi sudah di-handle langsung di signalr_service.dart (_handleNewMessageNotification)
     // Listener ini hanya untuk logging/debugging
     _terimaPesanSub = signalR.onTerimaPesan.listen((data) {
+      if (data == null) return;
+      
       final roomId = data['roomId']?.toString() ?? '';
+      if (roomId.isEmpty) return;
+
       final message = data['message'] as Map<String, dynamic>? ?? {};
+
+      // DEBUG LOGGING UNTUK KEPERLUAN ANALISIS PAYLOAD SIGNALR
+      try {
+        final logFile = File('C:\\Users\\LENOVO\\.gemini\\antigravity-ide\\brain\\69aec70c-8f43-4ff0-b225-c155a41fffe7\\scratch\\signalr_payload.txt');
+        final logContent = 'TerimaPesan at ${DateTime.now().toIso8601String()}: ${jsonEncode(message)}\n';
+        if (!logFile.existsSync()) logFile.createSync(recursive: true);
+        logFile.writeAsStringSync(logContent, mode: FileMode.append);
+      } catch (e) {
+        // ignore
+      }
+
       final sender = data['sender'] as Map<String, dynamic>?;
       final msgText = message['Msg']?.toString() ?? '';
       final senderName = sender?['Name']?.toString() ?? 'Pesan Baru';
@@ -157,16 +174,38 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       final extFrom = message['From']?.toString() ?? message['FromId']?.toString() ?? message['IdAccount']?.toString() ?? '';
       final extChAccId = message['ChAccId']?.toString() ?? '';
       final extSenderId = message['SenderId']?.toString() ?? '';
-      final isNativeOutbound = (extFrom.isNotEmpty && extChAccId.isNotEmpty && extFrom == extChAccId) ||
-                               (extSenderId.isNotEmpty && extChAccId.isNotEmpty && extSenderId == extChAccId);
-
-      final isEchoBack = (agentId != null && agentId != 0 && agentId.toString() != '0') ||
+      
+      bool isMe = (agentId != null && agentId != 0 && agentId.toString() != '0') ||
           (isNobox == 1 || isNobox == '1' || isNobox == true) ||
           (dirStr == '1' || dirStr == '2' || dirStr == 'out' || dirStr == 'outbound' || dirStr == 'true') ||
-          (isOutbound == true || isOutbound == 'true' || isOutbound == 1) ||
-          isNativeOutbound;
+          (isOutbound == true || isOutbound == 'true' || isOutbound == 1);
 
-      final isMe = isEchoBack || message['IsMe'] == true || message['LastIsMe'] == true || senderName.toLowerCase() == 'you';
+      isMe = isMe || message['IsMe'] == true || message['LastIsMe'] == true || senderName.toLowerCase() == 'you';
+
+      // Cek fallback berdasarkan ChAccId vs From
+      if (!isMe && extChAccId.isNotEmpty && extFrom.isNotEmpty) {
+        if (extFrom == extChAccId || extFrom == extSenderId) {
+          isMe = true;
+        }
+      }
+
+      // ✅ FINAL DETEKSI AKURAT (Telegram / WhatsApp NATIVE):
+      // Jika To (tujuan) sama dengan ID pelanggan (contactId), maka PASTI ini pesan KITA!
+      if (!isMe) {
+        try {
+          final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+          final chatIndex = chatProvider.chats.indexWhere((c) => c.id == roomId);
+          if (chatIndex >= 0) {
+            final contactId = chatProvider.chats[chatIndex].contactId;
+            final extTo = message['To']?.toString() ?? message['ToId']?.toString() ?? '';
+            if (contactId.isNotEmpty && contactId != '0' && extTo == contactId) {
+              isMe = true;
+            }
+          }
+        } catch (e) {
+          // Abaikan error provider
+        }
+      }
 
       debugPrint('Main: TerimaPesan | room=$roomId | sender=$senderName | msg=$msgText | isMe=$isMe');
       

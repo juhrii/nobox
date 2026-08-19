@@ -1080,7 +1080,7 @@ class ChatService {
           debugPrint('ChatService: First message keys: ${(dataList.first as Map).keys.toList()}');
         }
 
-        final messages = dataList.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId)).toList();
+        final messages = dataList.map((json) => Message.fromJson(json, currentUserEmail, tenantId: currentTenantId, contactId: contactId)).toList();
         
         // FIX UNIVERSAL FALLBACK:
         // NoBox occasionally stores messages under CtRealId, ContactId, or Link instead of the newly assigned RoomId

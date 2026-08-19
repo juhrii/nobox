@@ -812,6 +812,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   json,
                   currentUserEmail,
                   tenantId: _chatService.currentTenantId,
+                  contactId: chat.contactId,
                 );
               }).toList();
               _debugApiState =
@@ -1131,6 +1132,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     messageData,
                     currentUserEmail,
                     tenantId: _chatService.currentTenantId,
+                    contactId: chat.contactId,
                   );
                   final newMsg = parsedMsg.copyWith(status: MessageStatus.read);
 
@@ -1964,10 +1966,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           messageData,
           currentUserEmail,
           tenantId: _chatService.currentTenantId,
+          contactId: chat.contactId,
         );
 
+        // DEBUG: Inject raw payload for debugging
+        final debugMessage = !parsedMessage.isMe 
+            ? parsedMessage.copyWith(content: '${parsedMessage.content}\n\n[RAW PAYLOAD]: ${jsonEncode(messageData)}')
+            : parsedMessage;
+
         // SignalR messages from customers should always be read immediately when on this page
-        final newMessage = parsedMessage.copyWith(status: MessageStatus.read);
+        final newMessage = debugMessage.copyWith(status: MessageStatus.read);
 
         // Incoming message verified for this room; proceed without blocking.
 

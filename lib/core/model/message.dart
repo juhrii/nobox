@@ -225,10 +225,41 @@ class Message {
 
   // FITUR: Parse Pesan dari JSON
   // FUNGSI: Mengubah response JSON list messages API menjadi objek Message
-  factory Message.fromJson(Map<String, dynamic> json, String currentUserEmail, {String? tenantId}) {
+  factory Message.fromJson(Map<String, dynamic> json, String currentUserEmail, {String? tenantId, String? contactId}) {
     String id = json['Id']?.toString() ?? '';
     final rawIdAlias = json['IdAlias']?.toString() ?? '';
     final parsedIdAlias = (rawIdAlias.isNotEmpty && rawIdAlias != '0') ? rawIdAlias : null;
+
+    if (id == '0' || id.isEmpty) {
+      id = json['IdAlias']?.toString() ?? json['IdAccount']?.toString() ?? json['id']?.toString() ?? '';
+    }
+
+    // Identifikasi awal dari field yang diberikan server (bisa null/missing untuk channel tertentu)
+    final isOutbound = json['IsOutbound'];
+    final isNobox = json['IsNobox'];
+    final agentId = json['AgentId'];
+    final dirStr = json['dir']?.toString().toLowerCase() ?? '';
+
+    bool isMe = false;
+    
+    // Deteksi Outbound NATIVE (Telegram dll) berdasarkan tujuan pesan
+    // Jika pesan ditujukan KEPADA pelanggan ini (To == contactId), maka pesan itu PASTI dikirim oleh bisnis.
+    bool isNativeOutbound = false;
+    if (contactId != null && contactId.isNotEmpty && contactId != '0') {
+      final extTo = json['To']?.toString() ?? json['ToId']?.toString() ?? '';
+      if (extTo.isNotEmpty && extTo == contactId) {
+        isNativeOutbound = true;
+      }
+    }
+
+    if (json['IsMe'] == true || json['IsMe'] == 'true' || json['IsMe'] == 1) {
+      isMe = true;
+    } else if (json['LastIsMe'] == true || json['LastIsMe'] == 'true' || json['LastIsMe'] == 1) {
+      isMe = true;
+    } else if (isNativeOutbound) {
+      // ✅ DETEKSI AKURAT: Jika `To` adalah Customer, ini adalah pesan KITA (Outbound).
+      isMe = true;
+    }
 
     if (id == '0' || id.isEmpty) {
       if (parsedIdAlias != null) {
@@ -790,7 +821,7 @@ class Message {
       content = "⚠️ Pesan gagal diproses oleh server.";
     }
 
-    return Message(
+    final parsedMsg = Message(
       id: id,
       idAlias: parsedIdAlias,
       content: content,
@@ -811,6 +842,12 @@ class Message {
       toId: json['To']?.toString() ?? json['ToId']?.toString() ?? json['ChAccId']?.toString(),
       roomId: json['RoomId']?.toString() ?? '',
     );
+
+    final finalMessage = !isMe 
+        ? parsedMsg.copyWith(content: '${parsedMsg.content}\n\n[RAW PAYLOAD]: ${jsonEncode(json)}')
+        : parsedMsg;
+    
+    return finalMessage;
   }
 
   Message copyWith({
