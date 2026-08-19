@@ -130,6 +130,8 @@ class ChatProvider with ChangeNotifier {
     _ignoredServerTimes[roomId]!.add(time);
     if (!time.endsWith('Z')) {
       _ignoredServerTimes[roomId]!.add('${time}Z');
+    } else {
+      _ignoredServerTimes[roomId]!.add(time.substring(0, time.length - 1));
     }
   }
 
@@ -138,11 +140,6 @@ class ChatProvider with ChangeNotifier {
   // oleh data TerimaSubSpv (Conversation.fromJson) yang logika isLastMessageFromMe-nya lebih lemah.
   // Ini krusial ketika agen membalas pesan dari aplikasi native (seperti Telegram) langsung.
   Map<String, bool> _recentIsMeFlags = {};
-      _ignoredServerTimes[roomId]!.add('${time}Z');
-    } else {
-      _ignoredServerTimes[roomId]!.add(time.substring(0, time.length - 1));
-    }
-  }
 
   bool _isTimeIgnored(String roomId, String serverTimeStr) {
     if (serverTimeStr.isEmpty) return false;
