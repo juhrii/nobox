@@ -1045,9 +1045,11 @@ class ChatProvider with ChangeNotifier {
         isNeedReply = existing.needReply;
       }
       final sdrMsg = roomData['SdrMsg']?.toString() ?? '';
+      final bool isRecentMe = _recentIsMeFlags[roomId] == true;
 
       // Jika ada pesan baru yang masuk (unreadCount > 0 dan bukan dari kita), hapus blokir readIds!
       if (uc > 0 &&
+          !isRecentMe &&
           sdrMsg.toLowerCase() != 'you' &&
           _readIds.contains(roomId)) {
         _readIds.remove(roomId);
@@ -1149,6 +1151,7 @@ class ChatProvider with ChangeNotifier {
           // Hapus ketergantungan pada IsNeedReply secara total di sini.
           // Hanya anggap balasan agen JIKA sdrMsg = 'you'/'system' ATAU isSmartMeFallback true.
           final isFromAgent =
+              isRecentMe ||
               sdrMsg.toLowerCase() == 'you' ||
               (sdrMsg.toLowerCase() == 'system' && !existing.isGroup) ||
               isSmartMeFallback;
@@ -1257,7 +1260,10 @@ class ChatProvider with ChangeNotifier {
         ); // FIX: Wajib hapus dari _readIds agar tidak dipaksa jadi 0 lagi!
         _saveReadState();
       } else if (isMe) {
+        _localUnreadOverrides.remove(roomId);
+        if (!_readIds.contains(roomId)) _readIds.add(roomId);
         _chats[index] = _chats[index].copyWith(unreadCount: 0);
+        _saveReadState();
       }
 
       // Update pesan terakhir secara instan agar UI (termasuk preview pesan) langsung terupdate.
@@ -1789,7 +1795,16 @@ class ChatProvider with ChangeNotifier {
 
               final oldIdx = _chats.indexWhere((c) => c.id == chat.id);
               if (oldIdx != -1) {
-                if (chat.time != _chats[oldIdx].time && chat.unreadCount > 0) {
+                bool isTimeDifferent = false;
+                try {
+                  final t1 = DateTime.parse(chat.time.endsWith('Z') ? chat.time : chat.time + 'Z');
+                  final t2 = DateTime.parse(_chats[oldIdx].time.endsWith('Z') ? _chats[oldIdx].time : _chats[oldIdx].time + 'Z');
+                  isTimeDifferent = t1.difference(t2).inSeconds.abs() > 0;
+                } catch (e) {
+                  isTimeDifferent = chat.time != _chats[oldIdx].time;
+                }
+
+                if (isTimeDifferent && chat.unreadCount > 0) {
                   _readIds.remove(chat.id);
                 }
               } else if (chat.unreadCount > 0) {

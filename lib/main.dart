@@ -154,10 +154,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       final dirStr = message['dir']?.toString().toLowerCase();
       final isOutbound = message['IsOutbound'] ?? message['IsOutBound'] ?? message['Outbound'] ?? message['isOutbound'];
       
+      final extFrom = message['From']?.toString() ?? message['FromId']?.toString() ?? message['IdAccount']?.toString() ?? '';
+      final extChAccId = message['ChAccId']?.toString() ?? '';
+      final extSenderId = message['SenderId']?.toString() ?? '';
+      final isNativeOutbound = (extFrom.isNotEmpty && extChAccId.isNotEmpty && extFrom == extChAccId) ||
+                               (extSenderId.isNotEmpty && extChAccId.isNotEmpty && extSenderId == extChAccId);
+
       final isEchoBack = (agentId != null && agentId != 0 && agentId.toString() != '0') ||
           (isNobox == 1 || isNobox == '1' || isNobox == true) ||
           (dirStr == '1' || dirStr == '2' || dirStr == 'out' || dirStr == 'outbound' || dirStr == 'true') ||
-          (isOutbound == true || isOutbound == 'true' || isOutbound == 1);
+          (isOutbound == true || isOutbound == 'true' || isOutbound == 1) ||
+          isNativeOutbound;
 
       final isMe = isEchoBack || message['IsMe'] == true || message['LastIsMe'] == true || senderName.toLowerCase() == 'you';
 
