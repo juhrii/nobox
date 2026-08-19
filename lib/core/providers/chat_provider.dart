@@ -492,14 +492,13 @@ class ChatProvider with ChangeNotifier {
               isNewMessage = true;
               forcedUnread =
                   (_localUnreadOverrides[chat.id] ?? oldChat.unreadCount) + 1;
-            } else if ((isServerNewer ||
-                    isServerTimeDifferent ||
-                    isMessageDifferent) &&
-                chat.isLastMessageFromMe) {
-              // Jika ada pesan baru dan itu balasan dari Agen (isLastMessageFromMe = true):
-              // Hapus override angka indikator dan tandai sebagai terbaca (0).
+            } else if (chat.isLastMessageFromMe) {
+              // Jika pesan terakhir dari Agen (isLastMessageFromMe = true),
+              // Hapus override angka indikator dan tandai sebagai terbaca (0) 
+              // tanpa peduli apakah isi pesan/waktu berubah atau tidak (bugfix).
               _localUnreadOverrides.remove(chat.id);
               if (!_readIds.contains(chat.id)) _readIds.add(chat.id);
+              chat = chat.copyWith(unreadCount: 0);
             } else if (isMessageDifferent && chat.unreadCount > 0) {
               isNewMessage = true;
             }
