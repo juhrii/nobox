@@ -90,11 +90,20 @@ class Conversation {
     // Map St (integer) dari Chatrooms/List → string status yang bisa dibaca manusia
     // 1 = Unassigned, 2 = Assigned, 3 = Resolved
     String resolveStatus(dynamic stValue) {
-      final st = stValue is int ? stValue : int.tryParse(stValue?.toString() ?? '');
+      if (stValue == null) return 'Unassigned';
+      if (stValue is String) {
+        final lower = stValue.toLowerCase();
+        if (lower == 'unassigned') return 'Unassigned';
+        if (lower == 'assigned') return 'Assigned';
+        if (lower == 'resolved') return 'Resolved';
+        if (lower == 'archived') return 'Archived';
+      }
+      final st = stValue is int ? stValue : int.tryParse(stValue.toString());
       switch (st) {
         case 1: return 'Unassigned';
         case 2: return 'Assigned';
         case 3: return 'Resolved';
+        case 4: return 'Archived';
         default: return 'Unassigned';
       }
     }
@@ -203,9 +212,7 @@ class Conversation {
       lastMessage: finalLastMessage,
       lastMessageTime: getValue(['TimeMsg', 'In', 'last_message_time']) ?? '',
       unreadCount: int.tryParse(getValue(['Uc', 'uc', 'UC', 'unread_count', 'UnreadCount', 'Unread', 'unread', 'UnreadMsg', 'UnreadMsgs'])?.toString() ?? '') ?? 0,
-      status: json['St'] != null
-          ? resolveStatus(json['St'])
-          : (getValue(['Status', 'status']) ?? 'Unassigned'),
+      status: resolveStatus(json['St'] ?? getValue(['Status', 'status'])),
       agentName: getValue(['AssignedAgentName', 'AgentName', 'agent_name']) ?? '',
       tags: parsedTags,
       avatarUrl: _resolveAvatarUrl(json),

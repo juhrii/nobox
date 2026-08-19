@@ -1539,7 +1539,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     RegExp(r'\s+'),
                     '',
                   );
-                  return cleanM == cleanNew;
+                  
+                  if (cleanM.isNotEmpty && cleanNew.isNotEmpty && 
+                      (cleanM == cleanNew || cleanNew.contains(cleanM) || cleanM.contains(cleanNew))) {
+                    return true;
+                  }
+                  
+                  if (msg.messageType != MessageType.text && m.messageType == msg.messageType) {
+                    if (m.time == msg.time) return true;
+                  }
+                  
+                  return false;
                 });
 
                 if (matchIdx != -1) {
@@ -1696,29 +1706,45 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         '',
       );
 
-      final candidates = [
-        incomingRoomId,
-        incomingRoomId.replaceAll(RegExp(r'^[0-9]+_'), ''),
-        numericIncomingId,
-        fromVal,
-        toVal,
-        ctIdVal,
-        linkVal,
-        ctRealIdVal,
-      ].where((e) => e.isNotEmpty && e != '0' && e != 'null').toSet();
+      bool isMatch = false;
+      final bool hasValidLocalRoomId = chat.id.isNotEmpty && chat.id != '0' && chat.id != 'null';
 
-      final myIds = [
-        chat.id,
-        chat.id.replaceAll(RegExp(r'^[0-9]+_'), ''),
-        numericChatId,
-        chat.contactId,
-        chat.groupId,
-        chat.ctRealId,
-        chat.link,
-        chat.sender,
-      ].where((e) => e.isNotEmpty && e != '0' && e != 'null').toSet();
+      if (hasValidLocalRoomId) {
+        // Aturan Ketat: Jika chat ID lokal valid, MAKA Room ID dari SignalR WAJIB COCOK.
+        // Mencegah chat Resolved (lama) ikut ter-update oleh pesan dari chat aktif (baru).
+        if (incomingRoomId == chat.id ||
+            incomingRoomId.replaceAll(RegExp(r'^[0-9]+_'), '') == chat.id.replaceAll(RegExp(r'^[0-9]+_'), '') ||
+            (numericIncomingId.isNotEmpty && numericIncomingId == numericChatId)) {
+          isMatch = true;
+        }
+      } else {
+        // Jika chat ID lokal KOSONG (misal chat baru dibuat dari kontak),
+        // BARU KITA BOLEH fallback mencocokkan berdasarkan Contact ID / CtRealId.
+        final candidates = [
+          incomingRoomId,
+          incomingRoomId.replaceAll(RegExp(r'^[0-9]+_'), ''),
+          numericIncomingId,
+          fromVal,
+          toVal,
+          ctIdVal,
+          linkVal,
+          ctRealIdVal,
+        ].where((e) => e.isNotEmpty && e != '0' && e != 'null').toSet();
 
-      if (candidates.intersection(myIds).isEmpty) {
+        final myIds = [
+          chat.contactId,
+          chat.groupId,
+          chat.ctRealId,
+          chat.link,
+          chat.sender,
+        ].where((e) => e.isNotEmpty && e != '0' && e != 'null').toSet();
+
+        if (candidates.intersection(myIds).isNotEmpty) {
+          isMatch = true;
+        }
+      }
+
+      if (!isMatch) {
         final errMsg =
             '🛑 IGNORED! Incoming: $incomingRoomId | ChatId: ${chat.id} | CtId: ${chat.contactId} | GrpId: ${chat.groupId} | RealId: ${chat.ctRealId}';
         debugPrint(errMsg);
@@ -1924,20 +1950,35 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             // GUARD AKHIR ANTI-DUPLIKAT (Khusus pesan kita/keluar yang lolos dari pengecekan di atas)
             if (newMessage.isMe) {
               int matchIdx = _messages.indexWhere((m) {
-                if (newMessage.id.isNotEmpty && m.id == newMessage.id)
+                if (newMessage.id.isNotEmpty && m.id == newMessage.id) {
                   return true;
+                }
+                
                 // UPDATE: Coba cocokkan jika ID lokal kosong ATAU berawalan 'temp_'
                 if (m.isMe && (m.id.isEmpty || m.id.startsWith('temp_'))) {
-                  final cleanM = m.content.trim().toLowerCase().replaceAll(
-                    RegExp(r'\s+'),
-                    '',
-                  );
-                  final cleanNew = newMessage.content
-                      .trim()
-                      .toLowerCase()
-                      .replaceAll(RegExp(r'\s+'), '');
-                  if (cleanM.isNotEmpty && cleanM == cleanNew) {
+                  // 1. Cocokkan berdasarkan teks eksak (bersihkan whitespace)
+                  final cleanM = m.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                  final cleanNew = newMessage.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                  if (cleanM.isNotEmpty && cleanNew.isNotEmpty && 
+                      (cleanM == cleanNew || cleanNew.contains(cleanM) || cleanM.contains(cleanNew))) {
                     return true;
+                  }
+                  
+                  // 2. FIX: Untuk lampiran (Gambar, Dokumen, Voice Note), teks lokal ('📷 Photo')
+                  // TIDAK AKAN COCOK dengan JSON/URL dari server. Cocokkan berdasarkan tipe media.
+                  if (newMessage.messageType != MessageType.text && m.messageType == newMessage.messageType) {
+                    if (m.time == newMessage.time) return true;
+                  }
+                  
+                  // 3. FIX: Fallback waktu (Pesan terkirim dalam 60 detik terakhir dengan tipe sama)
+                  if (m.messageType == newMessage.messageType && m.rawTime.isNotEmpty && newMessage.rawTime.isNotEmpty) {
+                    try {
+                      final timeM = DateTime.parse(m.rawTime.replaceAll('ZZ', 'Z'));
+                      final timeNew = DateTime.parse(newMessage.rawTime.replaceAll('ZZ', 'Z'));
+                      if (timeNew.difference(timeM).inSeconds.abs() < 60) {
+                        return true;
+                      }
+                    } catch (_) {}
                   }
                 }
                 return false;
