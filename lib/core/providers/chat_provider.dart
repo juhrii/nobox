@@ -1626,7 +1626,8 @@ class ChatProvider with ChangeNotifier {
                 'lokasi',
                 'media',
               ].any((lbl) => oldLower.contains(lbl));
-              final isTextMatch = oldLower.isNotEmpty && newLower.isNotEmpty && (newLower == oldLower || newLower.Contains(oldLower) || oldLower.Contains(newLower)); if (isTextMatch || (isMediaJSON && oldHasMediaLabel)) {
+              final isTextMatch = oldLower.isNotEmpty && newLower.isNotEmpty && (newLower == oldLower || newLower.contains(oldLower) || oldLower.contains(newLower)); 
+              if (isTextMatch || (isMediaJSON && oldHasMediaLabel)) {
                 chat = chat.copyWith(isLastMessageFromMe: true);
               }
             }
