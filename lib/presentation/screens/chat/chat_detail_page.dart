@@ -6214,6 +6214,31 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue,
             buttonColor: isDark ? Colors.white70 : Colors.white,
             buttonIconColor: isDark ? Colors.white70 : Colors.white,
+            customBottomActionBar: (config, state, showSearchView) {
+              return Container(
+                color: isDark ? AppTheme.darkSurface : Colors.blue,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: isDark ? Colors.white12 : Colors.white,
+                      child: SearchButton(
+                        config,
+                        showSearchView,
+                        isDark ? Colors.white70 : Colors.blue,
+                      ),
+                    ),
+                    BackspaceButton(
+                      config,
+                      state.onBackspacePressed,
+                      state.onBackspaceLongPressed,
+                      isDark ? Colors.white70 : Colors.white,
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
           searchViewConfig: SearchViewConfig(
             backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
