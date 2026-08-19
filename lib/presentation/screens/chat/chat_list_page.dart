@@ -1758,6 +1758,7 @@ class _ChatListPageState extends State<ChatListPage>
   // FITUR: Status Badge (Assigned/Resolved/dll)
   // FUNGSI: Merender label kecil di kanan bawah chat tile berdasarkan status tiket obrolan, dengan warna yang disesuaikan.
   Widget _buildStatusBadge(String status) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     Color color;
     switch (status) {
       case 'Resolved':
@@ -1777,9 +1778,9 @@ class _ChatListPageState extends State<ChatListPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: status == 'Assigned'
-            ? Colors.blue.shade50
-            : Colors.white, // Background biru sangat muda
+        color: isDark
+            ? Colors.transparent
+            : (status == 'Assigned' ? Colors.blue.shade50 : Colors.white),
         border: Border.all(
           color: status == 'Assigned'
               ? Colors.blue.shade400
@@ -1792,9 +1793,9 @@ class _ChatListPageState extends State<ChatListPage>
       child: Text(
         status,
         style: TextStyle(
-          color: status == 'Assigned'
-              ? Colors.blue.shade700
-              : color, // Teks biru kecil tapi jelas
+          color: isDark
+              ? (status == 'Assigned' ? Colors.blue.shade300 : color)
+              : (status == 'Assigned' ? Colors.blue.shade700 : color),
           fontSize: 10,
           fontWeight: FontWeight.w600,
         ),
