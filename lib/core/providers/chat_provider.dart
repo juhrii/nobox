@@ -130,6 +130,15 @@ class ChatProvider with ChangeNotifier {
     _ignoredServerTimes[roomId]!.add(time);
     if (!time.endsWith('Z')) {
       _ignoredServerTimes[roomId]!.add('${time}Z');
+    }
+  }
+
+  // Map: roomId -> bool (true if recently received message was from us)
+  // Digunakan untuk melindungi flag isMe yang akurat dari TerimaPesan agar tidak ditimpa
+  // oleh data TerimaSubSpv (Conversation.fromJson) yang logika isLastMessageFromMe-nya lebih lemah.
+  // Ini krusial ketika agen membalas pesan dari aplikasi native (seperti Telegram) langsung.
+  Map<String, bool> _recentIsMeFlags = {};
+      _ignoredServerTimes[roomId]!.add('${time}Z');
     } else {
       _ignoredServerTimes[roomId]!.add(time.substring(0, time.length - 1));
     }
@@ -461,6 +470,10 @@ class ChatProvider with ChangeNotifier {
               if (isTextMatch || (isMediaJSON && oldHasMediaLabel)) {
                 chat = chat.copyWith(isLastMessageFromMe: true);
               }
+            }
+
+            if (_recentIsMeFlags.containsKey(chat.id)) {
+              chat = chat.copyWith(isLastMessageFromMe: _recentIsMeFlags[chat.id]);
             }
 
             // Jika chat sudah ada sebelumnya, kita cek apakah waktu pesannya berubah (lebih baru)
@@ -1212,6 +1225,13 @@ class ChatProvider with ChangeNotifier {
     String msgText = '',
   }) {
     if (roomId.isEmpty) return;
+
+    // Simpan isMe yang akurat sementara waktu agar bisa ditangkap oleh updateRoomFromSignalR
+    // (yang biasanya dipanggil berdekatan oleh TerimaSubSpv)
+    _recentIsMeFlags[roomId] = isMe;
+    Future.delayed(const Duration(seconds: 5), () {
+      _recentIsMeFlags.remove(roomId);
+    });
 
     // Jika kita yang membalas, kita reset unread count dan batalkan perlindungan unread.
     if (isMe) {
