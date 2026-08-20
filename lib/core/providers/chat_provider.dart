@@ -1193,17 +1193,24 @@ class ChatProvider with ChangeNotifier {
         _saveReadState();
       }
 
+      // Evaluasi apakah pesan ini benar-benar dari agen (untuk menghilangkan badge merah)
+      final isFromAgentForState =
+          isRecentMe ||
+          sdrMsg.toLowerCase() == 'you' ||
+          (sdrMsg.toLowerCase() == 'system' && !existing.isGroup) ||
+          isSmartMeFallback;
+
       _chats[index] = existing.copyWith(
         lastMessage: lastMsg,
         lastMessageType: updatedType,
         unreadCount:
-            (isSmartMeFallback ||
+            (isFromAgentForState ||
                 PushNotificationService.currentRoomId == roomId)
             ? 0
             : (_localUnreadOverrides[roomId] ?? uc),
         time: timeMsg,
         needReply: isNeedReply,
-        isLastMessageFromMe: isSmartMeFallback,
+        isLastMessageFromMe: isFromAgentForState,
         isBlocked: resolvedIsBlocked,
       );
 
