@@ -1287,13 +1287,15 @@ class ChatProvider with ChangeNotifier {
         Future.delayed(const Duration(milliseconds: 5500), () {
           // Hanya naikkan jika room tersebut belum dibaca dalam 5.5 detik terakhir
           if (!_readIds.contains(roomId)) {
-            final currentChats = _chats; // Pastikan kita pakai list terbaru
-            final indexNow = currentChats.indexWhere((c) => c.id == roomId);
+            final indexNow = _chats.indexWhere((c) => c.id == roomId);
             if (indexNow != -1) {
               // Jika ini masih bukan pesan agen (karena tidak ada SdrMsg="you" dari API)
-              if (!currentChats[indexNow].isLastMessageFromMe) {
+              if (!_chats[indexNow].isLastMessageFromMe) {
                 _localUnreadOverrides[roomId] =
-                    (_localUnreadOverrides[roomId] ?? currentChats[indexNow].unreadCount) + 1;
+                    (_localUnreadOverrides[roomId] ?? _chats[indexNow].unreadCount) + 1;
+                _chats[indexNow] = _chats[indexNow].copyWith(
+                  unreadCount: _localUnreadOverrides[roomId],
+                );
                 notifyListeners();
                 _saveReadState();
               }
