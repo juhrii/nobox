@@ -1308,7 +1308,7 @@ class ChatProvider with ChangeNotifier {
     // kita secara otomatis melakukan background refresh ke server API (setelah delay 2 detik) 
     // setiap kali ada pesan masuk. API `Chatrooms/List` PASTI tahu kebenaran mutlaknya!
     _signalRRefreshTimer?.cancel();
-    _signalRRefreshTimer = Timer(const Duration(seconds: 2), () {
+    _signalRRefreshTimer = Timer(const Duration(seconds: 5), () {
       debugPrint('ChatProvider: 🔄 Menjalankan Background Refresh untuk memastikan keakuratan isLastMessageFromMe dari API setelah SignalR...');
       refreshFirstPage(showLoading: false);
     });
