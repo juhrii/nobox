@@ -190,21 +190,24 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
 
       // ✅ FINAL DETEKSI AKURAT (Telegram / WhatsApp NATIVE):
-      // Jika To (tujuan) sama dengan ID pelanggan (contactId), maka PASTI ini pesan KITA!
-      if (!isMe) {
-        try {
-          final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-          final chatIndex = chatProvider.chats.indexWhere((c) => c.id == roomId);
-          if (chatIndex >= 0) {
-            final contactId = chatProvider.chats[chatIndex].contactId;
-            final extTo = message['To']?.toString() ?? message['ToId']?.toString() ?? '';
-            if (contactId.isNotEmpty && contactId != '0' && extTo == contactId) {
+      // Jika To (tujuan) sama dengan ID pelanggan (contactId), maka PASTI ini pesan KITA (Outbound)!
+      // Sebaliknya, jika From (pengirim) sama dengan ID pelanggan, maka ini pesan pelanggan (Inbound).
+      try {
+        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+        final chatIndex = chatProvider.chats.indexWhere((c) => c.id == roomId);
+        if (chatIndex >= 0) {
+          final contactId = chatProvider.chats[chatIndex].contactId;
+          final extTo = message['To']?.toString() ?? message['ToId']?.toString() ?? '';
+          if (contactId.isNotEmpty && contactId != '0') {
+            if (extTo == contactId) {
               isMe = true;
+            } else if (extFrom == contactId) {
+              isMe = false;
             }
           }
-        } catch (e) {
-          // Abaikan error provider
         }
+      } catch (e) {
+        // Abaikan error provider
       }
 
       debugPrint('Main: TerimaPesan | room=$roomId | sender=$senderName | msg=$msgText | isMe=$isMe');

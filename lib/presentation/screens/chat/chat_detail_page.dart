@@ -914,7 +914,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 }
 
                 // Lakukan sorting lokal untuk memastikan urutan sesuai waktu
-                final sortedList = List<Message>.from(response.data!);
+                final sortedList = List<Message>.from(response.data!).map((m) {
+                  if (chat.contactId.isNotEmpty && chat.contactId != '0') {
+                    if (m.toId == chat.contactId) return m.copyWith(isMe: true);
+                    if (m.fromId == chat.contactId) return m.copyWith(isMe: false);
+                  }
+                  return m;
+                }).toList();
                 sortedList.sort((a, b) {
                   if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
                   try {
@@ -1968,8 +1974,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           tenantId: _chatService.currentTenantId,
         );
 
-        if (parsedMessage.fromId != null && chat.accountId.isNotEmpty && parsedMessage.fromId == chat.accountId) {
-          parsedMessage = parsedMessage.copyWith(isMe: true);
+        if (chat.contactId.isNotEmpty && chat.contactId != '0') {
+          if (parsedMessage.toId == chat.contactId) {
+            parsedMessage = parsedMessage.copyWith(isMe: true);
+          } else if (parsedMessage.fromId == chat.contactId) {
+            parsedMessage = parsedMessage.copyWith(isMe: false);
+          }
         }
 
         // SignalR messages from customers should always be read immediately when on this page
