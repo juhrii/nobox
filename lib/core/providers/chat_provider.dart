@@ -1129,15 +1129,15 @@ class ChatProvider with ChangeNotifier {
       debugPrint('   - timeMsg (server): $timeMsg');
       debugPrint('   - existing.time (lokal): ${existing.time}');
 
+      final serverTimeParsed = DateTime.tryParse(
+        timeMsg.endsWith('Z') ? timeMsg : timeMsg + 'Z',
+      );
+      final existingTimeParsed = DateTime.tryParse(
+        existing.time.endsWith('Z') ? existing.time : existing.time + 'Z',
+      );
+
       if (!isSmartMeFallback &&
           PushNotificationService.currentRoomId != roomId) {
-        final serverTimeParsed = DateTime.tryParse(
-          timeMsg.endsWith('Z') ? timeMsg : timeMsg + 'Z',
-        );
-        final existingTimeParsed = DateTime.tryParse(
-          existing.time.endsWith('Z') ? existing.time : existing.time + 'Z',
-        );
-
         debugPrint('   - serverTimeParsed: $serverTimeParsed');
         debugPrint('   - existingTimeParsed: $existingTimeParsed');
         debugPrint(
@@ -1147,10 +1147,12 @@ class ChatProvider with ChangeNotifier {
           '   - lastMsg != existingMsg: ${lastMsg.trim() != existing.lastMessage.trim()}',
         );
 
-        if (serverTimeParsed != null &&
+        final bool isNewerOrDifferent = serverTimeParsed != null &&
             (existingTimeParsed == null ||
                 serverTimeParsed.isAfter(existingTimeParsed) ||
-                lastMsg.trim() != existing.lastMessage.trim())) {
+                lastMsg.trim() != existing.lastMessage.trim());
+
+        if (isNewerOrDifferent) {
           // FIX: Backend NoBox mengembalikan IsNeedReply = false secara keliru untuk pesan masuk dari Telegram.
           // Hapus ketergantungan pada IsNeedReply secara total di sini.
           // Hanya anggap balasan agen JIKA sdrMsg = 'you'/'system' ATAU isSmartMeFallback true.
@@ -1195,11 +1197,22 @@ class ChatProvider with ChangeNotifier {
       }
 
       // Evaluasi apakah pesan ini benar-benar dari agen (untuk menghilangkan badge merah)
-      final isFromAgentForState =
-          isRecentMe ||
-          sdrMsg.toLowerCase() == 'you' ||
-          (sdrMsg.toLowerCase() == 'system' && !existing.isGroup) ||
-          isSmartMeFallback;
+      // FIX: Jangan merusak isLastMessageFromMe yang mungkin sudah diperbaiki API, jika pesan tidak berubah!
+      final bool isNewerOrDifferentForState = serverTimeParsed != null &&
+            (existingTimeParsed == null ||
+                serverTimeParsed.isAfter(existingTimeParsed) ||
+                lastMsg.trim() != existing.lastMessage.trim());
+
+      final bool isFromAgentForState;
+      if (isNewerOrDifferentForState) {
+        isFromAgentForState =
+            isRecentMe ||
+            sdrMsg.toLowerCase() == 'you' ||
+            (sdrMsg.toLowerCase() == 'system' && !existing.isGroup) ||
+            isSmartMeFallback;
+      } else {
+        isFromAgentForState = existing.isLastMessageFromMe;
+      }
 
       _chats[index] = existing.copyWith(
         lastMessage: lastMsg,
