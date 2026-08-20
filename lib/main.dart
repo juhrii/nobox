@@ -184,7 +184,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
       // Cek fallback berdasarkan ChAccId vs From
       if (!isMe && extChAccId.isNotEmpty && extFrom.isNotEmpty) {
-        if (extFrom == extChAccId || extFrom == extSenderId) {
+        if (extFrom == extChAccId) {
           isMe = true;
         }
       }
