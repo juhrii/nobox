@@ -1278,12 +1278,15 @@ class ChatProvider with ChangeNotifier {
       refreshFirstPage();
     } else {
       if (PushNotificationService.currentRoomId != roomId && !isMe) {
-        // INSTANT FEEDBACK: Naikkan unread langsung saat TerimaPesan agar titik biru tidak delay!
-        _localUnreadOverrides[roomId] =
-            (_localUnreadOverrides[roomId] ?? _chats[index].unreadCount) + 1;
-        _readIds.remove(
-          roomId,
-        ); // FIX: Wajib hapus dari _readIds agar tidak dipaksa jadi 0 lagi!
+        // REMOVED INSTANT FEEDBACK:
+        // Kami tidak lagi menaikkan unread secara instan di sini karena SignalR sering gagal mengenali 
+        // pesan Telegram Native agen sebagai agen (mengira pelanggan). 
+        // Hal ini menyebabkan pesan agen berkedip merah sebelum API membetulkannya 5 detik kemudian.
+        // Dengan menghapus override ini, pesan pelanggan akan memunculkan titik biru 5 detik kemudian (lewat polling API),
+        // yang sangat bisa ditoleransi demi menghilangkan bug "berkedip merah" untuk agen.
+        _localUnreadOverrides.remove(roomId);
+        _readIds.remove(roomId); 
+        _saveReadState();
         _saveReadState();
       } else if (isMe) {
         _localUnreadOverrides.remove(roomId);
