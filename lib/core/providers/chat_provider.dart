@@ -1498,6 +1498,14 @@ class ChatProvider with ChangeNotifier {
           // Apply locally cached mapping for tags and funnel
           chat = _applyTagAndFunnelMapping(chat, conv);
 
+          // FIX: Jika API Backend mengatakan Agent yang terakhir membalas,
+          // Maka unreadCount HARUS 0, dan kita harus menghapus local override yang mungkin salah (akibat false-negative SignalR).
+          if (chat.isLastMessageFromMe) {
+            _localUnreadOverrides.remove(chat.id);
+            if (!_readIds.contains(chat.id)) _readIds.add(chat.id);
+            chat = chat.copyWith(unreadCount: 0);
+          }
+
           // Apply persisted local state
           chat = chat.copyWith(
             isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
