@@ -2130,7 +2130,10 @@ class _ChatListPageState extends State<ChatListPage>
     // Jika tidak -> Hitam/Warna Tema
     final bool hasUnread = chat.unreadCount > 0;
 
-    final Color messageColor = hasUnread
+    // FITUR: Indikator Pesan Belum Dibalas
+    // Teks pesan berwarna merah JIKA pesan terakhir bukan dari agen (belum dibalas).
+    // Hal ini sesuai dengan perilaku dashboard web NoBox.ai.
+    final Color messageColor = (!chat.isLastMessageFromMe)
         ? Colors.red
         : (isDark ? Colors.grey.shade400 : Colors.black87);
 
