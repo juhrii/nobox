@@ -1278,16 +1278,28 @@ class ChatProvider with ChangeNotifier {
       refreshFirstPage();
     } else {
       if (PushNotificationService.currentRoomId != roomId && !isMe) {
-        // REMOVED INSTANT FEEDBACK:
-        // Kami tidak lagi menaikkan unread secara instan di sini karena SignalR sering gagal mengenali 
-        // pesan Telegram Native agen sebagai agen (mengira pelanggan). 
-        // Hal ini menyebabkan pesan agen berkedip merah sebelum API membetulkannya 5 detik kemudian.
-        // Dengan menghapus override ini, pesan pelanggan akan memunculkan titik biru 5 detik kemudian (lewat polling API),
-        // yang sangat bisa ditoleransi demi menghilangkan bug "berkedip merah" untuk agen.
-        _localUnreadOverrides.remove(roomId);
-        _readIds.remove(roomId); 
-        _saveReadState();
-        _saveReadState();
+        // DELAYED INSTANT FEEDBACK (5.5 detik):
+        // Kita tunda kenaikan unread count selama 5.5 detik (karena polling API setiap 5 detik).
+        // Mengapa? Karena SignalR dari NoBox sering salah mengenali balasan agen dari Telegram/WA pribadi sebagai pelanggan.
+        // Jika dalam 5 detik API List (yang dipanggil oleh refreshFirstPage) mengenali bahwa itu agen (SdrMsg: "you"),
+        // maka _localUnreadOverrides akan dihapus, dan angka ini tidak akan bertambah!
+        // Tapi jika benar itu dari pelanggan, setelah 5.5 detik titik biru akan muncul (jika API juga gagal)!
+        Future.delayed(const Duration(milliseconds: 5500), () {
+          // Hanya naikkan jika room tersebut belum dibaca dalam 5.5 detik terakhir
+          if (!_readIds.contains(roomId)) {
+            final currentChats = _chats; // Pastikan kita pakai list terbaru
+            final indexNow = currentChats.indexWhere((c) => c.id == roomId);
+            if (indexNow != -1) {
+              // Jika ini masih bukan pesan agen (karena tidak ada SdrMsg="you" dari API)
+              if (!currentChats[indexNow].isLastMessageFromMe) {
+                _localUnreadOverrides[roomId] =
+                    (_localUnreadOverrides[roomId] ?? currentChats[indexNow].unreadCount) + 1;
+                notifyListeners();
+                _saveReadState();
+              }
+            }
+          }
+        });
       } else if (isMe) {
         _localUnreadOverrides.remove(roomId);
         if (!_readIds.contains(roomId)) _readIds.add(roomId);
