@@ -248,8 +248,6 @@ class Message {
 
     if (json['IsMe'] == true || json['IsMe'] == 'true' || json['IsMe'] == 1) {
       isMe = true;
-    } else if (json['LastIsMe'] == true || json['LastIsMe'] == 'true' || json['LastIsMe'] == 1) {
-      isMe = true;
     } else if (isNativeOutbound) {
       // ✅ DETEKSI AKURAT: Jika `To` adalah Customer, ini adalah pesan KITA (Outbound).
       isMe = true;

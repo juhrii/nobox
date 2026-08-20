@@ -180,7 +180,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           (dirStr == '1' || dirStr == '2' || dirStr == 'out' || dirStr == 'outbound' || dirStr == 'true') ||
           (isOutbound == true || isOutbound == 'true' || isOutbound == 1);
 
-      isMe = isMe || message['IsMe'] == true || message['LastIsMe'] == true || senderName.toLowerCase() == 'you';
+      isMe = isMe || message['IsMe'] == true || senderName.toLowerCase() == 'you';
 
       // Cek fallback berdasarkan ChAccId vs From
       if (!isMe && extChAccId.isNotEmpty && extFrom.isNotEmpty) {
@@ -189,41 +189,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         }
       }
 
-      // ✅ FINAL DETEKSI AKURAT (Telegram / WhatsApp NATIVE):
-      // Jika To (tujuan) sama dengan ID pelanggan (ctRealId), maka PASTI ini pesan KITA (Outbound)!
-      // Sebaliknya, jika From (pengirim) sama dengan ID pelanggan, maka ini pesan pelanggan (Inbound).
-      try {
-        final chatProvider = Provider.of<ChatProvider>(context, listen: false);
-        final chatIndex = chatProvider.chats.indexWhere((c) => c.id == roomId);
-        if (chatIndex >= 0) {
-          final ctRealId = chatProvider.chats[chatIndex].ctRealId;
-          final extTo = message['To']?.toString() ?? message['ToId']?.toString() ?? '';
-          if (ctRealId.isNotEmpty && ctRealId != '0') {
-            final cleanCtRealId = ctRealId.replaceAll(RegExp(r'[^0-9]'), '');
-            final cleanContactId = chatProvider.chats[chatIndex].contactId.replaceAll(RegExp(r'[^0-9]'), '');
-            final cleanExtTo = extTo.replaceAll(RegExp(r'[^0-9]'), '');
-            final cleanExtFrom = extFrom.replaceAll(RegExp(r'[^0-9]'), '');
-            
-            if (cleanCtRealId.isNotEmpty) {
-              bool matched = false;
-              if (cleanExtTo.isNotEmpty && (cleanExtTo == cleanCtRealId || cleanExtTo == cleanContactId)) {
-                isMe = true;
-                matched = true;
-              } else if (cleanExtFrom.isNotEmpty && (cleanExtFrom == cleanCtRealId || (cleanContactId.isNotEmpty && cleanExtFrom == cleanContactId))) {
-                isMe = false;
-                matched = true;
-              }
-              
-              if (!matched && cleanExtFrom.isNotEmpty && chatProvider.chats[chatIndex].groupId.isEmpty) {
-                // 1-on-1 Chat: Jika pengirim BUKAN customer, maka PASTI dikirim oleh Bot (Outbound)
-                isMe = true;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        // Abaikan error provider
-      }
+      // Logika deteksi IsMe diserahkan ke fallback di atas dan model Message.
 
       debugPrint('Main: TerimaPesan | room=$roomId | sender=$senderName | msg=$msgText | isMe=$isMe');
       

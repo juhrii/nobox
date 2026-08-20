@@ -1991,27 +1991,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           tenantId: _chatService.currentTenantId,
         );
 
-        if (chat.ctRealId.isNotEmpty && chat.ctRealId != '0') {
-          final cleanCtRealId = chat.ctRealId.replaceAll(RegExp(r'[^0-9]'), '');
-          final cleanContactId = chat.contactId.replaceAll(RegExp(r'[^0-9]'), '');
-          final cleanExtTo = (parsedMessage.toId ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-          final cleanExtFrom = (parsedMessage.fromId ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-          
-          if (cleanCtRealId.isNotEmpty) {
-            bool matched = false;
-            if (cleanExtTo.isNotEmpty && (cleanExtTo == cleanCtRealId || cleanExtTo == cleanContactId)) {
-              parsedMessage = parsedMessage.copyWith(isMe: true);
-              matched = true;
-            } else if (cleanExtFrom.isNotEmpty && (cleanExtFrom == cleanCtRealId || (cleanContactId.isNotEmpty && cleanExtFrom == cleanContactId))) {
-              parsedMessage = parsedMessage.copyWith(isMe: false);
-              matched = true;
-            }
-            
-            if (!matched && cleanExtFrom.isNotEmpty && chat.groupId.isEmpty) {
-              parsedMessage = parsedMessage.copyWith(isMe: true);
-            }
-          }
-        }
+        // Evaluasi isMe diserahkan ke model Message.fromJson()
 
         // SignalR messages from customers should always be read immediately when on this page
         final newMessage = parsedMessage.copyWith(status: MessageStatus.read);
