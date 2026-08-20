@@ -643,7 +643,8 @@ class ChatService {
           "Id", "CtId", "CtRealId", "GrpId", "CtRealNm", "Ct", "Grp",
           "LastMsg", "TimeMsg", "Uc", "St", "ChId", "ChAcc", "ChNm", "AccNm", "AccId", "BotNm", "CtTmp", "LinkTmp",
           "IsGrp", "IsPin", "CtIsBlock", "IsMuteBot", "IsNeedReply", "Tags", "Fn", "FnId", "FnNm", "FunnelId", "TagsIds",
-          "UpBy", "AgentId", "AssignedTo", "HandledBy", "AgentName", "AssignedAgentName", "CtImg", "LinkImg", "TagsNm"
+          "UpBy", "AgentId", "AssignedTo", "HandledBy", "AgentName", "AssignedAgentName", "CtImg", "LinkImg", "TagsNm",
+          "SdrMsg", "NeedReply", "IsMe", "LastIsMe"
         ],
         "ColumnSelection": 1,
       };
