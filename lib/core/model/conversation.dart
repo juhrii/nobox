@@ -229,13 +229,30 @@ class Conversation {
       return false;
     }
 
+    bool isLastFromMe = json['IsMe'] == true ||
+        json['IsMe'] == 1 ||
+        json['IsMe'] == '1' ||
+        json['IsMe'] == 'true' ||
+        json['LastIsMe'] == true ||
+        json['LastIsMe'] == 1 ||
+        json['LastIsMe'] == '1' ||
+        json['LastIsMe'] == 'true' ||
+        getValue(['is_last_message_from_me', 'IsMeLast']) == true ||
+        getValue(['is_last_message_from_me', 'IsMeLast']) == 1 ||
+        getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().toLowerCase() == 'you';
+
+    int rawUc = int.tryParse(getValue(['Uc', 'uc', 'UC', 'unread_count', 'UnreadCount', 'Unread', 'unread', 'UnreadMsg', 'UnreadMsgs'])?.toString() ?? '') ?? 0;
+    if (isLastFromMe) {
+      rawUc = 0;
+    }
+
     final conv = Conversation(
       id: getValue(['Id', 'id', 'RoomId', 'room_id'])?.toString() ?? '',
       contactId: getValue(['CtId', 'IdLink', 'LinkId', 'IdContact', 'ContactId', 'CtIdExt', 'ExtId', 'IdAlias'])?.toString() ?? '',
       participantEmail: getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Name', 'pushName', 'Title', 'participant_email', 'GroupNm', 'GroupName', 'group_name', 'Grp'])?.toString() ?? 'Unknown',
       lastMessage: finalLastMessage,
       lastMessageTime: getValue(['TimeMsg', 'In', 'last_message_time']) ?? '',
-      unreadCount: int.tryParse(getValue(['Uc', 'uc', 'UC', 'unread_count', 'UnreadCount', 'Unread', 'unread', 'UnreadMsg', 'UnreadMsgs'])?.toString() ?? '') ?? 0,
+      unreadCount: rawUc,
       status: resolveStatus(json['St'] ?? getValue(['Status', 'status'])),
       agentName: getValue(['AssignedAgentName', 'AgentName', 'agent_name']) ?? '',
       tags: parsedTags,
@@ -251,17 +268,7 @@ class Conversation {
       funnelId: rawFnId,
       isGroup: resolveIsGroup(),
       isBlocked: json['CtIsBlock'] == 1 || json['CtIsBlock'] == true,
-      isLastMessageFromMe: json['IsMe'] == true ||
-          json['IsMe'] == 1 ||
-          json['IsMe'] == '1' ||
-          json['IsMe'] == 'true' ||
-          json['LastIsMe'] == true ||
-          json['LastIsMe'] == 1 ||
-          json['LastIsMe'] == '1' ||
-          json['LastIsMe'] == 'true' ||
-          getValue(['is_last_message_from_me', 'IsMeLast']) == true ||
-          getValue(['is_last_message_from_me', 'IsMeLast']) == 1 ||
-          getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().toLowerCase() == 'you',
+      isLastMessageFromMe: isLastFromMe,
       needReply: json['NeedReply'] == 1 || 
           json['NeedReply'] == true || 
           json['IsNeedReply'] == 1 || 
