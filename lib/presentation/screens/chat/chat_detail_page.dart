@@ -1989,7 +1989,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           messageData,
           currentUserEmail,
           tenantId: _chatService.currentTenantId,
-          contactId: chat.contactId.isNotEmpty && chat.contactId != '0' ? chat.contactId : chat.ctRealId,
         );
 
         // Evaluasi isMe diserahkan ke model Message.fromJson()
