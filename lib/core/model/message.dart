@@ -634,7 +634,9 @@ class Message {
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '15' || typeVal == '11' || (json['Msg'] != null && json['Msg'].toString().toLowerCase().contains('"lat":'))) {
         msgType = MessageType.text;
-        content = '📍 Location';
+        if (!content.contains('[-{=||=}-]')) {
+          content = '📍 Location';
+        }
       } else if (typeVal == '14' || typeVal == '10') {
         msgType = MessageType.text;
         content = '👤 Contact';
@@ -704,7 +706,9 @@ class Message {
         imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
       } else if (typeVal == '15' || typeVal == '11' || (json['Msg'] != null && json['Msg'].toString().toLowerCase().contains('"lat":'))) {
         msgType = MessageType.text;
-        content = '📍 Location';
+        if (!content.contains('[-{=||=}-]')) {
+          content = '📍 Location';
+        }
       } else if (typeVal == '14' || typeVal == '10') {
         msgType = MessageType.text;
         content = '👤 Contact';
@@ -769,7 +773,9 @@ class Message {
       }
     } else if (typeVal == '15' || typeVal == '11') {
       msgType = MessageType.text;
-      content = '📍 Location';
+      if (!content.contains('[-{=||=}-]')) {
+        content = '📍 Location';
+      }
     } else if (typeVal == '14' || typeVal == '10') {
       msgType = MessageType.text;
       content = '👤 Contact';

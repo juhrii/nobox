@@ -179,7 +179,8 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
 
   bool _isLocationMessage(String content) {
     return content.contains('Location:') ||
-        content.contains('maps.google.com/maps?q=');
+        content.contains('maps.google.com/maps?q=') ||
+        content.contains('[-{=||=}-]');
   }
 
   @override
@@ -1288,6 +1289,12 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     if (match != null) {
       latitude = double.tryParse(match.group(1)!);
       longitude = double.tryParse(match.group(2)!);
+    } else if (messageText.contains('[-{=||=}-]')) {
+      final parts = messageText.split('[-{=||=}-]');
+      if (parts.length >= 2) {
+        latitude = double.tryParse(parts[0]);
+        longitude = double.tryParse(parts[1]);
+      }
     }
 
     final urlRegex = RegExp(r'https://maps\.google\.com/maps\?q=(-?\d+\.\d+),(-?\d+\.\d+)');
