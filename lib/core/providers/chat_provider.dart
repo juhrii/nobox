@@ -914,6 +914,9 @@ class ChatProvider with ChangeNotifier {
       // Update existing chat
       final existing = _chats[index];
       String lastMsg = roomData['LastMsg']?.toString() ?? existing.lastMessage;
+      if (lastMsg.contains('[-{=||=}-]')) {
+        lastMsg = '📍 Location';
+      }
 
       // FIX: Lindungi dari data usang (pesan yang baru dihapus).
       // Karena jam HP pengguna bisa tidak sinkron dengan server, jangan gunakan isAfter(localTime).
@@ -1269,6 +1272,9 @@ class ChatProvider with ChangeNotifier {
       // Update pesan terakhir secara instan agar UI (termasuk preview pesan) langsung terupdate.
       // Ini juga otomatis mencegah TerimaSubSpv melakukan double-increment karena pesan sudah terupdate.
       if (msgText.isNotEmpty) {
+        if (msgText.contains('[-{=||=}-]')) {
+          msgText = '📍 Location';
+        }
         _chats[index] = _chats[index].copyWith(
           lastMessage: msgText,
           time: DateTime.now()

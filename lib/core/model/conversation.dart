@@ -138,10 +138,14 @@ class Conversation {
       return str1.isNotEmpty ? str1 : str2;
     }
 
-    final finalLastMessage = resolveLastMessage(
+    String finalLastMessage = resolveLastMessage(
       getValue(['LastMsg', 'last_message']),
       getValue(['Category'])
     );
+
+    if (finalLastMessage.contains('[-{=||=}-]')) {
+      finalLastMessage = '📍 Location';
+    }
 
     // FIX: Server NoBox sering nyangkut di LastMessageType = 2 (Voice Note) atau media lain,
     // padahal LastMsg sudah update menjadi teks biasa. 
