@@ -1392,6 +1392,9 @@ class ChatProvider with ChangeNotifier {
     String? overrideTime,
     String? lastMessageType,
   }) {
+    if (lastMessage.contains('[-{=||=}-]')) {
+      lastMessage = '📍 Location';
+    }
     final index = _chats.indexWhere((c) => c.id == roomId);
     if (index >= 0) {
       final newTime =
