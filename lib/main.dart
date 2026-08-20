@@ -199,13 +199,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           final ctRealId = chatProvider.chats[chatIndex].ctRealId;
           final extTo = message['To']?.toString() ?? message['ToId']?.toString() ?? '';
           if (ctRealId.isNotEmpty && ctRealId != '0') {
-            if (extTo == ctRealId) {
-              isMe = true;
-            } else if (extFrom == ctRealId) {
-              isMe = false;
-            } else if (extFrom.isNotEmpty && extFrom != ctRealId && chatProvider.chats[chatIndex].groupId.isEmpty) {
-              // 1-on-1 Chat: Jika pengirim BUKAN customer, maka PASTI dikirim oleh Bot (Outbound)
-              isMe = true;
+            final cleanCtRealId = ctRealId.replaceAll(RegExp(r'[^0-9]'), '');
+            final cleanExtTo = extTo.replaceAll(RegExp(r'[^0-9]'), '');
+            final cleanExtFrom = extFrom.replaceAll(RegExp(r'[^0-9]'), '');
+            
+            if (cleanCtRealId.isNotEmpty) {
+              if (cleanExtTo == cleanCtRealId) {
+                isMe = true;
+              } else if (cleanExtFrom == cleanCtRealId) {
+                isMe = false;
+              } else if (cleanExtFrom.isNotEmpty && cleanExtFrom != cleanCtRealId && chatProvider.chats[chatIndex].groupId.isEmpty) {
+                // 1-on-1 Chat: Jika pengirim BUKAN customer, maka PASTI dikirim oleh Bot (Outbound)
+                isMe = true;
+              }
             }
           }
         }
