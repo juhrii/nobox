@@ -915,9 +915,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
                 // Lakukan sorting lokal untuk memastikan urutan sesuai waktu
                 final sortedList = List<Message>.from(response.data!).map((m) {
-                  if (chat.contactId.isNotEmpty && chat.contactId != '0') {
-                    if (m.toId == chat.contactId) return m.copyWith(isMe: true);
-                    if (m.fromId == chat.contactId) return m.copyWith(isMe: false);
+                  if (chat.ctRealId.isNotEmpty && chat.ctRealId != '0') {
+                    if (m.toId == chat.ctRealId) {
+                      m = m.copyWith(isMe: true);
+                    } else if (m.fromId == chat.ctRealId) {
+                      m = m.copyWith(isMe: false);
+                    } else if (m.fromId != null && m.fromId!.isNotEmpty && m.fromId != chat.ctRealId && chat.groupId.isEmpty) {
+                      m = m.copyWith(isMe: true);
+                    }
                   }
                   return m;
                 }).toList();
@@ -1974,11 +1979,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           tenantId: _chatService.currentTenantId,
         );
 
-        if (chat.contactId.isNotEmpty && chat.contactId != '0') {
-          if (parsedMessage.toId == chat.contactId) {
+        if (chat.ctRealId.isNotEmpty && chat.ctRealId != '0') {
+          if (parsedMessage.toId == chat.ctRealId) {
             parsedMessage = parsedMessage.copyWith(isMe: true);
-          } else if (parsedMessage.fromId == chat.contactId) {
+          } else if (parsedMessage.fromId == chat.ctRealId) {
             parsedMessage = parsedMessage.copyWith(isMe: false);
+          } else if (parsedMessage.fromId != null && parsedMessage.fromId!.isNotEmpty && parsedMessage.fromId != chat.ctRealId && chat.groupId.isEmpty) {
+            parsedMessage = parsedMessage.copyWith(isMe: true);
           }
         }
 

@@ -190,19 +190,22 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
 
       // ✅ FINAL DETEKSI AKURAT (Telegram / WhatsApp NATIVE):
-      // Jika To (tujuan) sama dengan ID pelanggan (contactId), maka PASTI ini pesan KITA (Outbound)!
+      // Jika To (tujuan) sama dengan ID pelanggan (ctRealId), maka PASTI ini pesan KITA (Outbound)!
       // Sebaliknya, jika From (pengirim) sama dengan ID pelanggan, maka ini pesan pelanggan (Inbound).
       try {
         final chatProvider = Provider.of<ChatProvider>(context, listen: false);
         final chatIndex = chatProvider.chats.indexWhere((c) => c.id == roomId);
         if (chatIndex >= 0) {
-          final contactId = chatProvider.chats[chatIndex].contactId;
+          final ctRealId = chatProvider.chats[chatIndex].ctRealId;
           final extTo = message['To']?.toString() ?? message['ToId']?.toString() ?? '';
-          if (contactId.isNotEmpty && contactId != '0') {
-            if (extTo == contactId) {
+          if (ctRealId.isNotEmpty && ctRealId != '0') {
+            if (extTo == ctRealId) {
               isMe = true;
-            } else if (extFrom == contactId) {
+            } else if (extFrom == ctRealId) {
               isMe = false;
+            } else if (extFrom.isNotEmpty && extFrom != ctRealId && chatProvider.chats[chatIndex].groupId.isEmpty) {
+              // 1-on-1 Chat: Jika pengirim BUKAN customer, maka PASTI dikirim oleh Bot (Outbound)
+              isMe = true;
             }
           }
         }
