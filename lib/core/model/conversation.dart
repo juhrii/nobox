@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'message.dart';
 
 // =====================================================================
@@ -255,14 +256,18 @@ class Conversation {
       groupId: getValue(['GrpId', 'group_id'])?.toString() ?? '',
     );
 
-    // DEBUG: Print raw API values for isMe detection
+    // DEBUG: Write raw API values to file for analysis
     final _dbgName = getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Name'])?.toString() ?? '?';
     final _dbgIsMe = json['IsMe'];
     final _dbgLastIsMe = json['LastIsMe'];
     final _dbgSdrMsg = getValue(['SdrMsg', 'sdr_msg', 'Sdr']);
     final _dbgNeedReply = json['NeedReply'] ?? json['IsNeedReply'];
     final _dbgLastMsg = (conv.lastMessage.length > 20) ? conv.lastMessage.substring(0, 20) : conv.lastMessage;
-    print('📊 CONV [$_dbgName] IsMe=$_dbgIsMe(${_dbgIsMe.runtimeType}) LastIsMe=$_dbgLastIsMe SdrMsg=$_dbgSdrMsg NeedReply=$_dbgNeedReply → isLastMessageFromMe=${conv.isLastMessageFromMe} | msg=$_dbgLastMsg');
+    try {
+      final logFile = File('D:\\UBIG\\Proyek\\NoBox_Chat\\nobox\\api_debug.txt');
+      final line = '📊 CONV [$_dbgName] IsMe=$_dbgIsMe(${_dbgIsMe.runtimeType}) LastIsMe=$_dbgLastIsMe SdrMsg=$_dbgSdrMsg NeedReply=$_dbgNeedReply → isLastMessageFromMe=${conv.isLastMessageFromMe} | msg=$_dbgLastMsg\n';
+      logFile.writeAsStringSync(line, mode: FileMode.append);
+    } catch (_) {}
 
     return conv;
   }
