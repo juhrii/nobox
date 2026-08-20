@@ -843,12 +843,8 @@ class Message {
       roomId: json['RoomId']?.toString() ?? '',
     );
 
-    final finalMessage = !isMe 
-        ? parsedMsg.copyWith(content: '${parsedMsg.content}\n\n[RAW PAYLOAD]: ${jsonEncode(json)}')
-        : parsedMsg;
-    
-    return finalMessage;
-  }
+      return parsedMsg;
+    }
 
   Message copyWith({
     String? id,

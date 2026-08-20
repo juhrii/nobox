@@ -1962,20 +1962,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       final currentUserEmail = authProvider.currentUser ?? '';
 
       try {
-        final parsedMessage = Message.fromJson(
+        var parsedMessage = Message.fromJson(
           messageData,
           currentUserEmail,
           tenantId: _chatService.currentTenantId,
-          contactId: chat.contactId,
         );
 
-        // DEBUG: Inject raw payload for debugging
-        final debugMessage = !parsedMessage.isMe 
-            ? parsedMessage.copyWith(content: '${parsedMessage.content}\n\n[RAW PAYLOAD]: ${jsonEncode(messageData)}')
-            : parsedMessage;
+        if (parsedMessage.fromId != null && chat.accountId.isNotEmpty && parsedMessage.fromId == chat.accountId) {
+          parsedMessage = parsedMessage.copyWith(isMe: true);
+        }
 
         // SignalR messages from customers should always be read immediately when on this page
-        final newMessage = debugMessage.copyWith(status: MessageStatus.read);
+        final newMessage = parsedMessage.copyWith(status: MessageStatus.read);
 
         // Incoming message verified for this room; proceed without blocking.
 
