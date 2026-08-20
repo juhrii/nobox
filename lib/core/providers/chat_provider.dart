@@ -8,7 +8,7 @@ import '../model/conversation.dart';
 import '../model/api_response.dart';
 import '../services/push_notification_service.dart';
 import 'package:flutter/foundation.dart';
-
+import 'dart:async';
 // =====================================================================
 // FITUR: Provider Chat Utama
 // FILE: lib/core/providers/chat_provider.dart
@@ -20,6 +20,7 @@ class ChatProvider with ChangeNotifier {
   List<ChatModel> _chats = [];
   bool _isLoading = false;
   String? _error;
+  Timer? _signalRRefreshTimer;
 
   // Pagination state
   static const int _pageSize = 100;
@@ -1298,9 +1299,19 @@ class ChatProvider with ChangeNotifier {
         );
       }
 
-      // Jika ada pesan baru masuk via TerimaPesan, picu pembaruan UI agar badge unread/posisi teratas ter-render
       notifyListeners();
     }
+    
+    // FIX TERPENTING: Sinkronisasi Latar Belakang (Debounced)
+    // Server sering kali lambat memperbarui DB atau gagal mengirimkan penanda agen secara jelas via SignalR (khususnya untuk Telegram Native).
+    // Untuk memastikan pesan dari agen native tidak selamanya berwarna merah (isLastMessageFromMe = false),
+    // kita secara otomatis melakukan background refresh ke server API (setelah delay 2 detik) 
+    // setiap kali ada pesan masuk. API `Chatrooms/List` PASTI tahu kebenaran mutlaknya!
+    _signalRRefreshTimer?.cancel();
+    _signalRRefreshTimer = Timer(const Duration(seconds: 2), () {
+      debugPrint('ChatProvider: 🔄 Menjalankan Background Refresh untuk memastikan keakuratan isLastMessageFromMe dari API setelah SignalR...');
+      refreshFirstPage(showLoading: false);
+    });
   }
 
   /// Mengambil pesan asli terakhir untuk ruangan yang pesan terakhirnya dihapus atau berupa log sistem
@@ -1441,9 +1452,14 @@ class ChatProvider with ChangeNotifier {
 
   /// Hanya merefresh halaman pertama percakapan tanpa mereset pagination.
   /// Digunakan oleh SignalR dan polling untuk memperbarui data tanpa merusak scroll tanpa batas.
-  Future<void> refreshFirstPage({int? customStatusCode}) async {
+  Future<void> refreshFirstPage({int? customStatusCode, bool showLoading = false}) async {
     if (_isLoading || _isLoadingMore) return;
 
+    if (showLoading) {
+      _isLoading = true;
+      notifyListeners();
+    }
+    
     try {
       final statusCode =
           customStatusCode ?? _statusCodeForFilter(_activeFilter);
