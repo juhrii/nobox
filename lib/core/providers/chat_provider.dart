@@ -1323,7 +1323,9 @@ class ChatProvider with ChangeNotifier {
     _signalRRefreshTimer?.cancel();
     _signalRRefreshTimer = Timer(const Duration(seconds: 5), () {
       debugPrint('ChatProvider: 🔄 Menjalankan Background Refresh untuk memastikan keakuratan isLastMessageFromMe dari API setelah SignalR...');
-      refreshFirstPage(showLoading: false);
+      refreshFirstPage(showLoading: false).then((_) {
+        Conversation.dumpDebugLog();
+      });
     });
   }
 

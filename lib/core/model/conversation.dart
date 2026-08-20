@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'message.dart';
 
 // =====================================================================
@@ -8,6 +8,16 @@ import 'message.dart';
 // FUNGSI: Class model untuk menampung data list chat/room di halaman utama chat
 // =====================================================================
 class Conversation {
+
+  // DEBUG: Static log buffer for API analysis
+  static final List<String> _debugApiLog = [];
+  static void dumpDebugLog() {
+    debugPrint('=== API DEBUG LOG (${_debugApiLog.length} entries) ===');
+    for (final l in _debugApiLog) {
+      debugPrint(l);
+    }
+    debugPrint('=== END API DEBUG LOG ===');
+  }
 
   final String id;
   final String contactId; // CtId dari Chatrooms/List — dibutuhkan untuk Inbox/Send dan Inbox/Get
@@ -256,18 +266,16 @@ class Conversation {
       groupId: getValue(['GrpId', 'group_id'])?.toString() ?? '',
     );
 
-    // DEBUG: Write raw API values to file for analysis
+    // DEBUG: Accumulate raw API values for analysis
     final _dbgName = getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Name'])?.toString() ?? '?';
     final _dbgIsMe = json['IsMe'];
     final _dbgLastIsMe = json['LastIsMe'];
     final _dbgSdrMsg = getValue(['SdrMsg', 'sdr_msg', 'Sdr']);
     final _dbgNeedReply = json['NeedReply'] ?? json['IsNeedReply'];
     final _dbgLastMsg = (conv.lastMessage.length > 20) ? conv.lastMessage.substring(0, 20) : conv.lastMessage;
-    try {
-      final logFile = File('D:\\UBIG\\Proyek\\NoBox_Chat\\nobox\\api_debug.txt');
-      final line = '📊 CONV [$_dbgName] IsMe=$_dbgIsMe(${_dbgIsMe.runtimeType}) LastIsMe=$_dbgLastIsMe SdrMsg=$_dbgSdrMsg NeedReply=$_dbgNeedReply → isLastMessageFromMe=${conv.isLastMessageFromMe} | msg=$_dbgLastMsg\n';
-      logFile.writeAsStringSync(line, mode: FileMode.append);
-    } catch (_) {}
+    final line = 'CONV [$_dbgName] IsMe=$_dbgIsMe(${_dbgIsMe.runtimeType}) LastIsMe=$_dbgLastIsMe SdrMsg=$_dbgSdrMsg NeedReply=$_dbgNeedReply => fromMe=${conv.isLastMessageFromMe} | msg=$_dbgLastMsg';
+    _debugApiLog.add(line);
+    if (_debugApiLog.length > 200) _debugApiLog.removeAt(0); // Keep last 200
 
     return conv;
   }
