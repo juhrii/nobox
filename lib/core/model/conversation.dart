@@ -261,8 +261,7 @@ class Conversation {
           json['LastIsMe'] == 'true' ||
           getValue(['is_last_message_from_me', 'IsMeLast']) == true ||
           getValue(['is_last_message_from_me', 'IsMeLast']) == 1 ||
-          getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().toLowerCase() == 'you' ||
-          getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().toLowerCase() == 'me',
+          getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().toLowerCase() == 'you',
       needReply: json['NeedReply'] == 1 || 
           json['NeedReply'] == true || 
           json['IsNeedReply'] == 1 || 
