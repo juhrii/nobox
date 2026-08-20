@@ -2219,7 +2219,10 @@ class ChatProvider with ChangeNotifier {
         _localOverrides.clear();
         for (final entry in decoded.entries) {
           final val = entry.value as Map<String, dynamic>;
-          final lastMsgStr = val['lastMessage']?.toString() ?? '';
+          String lastMsgStr = val['lastMessage']?.toString() ?? '';
+          if (lastMsgStr.contains('[-{=||=}-]')) {
+            lastMsgStr = '📍 Location';
+          }
           final lowerMsg = lastMsgStr.toLowerCase();
           final isBogusSystemMsg =
               lastMsgStr == 'Site.Inbox.DeletedMessage' ||
