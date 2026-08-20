@@ -234,12 +234,6 @@ class Message {
       id = json['IdAlias']?.toString() ?? json['IdAccount']?.toString() ?? json['id']?.toString() ?? '';
     }
 
-    // Identifikasi awal dari field yang diberikan server (bisa null/missing untuk channel tertentu)
-    final isOutbound = json['IsOutbound'];
-    final isNobox = json['IsNobox'];
-    final agentId = json['AgentId'];
-    final dirStr = json['dir']?.toString().toLowerCase() ?? '';
-
     bool isMe = false;
     
     // Deteksi Outbound NATIVE (Telegram dll) berdasarkan tujuan pesan
@@ -334,9 +328,8 @@ class Message {
       }
     }
 
-    // Tentukan apakah pesan berasal dari "saya" (agen/pengguna)
-    bool isMe = false;
-    if (!isSystem) {
+    // Evaluasi isMe lanjutan (apabila tidak terdeteksi via isNativeOutbound/LastIsMe)
+    if (!isMe && !isSystem) {
       final agentIdVal = json['AgentId'];
       final dirVal = json['Dir'] ?? json['Direction'] ?? json['dir'];
       final dirStr = dirVal?.toString().toLowerCase() ?? '';
