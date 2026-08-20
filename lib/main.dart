@@ -189,6 +189,29 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         }
       }
 
+      // Deteksi Outbound NATIVE berdasarkan target penerima (To == contactId)
+      if (!isMe) {
+        try {
+          final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+          final chatIndex = chatProvider.chats.indexWhere((c) => c.id == roomId);
+          if (chatIndex >= 0) {
+            final extTo = message['To']?.toString() ?? message['ToId']?.toString() ?? '';
+            final cleanContactId = chatProvider.chats[chatIndex].contactId.replaceAll(RegExp(r'[^0-9]'), '');
+            final cleanCtRealId = chatProvider.chats[chatIndex].ctRealId.replaceAll(RegExp(r'[^0-9]'), '');
+            final cleanExtTo = extTo.replaceAll(RegExp(r'[^0-9]'), '');
+            
+            if (cleanExtTo.isNotEmpty && (
+                (cleanContactId.isNotEmpty && cleanExtTo == cleanContactId) || 
+                (cleanCtRealId.isNotEmpty && cleanExtTo == cleanCtRealId)
+            )) {
+              isMe = true;
+            }
+          }
+        } catch (e) {
+          // Abaikan error provider
+        }
+      }
+
       // Logika deteksi IsMe diserahkan ke fallback di atas dan model Message.
 
       debugPrint('Main: TerimaPesan | room=$roomId | sender=$senderName | msg=$msgText | isMe=$isMe');
