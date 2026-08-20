@@ -200,15 +200,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           final extTo = message['To']?.toString() ?? message['ToId']?.toString() ?? '';
           if (ctRealId.isNotEmpty && ctRealId != '0') {
             final cleanCtRealId = ctRealId.replaceAll(RegExp(r'[^0-9]'), '');
+            final cleanContactId = chatProvider.chats[chatIndex].contactId.replaceAll(RegExp(r'[^0-9]'), '');
             final cleanExtTo = extTo.replaceAll(RegExp(r'[^0-9]'), '');
             final cleanExtFrom = extFrom.replaceAll(RegExp(r'[^0-9]'), '');
             
             if (cleanCtRealId.isNotEmpty) {
-              if (cleanExtTo == cleanCtRealId) {
+              bool matched = false;
+              if (cleanExtTo.isNotEmpty && (cleanExtTo == cleanCtRealId || cleanExtTo == cleanContactId)) {
                 isMe = true;
-              } else if (cleanExtFrom == cleanCtRealId) {
+                matched = true;
+              } else if (cleanExtFrom.isNotEmpty && (cleanExtFrom == cleanCtRealId || (cleanContactId.isNotEmpty && cleanExtFrom == cleanContactId))) {
                 isMe = false;
-              } else if (cleanExtFrom.isNotEmpty && cleanExtFrom != cleanCtRealId && chatProvider.chats[chatIndex].groupId.isEmpty) {
+                matched = true;
+              }
+              
+              if (!matched && cleanExtFrom.isNotEmpty && chatProvider.chats[chatIndex].groupId.isEmpty) {
                 // 1-on-1 Chat: Jika pengirim BUKAN customer, maka PASTI dikirim oleh Bot (Outbound)
                 isMe = true;
               }

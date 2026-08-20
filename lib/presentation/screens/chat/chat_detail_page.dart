@@ -917,15 +917,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 final sortedList = List<Message>.from(response.data!).map((m) {
                   if (chat.ctRealId.isNotEmpty && chat.ctRealId != '0') {
                     final cleanCtRealId = chat.ctRealId.replaceAll(RegExp(r'[^0-9]'), '');
+                    final cleanContactId = chat.contactId.replaceAll(RegExp(r'[^0-9]'), '');
                     final cleanExtTo = (m.toId ?? '').replaceAll(RegExp(r'[^0-9]'), '');
                     final cleanExtFrom = (m.fromId ?? '').replaceAll(RegExp(r'[^0-9]'), '');
                     
                     if (cleanCtRealId.isNotEmpty) {
-                      if (cleanExtTo == cleanCtRealId) {
+                      bool matched = false;
+                      if (cleanExtTo.isNotEmpty && (cleanExtTo == cleanCtRealId || cleanExtTo == cleanContactId)) {
                         m = m.copyWith(isMe: true);
-                      } else if (cleanExtFrom == cleanCtRealId) {
+                        matched = true;
+                      } else if (cleanExtFrom.isNotEmpty && (cleanExtFrom == cleanCtRealId || (cleanContactId.isNotEmpty && cleanExtFrom == cleanContactId))) {
                         m = m.copyWith(isMe: false);
-                      } else if (cleanExtFrom.isNotEmpty && cleanExtFrom != cleanCtRealId && chat.groupId.isEmpty) {
+                        matched = true;
+                      }
+                      
+                      if (!matched && cleanExtFrom.isNotEmpty && chat.groupId.isEmpty) {
                         m = m.copyWith(isMe: true);
                       }
                     }
@@ -1987,15 +1993,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
         if (chat.ctRealId.isNotEmpty && chat.ctRealId != '0') {
           final cleanCtRealId = chat.ctRealId.replaceAll(RegExp(r'[^0-9]'), '');
+          final cleanContactId = chat.contactId.replaceAll(RegExp(r'[^0-9]'), '');
           final cleanExtTo = (parsedMessage.toId ?? '').replaceAll(RegExp(r'[^0-9]'), '');
           final cleanExtFrom = (parsedMessage.fromId ?? '').replaceAll(RegExp(r'[^0-9]'), '');
           
           if (cleanCtRealId.isNotEmpty) {
-            if (cleanExtTo == cleanCtRealId) {
+            bool matched = false;
+            if (cleanExtTo.isNotEmpty && (cleanExtTo == cleanCtRealId || cleanExtTo == cleanContactId)) {
               parsedMessage = parsedMessage.copyWith(isMe: true);
-            } else if (cleanExtFrom == cleanCtRealId) {
+              matched = true;
+            } else if (cleanExtFrom.isNotEmpty && (cleanExtFrom == cleanCtRealId || (cleanContactId.isNotEmpty && cleanExtFrom == cleanContactId))) {
               parsedMessage = parsedMessage.copyWith(isMe: false);
-            } else if (cleanExtFrom.isNotEmpty && cleanExtFrom != cleanCtRealId && chat.groupId.isEmpty) {
+              matched = true;
+            }
+            
+            if (!matched && cleanExtFrom.isNotEmpty && chat.groupId.isEmpty) {
               parsedMessage = parsedMessage.copyWith(isMe: true);
             }
           }
