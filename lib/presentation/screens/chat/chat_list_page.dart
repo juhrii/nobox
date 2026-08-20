@@ -2723,8 +2723,6 @@ class _ChatListPageState extends State<ChatListPage>
       }
     }
 
-    displayMessage = '[isMe:${chat.isLastMessageFromMe}] $displayMessage';
-
     return Text(
       displayMessage,
       maxLines: 1,
