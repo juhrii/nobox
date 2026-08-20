@@ -1324,7 +1324,11 @@ class ChatProvider with ChangeNotifier {
     _signalRRefreshTimer = Timer(const Duration(seconds: 5), () {
       debugPrint('ChatProvider: 🔄 Menjalankan Background Refresh untuk memastikan keakuratan isLastMessageFromMe dari API setelah SignalR...');
       refreshFirstPage(showLoading: false).then((_) {
-        Conversation.dumpDebugLog();
+        try {
+          File('api_debug_log.txt').writeAsStringSync(Conversation.dumpDebugLogStr());
+        } catch (e) {
+          debugPrint('Failed to write debug log: $e');
+        }
       });
     });
   }

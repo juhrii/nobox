@@ -12,11 +12,20 @@ class Conversation {
   // DEBUG: Static log buffer for API analysis
   static final List<String> _debugApiLog = [];
   static void dumpDebugLog() {
-    debugPrint('=== API DEBUG LOG (${_debugApiLog.length} entries) ===');
-    for (final l in _debugApiLog) {
-      debugPrint(l);
+    print(dumpDebugLogStr());
+  }
+
+  static String dumpDebugLogStr() {
+    if (_debugApiLog.isEmpty) {
+      return '=== API DEBUG LOG EMPTY ===';
     }
-    debugPrint('=== END API DEBUG LOG ===');
+    final sb = StringBuffer();
+    sb.writeln('=== API DEBUG LOG (${_debugApiLog.length} messages) ===');
+    for (var log in _debugApiLog) {
+      sb.writeln(log);
+    }
+    sb.writeln('===========================');
+    return sb.toString();
   }
 
   final String id;
