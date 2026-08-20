@@ -1113,6 +1113,8 @@ class ChatProvider with ChangeNotifier {
 
       bool isSmartMeFallback =
           (sdrMsg.toLowerCase() == 'you') ||
+          (existing.channelName.isNotEmpty &&
+              sdrMsg.toLowerCase() == existing.channelName.toLowerCase()) ||
           (existing.isLastMessageFromMe &&
               lastMsg.trim().toLowerCase() ==
                   existing.lastMessage.trim().toLowerCase()) ||
