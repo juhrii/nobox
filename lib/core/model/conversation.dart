@@ -232,7 +232,7 @@ class Conversation {
     bool isLastFromMe = 
         getValue(['is_last_message_from_me', 'IsMeLast']) == true ||
         getValue(['is_last_message_from_me', 'IsMeLast']) == 1 ||
-        getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().toLowerCase() == 'you';
+        getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().toLowerCase() == 'me';
 
     int rawUc = int.tryParse(getValue(['Uc', 'uc', 'UC', 'unread_count', 'UnreadCount', 'Unread', 'unread', 'UnreadMsg', 'UnreadMsgs'])?.toString() ?? '') ?? 0;
     if (isLastFromMe) {

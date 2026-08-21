@@ -1054,7 +1054,7 @@ class ChatProvider with ChangeNotifier {
       // Jika ada pesan baru yang masuk (unreadCount > 0 dan bukan dari kita), hapus blokir readIds!
       if (uc > 0 &&
           !isRecentMe &&
-          sdrMsg.toLowerCase() != 'you' &&
+          sdrMsg.toLowerCase() != 'me' &&
           _readIds.contains(roomId)) {
         _readIds.remove(roomId);
         _localUnreadOverrides.remove(roomId);
@@ -1112,7 +1112,7 @@ class ChatProvider with ChangeNotifier {
           lastMsg.trim().startsWith('{') || lastMsg.trim().startsWith('[');
 
       bool isSmartMeFallback =
-          (sdrMsg.toLowerCase() == 'you') ||
+          (sdrMsg.toLowerCase() == 'me') ||
           (existing.channelName.isNotEmpty &&
               sdrMsg.toLowerCase() == existing.channelName.toLowerCase()) ||
           (existing.isLastMessageFromMe &&
@@ -1155,51 +1155,33 @@ class ChatProvider with ChangeNotifier {
                 lastMsg.trim() != existing.lastMessage.trim());
 
         if (isNewerOrDifferent) {
-          // FIX: Backend NoBox mengembalikan IsNeedReply = false secara keliru untuk pesan masuk dari Telegram.
-          // Hapus ketergantungan pada IsNeedReply secara total di sini.
-          // Hanya anggap balasan agen JIKA sdrMsg = 'you'/'system' ATAU isSmartMeFallback true.
+          // Sesuai arahan Mas Erik: SdrMsg == "me" artinya pesan dari agen
           final isFromAgent =
               isRecentMe ||
-              sdrMsg.toLowerCase() == 'you' ||
+              sdrMsg.toLowerCase() == 'me' ||
               (sdrMsg.toLowerCase() == 'system' && !existing.isGroup) ||
               isSmartMeFallback;
 
           if (isFromAgent) {
-            // FIX: Jika pesan balasan dari agen (atau tidak butuh balasan),
-            // Hapus semua angka indikator karena agen sendiri yang membalas!
             _localUnreadOverrides.remove(roomId);
             if (!_readIds.contains(roomId)) _readIds.add(roomId);
             _saveReadState();
-            debugPrint(
-              'ChatProvider: 🧹 Cleared Unread (via TerimaSubSpv - Agent Reply) for room $roomId',
-            );
+            debugPrint('ChatProvider: 🧹 Cleared Unread (via TerimaSubSpv - Agent Reply) for room $roomId');
           } else {
-            // Jika pesan pelanggan, naikkan Unread!
-            final currentUc =
-                _localUnreadOverrides[roomId] ?? existing.unreadCount;
-            final forcedUc = currentUc + 1;
-            _localUnreadOverrides[roomId] = forcedUc;
+            // Sesuai arahan Mas Erik: Gunakan Uc dari payload SignalR secara langsung
+            _localUnreadOverrides[roomId] = uc;
             _readIds.remove(roomId);
             _saveReadState();
-            debugPrint(
-              'ChatProvider: 📈 Incremented Unread (via TerimaSubSpv) for room $roomId. New Uc: $forcedUc',
-            );
+            debugPrint('ChatProvider: 📈 Using SignalR Uc ($uc) for room $roomId');
           }
-
-          // 🔕 PANGGILAN NOTIFIKASI DIHAPUS DARI SINI:
-          // Evaluasi serverTimeParsed terlalu rawan error (pesan masuk tidak selalu memiliki waktu > existingTime jika waktunya sangat cepat).
-          // Tugas notifikasi DIBALIKKAN KEMBALI ke signalr_service.dart di event TerimaSubSpv.
         }
       } else if (isSmartMeFallback ||
           PushNotificationService.currentRoomId == roomId) {
-        // Jika pesan balasan dari kita sendiri ATAU kita sedang di dalam room, hapus perlindungan unread!
         _localUnreadOverrides.remove(roomId);
         if (!_readIds.contains(roomId)) _readIds.add(roomId);
         _saveReadState();
       }
 
-      // Evaluasi apakah pesan ini benar-benar dari agen (untuk menghilangkan badge merah)
-      // FIX: Jangan merusak isLastMessageFromMe yang mungkin sudah diperbaiki API, jika pesan tidak berubah!
       final bool isNewerOrDifferentForState = serverTimeParsed != null &&
             (existingTimeParsed == null ||
                 serverTimeParsed.isAfter(existingTimeParsed) ||
@@ -1209,7 +1191,7 @@ class ChatProvider with ChangeNotifier {
       if (isNewerOrDifferentForState) {
         isFromAgentForState =
             isRecentMe ||
-            sdrMsg.toLowerCase() == 'you' ||
+            sdrMsg.toLowerCase() == 'me' ||
             (sdrMsg.toLowerCase() == 'system' && !existing.isGroup) ||
             isSmartMeFallback;
       } else {
@@ -1278,30 +1260,9 @@ class ChatProvider with ChangeNotifier {
       refreshFirstPage();
     } else {
       if (PushNotificationService.currentRoomId != roomId && !isMe) {
-        // DELAYED INSTANT FEEDBACK (5.5 detik):
-        // Kita tunda kenaikan unread count selama 5.5 detik (karena polling API setiap 5 detik).
-        // Mengapa? Karena SignalR dari NoBox sering salah mengenali balasan agen dari Telegram/WA pribadi sebagai pelanggan.
-        // Jika dalam 5 detik API List (yang dipanggil oleh refreshFirstPage) mengenali bahwa itu agen (SdrMsg: "you"),
-        // maka _localUnreadOverrides akan dihapus, dan angka ini tidak akan bertambah!
-        // Tapi jika benar itu dari pelanggan, setelah 5.5 detik titik biru akan muncul (jika API juga gagal)!
-        Future.delayed(const Duration(milliseconds: 5500), () {
-          // Hanya naikkan jika room tersebut belum dibaca dalam 5.5 detik terakhir
-          if (!_readIds.contains(roomId)) {
-            final indexNow = _chats.indexWhere((c) => c.id == roomId);
-            if (indexNow != -1) {
-              // Jika ini masih bukan pesan agen (karena tidak ada SdrMsg="you" dari API)
-              if (!_chats[indexNow].isLastMessageFromMe) {
-                _localUnreadOverrides[roomId] =
-                    (_localUnreadOverrides[roomId] ?? _chats[indexNow].unreadCount) + 1;
-                _chats[indexNow] = _chats[indexNow].copyWith(
-                  unreadCount: _localUnreadOverrides[roomId],
-                );
-                notifyListeners();
-                _saveReadState();
-              }
-            }
-          }
-        });
+        // Sesuai arahan Mas Erik: Kita tidak lagi menaikkan Uc secara manual menggunakan delay 5.5s.
+        // Kita murni menunggu TerimaSubSpv yang datang sesaat lagi untuk membawa angka Uc yang akurat.
+        debugPrint('ChatProvider: Waiting for TerimaSubSpv to update Unread Count for room $roomId');
       } else if (isMe) {
         _localUnreadOverrides.remove(roomId);
         if (!_readIds.contains(roomId)) _readIds.add(roomId);
@@ -1334,22 +1295,10 @@ class ChatProvider with ChangeNotifier {
       notifyListeners();
     }
     
-    // FIX TERPENTING: Sinkronisasi Latar Belakang (Debounced)
-    // Server sering kali lambat memperbarui DB atau gagal mengirimkan penanda agen secara jelas via SignalR (khususnya untuk Telegram Native).
-    // Untuk memastikan pesan dari agen native tidak selamanya berwarna merah (isLastMessageFromMe = false),
-    // kita secara otomatis melakukan background refresh ke server API (setelah delay 2 detik) 
-    // setiap kali ada pesan masuk. API `Chatrooms/List` PASTI tahu kebenaran mutlaknya!
+    // Sesuai arahan Mas Erik: Hapus background refresh API (yang dulu dibuat dengan delay 5 detik).
+    // Ini yang sebelumnya menyebabkan Uc sempat terbaca 0 karena menembak API Chatrooms/List saat pesan baru masuk.
+    // TerimaSubSpv akan mengirimkan data yang 100% akurat sesaat lagi.
     _signalRRefreshTimer?.cancel();
-    _signalRRefreshTimer = Timer(const Duration(seconds: 5), () {
-      debugPrint('ChatProvider: 🔄 Menjalankan Background Refresh untuk memastikan keakuratan isLastMessageFromMe dari API setelah SignalR...');
-      refreshFirstPage(showLoading: false).then((_) {
-        try {
-          File('api_debug_log.txt').writeAsStringSync(Conversation.dumpDebugLogStr());
-        } catch (e) {
-          debugPrint('Failed to write debug log: $e');
-        }
-      });
-    });
   }
 
   /// Mengambil pesan asli terakhir untuk ruangan yang pesan terakhirnya dihapus atau berupa log sistem

@@ -215,15 +215,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
     });
 
-    // ── UcChanged: total unread count changed → refresh first page ──
+    // ── UcChanged: total unread count changed ──
+    // Sesuai saran Mas Erik: Jangan hit ulang API Chatrooms/List saat ada chat masuk (race condition Uc 0)
+    // List sudah diupdate secara lokal lewat TerimaSubSpv
     _ucChangedSub = signalR.onUcChanged.listen((count) {
-      debugPrint('Main: UcChanged | total=$count');
-      try {
-        final chatProvider = context.read<ChatProvider>();
-        chatProvider.refreshFirstPage();
-      } catch (e) {
-        debugPrint('Main: Could not refresh from UcChanged: $e');
-      }
+      debugPrint('Main: UcChanged | total=$count (Ignored refresh to prevent race condition)');
     });
 
     // ── Reconnect: sync data after reconnection ──

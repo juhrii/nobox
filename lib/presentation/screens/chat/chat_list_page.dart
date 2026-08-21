@@ -2129,8 +2129,11 @@ class _ChatListPageState extends State<ChatListPage>
     // Jika unreadCount > 0 -> Ada pesan masuk baru yang belum dibaca -> Merah
     // Jika tidak -> Hitam/Warna Tema
     final bool hasUnread = chat.unreadCount > 0;
+    // Sesuai arahan Mas Erik: Teks jadi merah HANYA JIKA SdrMsg=="you" dan IsNeedReply==1
+    // chat.needReply dan chat.isLastMessageFromMe (yang sekarang di-set jadi SdrMsg=="me") 
+    final bool isRedText = !chat.isLastMessageFromMe && chat.needReply;
 
-    final Color messageColor = hasUnread
+    final Color messageColor = isRedText
         ? Colors.red
         : (isDark ? Colors.grey.shade400 : Colors.black87);
 
