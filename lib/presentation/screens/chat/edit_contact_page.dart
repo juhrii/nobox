@@ -220,7 +220,7 @@ class _EditContactPageState extends State<EditContactPage> {
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFF5F8FA),
       appBar: AppBar(
-        backgroundColor: Colors.blue,
+        backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.blue,
         foregroundColor: Colors.white,
         title: const Text('Edit Contact', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
         centerTitle: false,
