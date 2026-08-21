@@ -229,14 +229,7 @@ class Conversation {
       return false;
     }
 
-    bool isLastFromMe = json['IsMe'] == true ||
-        json['IsMe'] == 1 ||
-        json['IsMe'] == '1' ||
-        json['IsMe'] == 'true' ||
-        json['LastIsMe'] == true ||
-        json['LastIsMe'] == 1 ||
-        json['LastIsMe'] == '1' ||
-        json['LastIsMe'] == 'true' ||
+    bool isLastFromMe = 
         getValue(['is_last_message_from_me', 'IsMeLast']) == true ||
         getValue(['is_last_message_from_me', 'IsMeLast']) == 1 ||
         getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().toLowerCase() == 'you';
