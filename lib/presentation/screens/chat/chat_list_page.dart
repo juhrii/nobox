@@ -2159,9 +2159,6 @@ class _ChatListPageState extends State<ChatListPage>
       'voice (empty)',
     ];
 
-    // DEBUG: Tampilkan nilai SdrMsg dan Uc langsung di layar agar kita tahu kebenarannya!
-    final debugPrefix = '[isMe:${chat.isLastMessageFromMe}][Uc:${chat.unreadCount}] ';
-    displayMessage = debugPrefix + displayMessage;
     final exactPhotoLabels = ['photo', '📷 photo', 'image', 'foto', '📷 foto'];
     final exactVideoLabels = ['video', '🎥 video', '🎬 video'];
 
