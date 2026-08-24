@@ -811,8 +811,9 @@ class _ChatListPageState extends State<ChatListPage>
               'DisplayName',
             ]);
 
+            final isDark = Theme.of(context).brightness == Brightness.dark;
             return Dialog(
-              backgroundColor: Colors.white,
+              backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
