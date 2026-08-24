@@ -208,7 +208,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void _savePersistentMessages() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final List<Map<String, dynamic>> mapList = _messages
+      
+      // FIX: Batasi pesan yang disimpan secara lokal maksimal 50 pesan terakhir
+      // Jika menyimpan ribuan pesan sekaligus, aplikasi akan freeze (ANR) saat jsonEncode()
+      final int maxPersistent = 50;
+      final List<Message> messagesToSave = _messages.length > maxPersistent 
+          ? _messages.sublist(_messages.length - maxPersistent) 
+          : _messages;
+
+      final List<Map<String, dynamic>> mapList = messagesToSave
           .map((m) => m.toMap())
           .toList();
       final jsonStr = jsonEncode(mapList);
