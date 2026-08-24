@@ -1168,11 +1168,19 @@ class ChatProvider with ChangeNotifier {
             _saveReadState();
             debugPrint('ChatProvider: 🧹 Cleared Unread (via TerimaSubSpv - Agent Reply) for room $roomId');
           } else {
-            // Sesuai arahan Mas Erik: Gunakan Uc dari payload SignalR secara langsung
-            _localUnreadOverrides[roomId] = uc;
+            // FIX: Mengatasi Race Condition Backend
+            // Jika ada 2 pesan masuk nyaris bersamaan, backend NoBox sering mengirimkan Uc=1 untuk keduanya.
+            // Kita atasi dengan cara: jika Uc dari server <= unreadCount lokal, kita asumsikan itu race condition
+            // dan kita increment manual. Jika Uc dari server lebih besar (misal karena offline lama), kita pakai server.
+            int finalUc = uc;
+            if (uc > 0 && uc <= existing.unreadCount) {
+              finalUc = existing.unreadCount + 1;
+            }
+            
+            _localUnreadOverrides[roomId] = finalUc;
             _readIds.remove(roomId);
             _saveReadState();
-            debugPrint('ChatProvider: 📈 Using SignalR Uc ($uc) for room $roomId');
+            debugPrint('ChatProvider: 📈 Using SignalR Uc ($finalUc) [Raw Server: $uc, Existing: ${existing.unreadCount}] for room $roomId');
           }
         }
       } else if (isSmartMeFallback ||
