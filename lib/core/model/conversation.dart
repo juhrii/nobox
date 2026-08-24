@@ -173,8 +173,10 @@ class Conversation {
     String? rawLastMessageType = getValue(['LastMessageType', 'last_message_type'])?.toString();
     if (!finalLastMessage.startsWith('{') && !finalLastMessage.startsWith('[')) {
       final lower = finalLastMessage.trim().toLowerCase();
-      if (lower.isNotEmpty && lower != 'document(empty)' && lower != 'voice(empty)') {
-        if (rawLastMessageType == '2' || rawLastMessageType == '3' || rawLastMessageType == '4' || rawLastMessageType == '5') {
+      if (lower.isNotEmpty && lower != 'document(empty)' && lower != 'voice(empty)' && lower != 'image(empty)' && lower != 'video(empty)') {
+        // Jika pesan adalah teks biasa, paksa tipe menjadi 1 (Text)
+        // Ini mengatasi bug di mana server nyangkut di tipe media (seperti 6 untuk Sticker, 2 Voice, dll)
+        if (rawLastMessageType != '1') {
           rawLastMessageType = '1';
         }
       }
