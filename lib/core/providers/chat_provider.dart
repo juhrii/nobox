@@ -1424,12 +1424,8 @@ class ChatProvider with ChangeNotifier {
       } else {
         // Hanya update di tempat, tapi waktu bisa mundur (misal saat hapus pesan)
         _chats[index] = chat;
-        // Opsional: sort _chats jika ingin posisi langsung akurat saat pesan dihapus
-        _chats.sort((a, b) {
-          final timeA = _parseTimeForSort(a.time);
-          final timeB = _parseTimeForSort(b.time);
-          return timeB.compareTo(timeA);
-        });
+        // FIX: Hapus _chats.sort() di sini karena melakukan parsing waktu pada ribuan list akan memicu ANR / Freeze.
+        // Posisi akan diperbaiki secara alami saat SignalR atau polling API berikutnya berjalan.
       }
 
       _saveLocalOverrides();
