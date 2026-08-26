@@ -357,12 +357,6 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
           // Override: gunakan data lokasi lokal (optimistic save) jika ada
           final localLocation = chatProvider.getSavedContactLocation(widget.chat.id);
           if (localLocation != null) {
-            if (localLocation['Address'] != null && localLocation['Address']!.isNotEmpty) {
-              _contactAddress = localLocation['Address']!;
-            }
-            if (localLocation['Postal'] != null && localLocation['Postal']!.isNotEmpty) {
-              _contactPostal = localLocation['Postal']!;
-            }
             if (localLocation['Country'] != null && localLocation['Country']!.isNotEmpty) {
               _contactCountry = localLocation['Country']!;
             }
