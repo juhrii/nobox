@@ -112,17 +112,8 @@ class SignalRBackgroundService : Service() {
                 .withAccessTokenProvider(Single.defer { Single.just(token ?: "") })
                 .build()
 
-            // Register handlers with 2, 3, and 4 arguments to prevent signature mismatch exceptions
-            hubConnection?.on("TerimaPesan", { rawRoom: Any, rawMsg: Any ->
-                Log.d(TAG, ">>> TerimaPesan (2 args)! room=${rawRoom}")
-                handleIncomingMessage(rawRoom.toString(), rawMsg.toString())
-            }, Object::class.java, Object::class.java)
-
-            hubConnection?.on("TerimaPesan", { rawRoom: Any, rawMsg: Any, arg3: Any ->
-                Log.d(TAG, ">>> TerimaPesan (3 args)! room=${rawRoom}")
-                handleIncomingMessage(rawRoom.toString(), rawMsg.toString())
-            }, Object::class.java, Object::class.java, Object::class.java)
-
+            // Register handler with 4 arguments (Action4) since the backend sends up to 4 parameters.
+            // Using multiple on() handlers for the same event crashes the Java SignalR client if argument counts mismatch.
             hubConnection?.on("TerimaPesan", { rawRoom: Any, rawMsg: Any, arg3: Any, arg4: Any ->
                 Log.d(TAG, ">>> TerimaPesan (4 args)! room=${rawRoom}")
                 handleIncomingMessage(rawRoom.toString(), rawMsg.toString())
