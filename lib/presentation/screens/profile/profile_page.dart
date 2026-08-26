@@ -239,10 +239,9 @@ class ProfilePage extends StatelessWidget {
             Center(
               child: Column(
                 children: [
-                  Icon(
-                    Icons.all_inclusive_rounded,
-                    size: 40,
-                    color: isDark ? Colors.white30 : Colors.grey[400],
+                  Image.asset(
+                    'assets/nobox2.png',
+                    height: 40,
                   ),
                   const SizedBox(height: 8),
                   Text(
