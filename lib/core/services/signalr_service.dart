@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:signalr_netcore/signalr_client.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../app_config.dart';
 import 'push_notification_service.dart';
 import 'api_client.dart';
@@ -103,8 +104,23 @@ class SignalRService {
               requestTimeout: 30000,
               accessTokenFactory: () async {
                 // Always read fresh token (handles token refresh/expiry)
-                const storage = FlutterSecureStorage();
-                return await storage.read(key: 'auth_token') ?? '';
+                // FIX: Gunakan fallback ke SharedPreferences untuk mengatasi bug SecureStorage di OS tertentu
+                String? token;
+                try {
+                  const storage = FlutterSecureStorage();
+                  token = await storage.read(key: AppConfig.tokenKey);
+                } catch (e) {
+                  debugPrint('SignalR: SecureStorage read error: $e');
+                }
+                
+                if (token == null || token.isEmpty) {
+                  final prefs = await SharedPreferences.getInstance();
+                  token = prefs.getString(AppConfig.tokenKey);
+                  if (token != null && token.isNotEmpty) {
+                    debugPrint('SignalR: Token recovered from SharedPreferences fallback');
+                  }
+                }
+                return token ?? '';
               },
             ),
           )

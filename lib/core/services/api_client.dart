@@ -132,8 +132,20 @@ class ApiClient {
     try {
       const secureStorage = FlutterSecureStorage();
       final prefs = await SharedPreferences.getInstance();
-      final savedUsername = await secureStorage.read(key: AppConfig.lastUsernameKey) ?? prefs.getString(AppConfig.lastUsernameKey);
-      final savedPassword = await secureStorage.read(key: AppConfig.lastPasswordKey) ?? prefs.getString(AppConfig.lastPasswordKey);
+      
+      // FIX: SecureStorage.read bisa melemparkan exception (PlatformException) di beberapa OS.
+      // Jika dilempar exception, tangkap dan gunakan fallback SharedPreferences.
+      String? savedUsername;
+      String? savedPassword;
+      try {
+        savedUsername = await secureStorage.read(key: AppConfig.lastUsernameKey);
+        savedPassword = await secureStorage.read(key: AppConfig.lastPasswordKey);
+      } catch (e) {
+        debugPrint('ApiClient: SecureStorage read error, using fallback: $e');
+      }
+      
+      savedUsername ??= prefs.getString(AppConfig.lastUsernameKey);
+      savedPassword ??= prefs.getString(AppConfig.lastPasswordKey);
 
       if (savedUsername == null || savedPassword == null) {
         debugPrint('ApiClient: No saved credentials found, cannot auto re-login');
@@ -167,7 +179,12 @@ class ApiClient {
         
         // Simpan token baru
         _token = newToken;
-        await secureStorage.write(key: AppConfig.tokenKey, value: newToken);
+        try {
+          await secureStorage.write(key: AppConfig.tokenKey, value: newToken);
+        } catch (e) {
+          debugPrint('ApiClient: SecureStorage write error: $e');
+        }
+        await prefs.setString(AppConfig.tokenKey, newToken);
         
         debugPrint('ApiClient: ✅ Auto re-login successful! New token saved.');
         _refreshCompleter!.complete(newToken);
