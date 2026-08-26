@@ -242,6 +242,7 @@ class ProfilePage extends StatelessWidget {
                   Image.asset(
                     'assets/nobox2.png',
                     height: 40,
+                    color: isDark ? Colors.white30 : Colors.grey[400],
                   ),
                   const SizedBox(height: 8),
                   Text(
