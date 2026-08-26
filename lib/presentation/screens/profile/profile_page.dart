@@ -300,9 +300,9 @@ class _AccordionListState extends State<_AccordionList> {
             bottom: 16,
           ),
           children: [
-            Text(
+            _buildRichText(
               content,
-              style: TextStyle(
+              TextStyle(
                 color: widget.isDark ? Colors.white70 : Colors.grey.shade700,
                 fontSize: 14,
                 height: 1.6,
@@ -312,6 +312,29 @@ class _AccordionListState extends State<_AccordionList> {
         ),
       ),
     );
+  }
+
+  Widget _buildRichText(String text, TextStyle baseStyle) {
+    final List<TextSpan> spans = [];
+    final parts = text.split('**');
+    
+    for (int i = 0; i < parts.length; i++) {
+      if (i % 2 == 1) {
+        spans.add(TextSpan(
+          text: parts[i],
+          style: baseStyle.copyWith(
+            fontWeight: FontWeight.bold,
+            color: widget.isDark ? Colors.white : Colors.black87,
+          ),
+        ));
+      } else {
+        spans.add(TextSpan(
+          text: parts[i],
+          style: baseStyle,
+        ));
+      }
+    }
+    return Text.rich(TextSpan(children: spans));
   }
 
   @override
@@ -344,7 +367,7 @@ class _AccordionListState extends State<_AccordionList> {
           3,
           title: 'Target Pengguna',
           content:
-              'NoBox.AI dirancang untuk membantu berbagai jenis organisasi dan pelaku usaha dalam mengelola komunikasi dan layanan pelanggan secara lebih efektif:\n\n• UMKM: Mengelola pesan, promosi, dan layanan otomatis tanpa tim besar.\n• Perusahaan Menengah & Besar: Mendukung operasional CS kompleks dengan sistem terintegrasi dan pelaporan.\n• Startup Digital: Membangun sistem layanan pelanggan modern berbasis AI.\n• Lembaga Pendidikan: Melayani pertanyaan siswa dan orang tua lintas kanal.\n• Instansi Pemerintah: Mendukung pelayanan masyarakat yang responsif dan transparan.\n• E-Commerce & Marketplace: Pengelolaan pesanan dan komplain secara otomatis dan terpusat.',
+              'NoBox.AI dirancang untuk membantu berbagai jenis organisasi dan pelaku usaha dalam mengelola komunikasi dan layanan pelanggan secara lebih efektif:\n\n• **UMKM:** Mengelola pesan, promosi, dan layanan otomatis tanpa tim besar.\n• **Perusahaan Menengah & Besar:** Mendukung operasional CS kompleks dengan sistem terintegrasi dan pelaporan.\n• **Startup Digital:** Membangun sistem layanan pelanggan modern berbasis AI.\n• **Lembaga Pendidikan:** Melayani pertanyaan siswa dan orang tua lintas kanal.\n• **Instansi Pemerintah:** Mendukung pelayanan masyarakat yang responsif dan transparan.\n• **E-Commerce & Marketplace:** Pengelolaan pesanan dan komplain secara otomatis dan terpusat.',
         ),
         const SizedBox(height: 12),
         _buildExpandableSection(
@@ -358,14 +381,14 @@ class _AccordionListState extends State<_AccordionList> {
           5,
           title: 'Modul Utama NoBox.AI',
           content:
-              'NoBox.AI terdiri dari beberapa modul utama yang saling terintegrasi untuk mendukung operasional bisnis secara menyeluruh, mulai dari komunikasi pelanggan hingga pengelolaan sistem.\n\n• Pesan: Mengelola seluruh percakapan pelanggan dari berbagai kanal komunikasi.\n• CRM: Menyimpan dan mengelola data pelanggan, status prospek, dan aktivitas penjualan.\n• Formulir: Membuat formulir digital seperti pendaftaran dan survei pelanggan.\n• Promosi: Pengiriman pesan promosi dan campaign pemasaran secara terjadwal.\n• Kontak: Mengelola database pelanggan.\n• Akun: Mengatur data akun pengguna, lisensi, dan status layanan.\n• AI Agents: Mengelola chatbot berbasis AI sesuai skenario.\n• Human Agents: Mengatur agen manusia untuk percakapan lanjutan.\n• Berlangganan: Informasi paket layanan dan fitur yang tersedia.\n• Billing: Mengelola tagihan dan status transaksi.\n• Pengaturan: Mengatur sistem secara menyeluruh termasuk profil, file manager, dan integrasi.',
+              'NoBox.AI terdiri dari beberapa modul utama yang saling terintegrasi untuk mendukung operasional bisnis secara menyeluruh, mulai dari komunikasi pelanggan hingga pengelolaan sistem.\n\n• **Pesan:** Mengelola seluruh percakapan pelanggan dari berbagai kanal komunikasi.\n• **CRM:** Menyimpan dan mengelola data pelanggan, status prospek, dan aktivitas penjualan.\n• **Formulir:** Membuat formulir digital seperti pendaftaran dan survei pelanggan.\n• **Promosi:** Pengiriman pesan promosi dan campaign pemasaran secara terjadwal.\n• **Kontak:** Mengelola database pelanggan.\n• **Akun:** Mengatur data akun pengguna, lisensi, dan status layanan.\n• **AI Agents:** Mengelola chatbot berbasis AI sesuai skenario.\n• **Human Agents:** Mengatur agen manusia untuk percakapan lanjutan.\n• **Berlangganan:** Informasi paket layanan dan fitur yang tersedia.\n• **Billing:** Mengelola tagihan dan status transaksi.\n• **Pengaturan:** Mengatur sistem secara menyeluruh termasuk profil, file manager, dan integrasi.',
         ),
         const SizedBox(height: 12),
         _buildExpandableSection(
           6,
           title: 'Detail Keunggulan',
           content:
-              'NoBox.AI memiliki berbagai keunggulan yang mendukung kemudahan penggunaan, keamanan data, dan integrasi sistem.\n\nTampilan:\n• Menu Per Role User: Tampilan menu disesuaikan dengan peran pengguna\n• Tracking Data: Memudahkan pemantauan aktivitas dan data sistem\n• Tampilan Fleksibel: Layout dapat disesuaikan dengan kebutuhan pengguna\n• Pilihan Tema: Tersedia tema terang dan gelap\n\nKeamanan:\n• Hak Akses User: Pengaturan hak akses berdasarkan role pengguna\n\nIntegrasi:\n• Import Kontak: Mendukung file Excel dan CSV\n• Export Kontak: Mendukung format Google Contacts',
+              'NoBox.AI memiliki berbagai keunggulan yang mendukung kemudahan penggunaan, keamanan data, dan integrasi sistem.\n\n**Tampilan:**\n• **Menu Per Role User:** Tampilan menu disesuaikan dengan peran pengguna\n• **Tracking Data:** Memudahkan pemantauan aktivitas dan data sistem\n• **Tampilan Fleksibel:** Layout dapat disesuaikan dengan kebutuhan pengguna\n• **Pilihan Tema:** Tersedia tema terang dan gelap\n\n**Keamanan:**\n• **Hak Akses User:** Pengaturan hak akses berdasarkan role pengguna\n\n**Integrasi:**\n• **Import Kontak:** Mendukung file Excel dan CSV\n• **Export Kontak:** Mendukung format Google Contacts',
         ),
       ],
     );
