@@ -12,7 +12,7 @@ import 'api_client.dart';
 // FITUR: Layanan SignalR (Real-time / WebSocket)
 // FILE: lib/core/services/signalr_service.dart
 // BARIS AWAL: 17 (setelah komentar ini)
-// FUNGSI: Mengelola koneksi real-time via SignalR untuk pesan instan. 
+// FUNGSI: Mengelola koneksi real-time via SignalR untuk pesan instan.
 //         Mendengarkan event: TerimaPesan, TerimaSubSpv, UcChanged, TerimaExpired.
 // =====================================================================
 
@@ -40,11 +40,14 @@ class SignalRService {
 
   // ── Generic stream (backward-compatible) ──
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get onMessageReceived => _messageController.stream;
+  Stream<Map<String, dynamic>> get onMessageReceived =>
+      _messageController.stream;
 
   // ── Typed streams for specific events ──
-  final _terimaPesanController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get onTerimaPesan => _terimaPesanController.stream;
+  final _terimaPesanController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onTerimaPesan =>
+      _terimaPesanController.stream;
 
   // ── Cached Messages (Fix race condition) ──
   final Map<String, List<Map<String, dynamic>>> _recentTerimaPesan = {};
@@ -53,21 +56,26 @@ class SignalRService {
     return _recentTerimaPesan[roomId] ?? [];
   }
 
-  final _terimaSubSpvController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get onTerimaSubSpv => _terimaSubSpvController.stream;
+  final _terimaSubSpvController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onTerimaSubSpv =>
+      _terimaSubSpvController.stream;
 
   final _ucChangedController = StreamController<int>.broadcast();
   Stream<int> get onUcChanged => _ucChangedController.stream;
 
   // ── Connection state stream ──
   final _connectionStateController = StreamController<bool>.broadcast();
-  Stream<bool> get onConnectionStateChanged => _connectionStateController.stream;
+  Stream<bool> get onConnectionStateChanged =>
+      _connectionStateController.stream;
 
-  final _blockUnblockController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get onBlockUnblock => _blockUnblockController.stream;
+  final _blockUnblockController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onBlockUnblock =>
+      _blockUnblockController.stream;
 
   /// Hubungkan ke SignalR hub menggunakan token autentikasi pengguna.
-    // FITUR 3: Terhubung ke server hub SignalR menggunakan Token JWT.
+  // FITUR 3: Terhubung ke server hub SignalR menggunakan Token JWT.
   // [ACTION: SIGNALR_CONNECT] - Membangun dan menjaga koneksi Web-Socket real-time
   Future<void> connect() async {
     if (_hubConnection != null) {
@@ -88,7 +96,9 @@ class SignalRService {
           await _subscribeUser();
           return;
         } catch (e) {
-          debugPrint('SignalR: ❌ Reconnection failed, building new connection: $e');
+          debugPrint(
+            'SignalR: ❌ Reconnection failed, building new connection: $e',
+          );
           // Fall through to build a new connection
         }
       }
@@ -112,12 +122,14 @@ class SignalRService {
                 } catch (e) {
                   debugPrint('SignalR: SecureStorage read error: $e');
                 }
-                
+
                 if (token == null || token.isEmpty) {
                   final prefs = await SharedPreferences.getInstance();
                   token = prefs.getString(AppConfig.tokenKey);
                   if (token != null && token.isNotEmpty) {
-                    debugPrint('SignalR: Token recovered from SharedPreferences fallback');
+                    debugPrint(
+                      'SignalR: Token recovered from SharedPreferences fallback',
+                    );
                   }
                 }
                 return token ?? '';
@@ -128,39 +140,54 @@ class SignalRService {
           .build();
 
       // Perbesar timeout agar tidak mudah disconnect di jaringan mobile
-      _hubConnection!.serverTimeoutInMilliseconds = 30000;  // 30 detik (default 2 detik)
+      _hubConnection!.serverTimeoutInMilliseconds =
+          30000; // 30 detik (default 2 detik)
       _hubConnection!.keepAliveIntervalInMilliseconds = 15000; // 15 detik
 
       // ── Register handlers for NoBox events ──
       debugPrint('SignalR: Registering event handlers...');
-      
+
       // [ACTION: SIGNALR_RECEIVE_MSG] - Menerima balasan pesan/chat masuk secara real-time
       _hubConnection!.on(eventTerimaPesan, (args) {
-        debugPrint('SignalR: 🔥🔥🔥 RAW TerimaPesan RECEIVED! args.length=${args?.length}');
-        debugPrint('SignalR: 🔥 arg[0]=${args?[0]?.toString().substring(0, (args?[0]?.toString().length ?? 0) > 100 ? 100 : (args?[0]?.toString().length ?? 0))}');
+        debugPrint(
+          'SignalR: 🔥🔥🔥 RAW TerimaPesan RECEIVED! args.length=${args?.length}',
+        );
+        debugPrint(
+          'SignalR: 🔥 arg[0]=${args?[0]?.toString().substring(0, (args?[0]?.toString().length ?? 0) > 100 ? 100 : (args?[0]?.toString().length ?? 0))}',
+        );
         if (args != null && args.length > 1) {
-          debugPrint('SignalR: 🔥 arg[1]=${args[1]?.toString().substring(0, (args[1]?.toString().length ?? 0) > 200 ? 200 : (args[1]?.toString().length ?? 0))}');
+          debugPrint(
+            'SignalR: 🔥 arg[1]=${args[1]?.toString().substring(0, (args[1]?.toString().length ?? 0) > 200 ? 200 : (args[1]?.toString().length ?? 0))}',
+          );
         }
         _handleTerimaPesan(args);
       });
-      
+
       _hubConnection!.on(eventTerimaSubSpv, (args) {
-        debugPrint('SignalR: 🔥 RAW TerimaSubSpv RECEIVED! args.length=${args?.length}');
+        debugPrint(
+          'SignalR: 🔥 RAW TerimaSubSpv RECEIVED! args.length=${args?.length}',
+        );
         _handleTerimaSubSpv(args);
       });
-      
+
       _hubConnection!.on(eventUcChanged, (args) {
-        debugPrint('SignalR: 🔥 RAW UcChanged RECEIVED! args.length=${args?.length}');
+        debugPrint(
+          'SignalR: 🔥 RAW UcChanged RECEIVED! args.length=${args?.length}',
+        );
         _handleUcChanged(args);
       });
-      
+
       _hubConnection!.on(eventTerimaExpired, (args) {
-        debugPrint('SignalR: 🔥 RAW TerimaExpired RECEIVED! args.length=${args?.length}');
+        debugPrint(
+          'SignalR: 🔥 RAW TerimaExpired RECEIVED! args.length=${args?.length}',
+        );
         _handleTerimaExpired(args);
       });
 
       _hubConnection!.on(eventTerimaBlockUnblock, (args) {
-        debugPrint('SignalR: 🔥 RAW TerimaBlockUnblock RECEIVED! args.length=${args?.length}');
+        debugPrint(
+          'SignalR: 🔥 RAW TerimaBlockUnblock RECEIVED! args.length=${args?.length}',
+        );
         _handleTerimaBlockUnblock(args);
       });
 
@@ -193,12 +220,13 @@ class SignalRService {
       debugPrint('SignalR: ✅ Connected successfully!');
       debugPrint('SignalR: ConnectionId = ${_hubConnection!.connectionId}');
       debugPrint('SignalR: State = ${_hubConnection!.state}');
-      debugPrint('SignalR: Listening for: $eventTerimaPesan, $eventTerimaSubSpv, $eventUcChanged, $eventTerimaExpired');
+      debugPrint(
+        'SignalR: Listening for: $eventTerimaPesan, $eventTerimaSubSpv, $eventUcChanged, $eventTerimaExpired',
+      );
 
       // CRITICAL: Subscribe user agar server tahu harus kirim event ke koneksi ini
       // (Seperti project mentor: SubscribeUserAgent + SubscribeUserSpv)
       await _subscribeUser();
-
     } catch (e, stack) {
       debugPrint('SignalR: ❌ Connection failed: $e');
       debugPrint('Stack: $stack');
@@ -214,7 +242,8 @@ class SignalRService {
   /// Mendaftarkan (subscribe) pengguna ke hub SignalR agar menerima event.
   /// Tanpa ini, server TIDAK akan mengirim TerimaPesan, TerimaSubSpv, dll.
   Future<void> _subscribeUser() async {
-    if (_hubConnection == null || _hubConnection!.state != HubConnectionState.Connected) {
+    if (_hubConnection == null ||
+        _hubConnection!.state != HubConnectionState.Connected) {
       debugPrint('SignalR: ⚠️ Cannot subscribe - not connected');
       return;
     }
@@ -236,10 +265,11 @@ class SignalRService {
           final payload = base64Url.normalize(parts[1]);
           final decoded = utf8.decode(base64Url.decode(payload));
           final payloadMap = jsonDecode(decoded);
-          userId = payloadMap['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']
-              ?? payloadMap['nameid']
-              ?? payloadMap['sub']
-              ?? '1';
+          userId =
+              payloadMap['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ??
+              payloadMap['nameid'] ??
+              payloadMap['sub'] ??
+              '1';
         }
       } catch (e) {
         debugPrint('SignalR: ⚠️ Failed to decode JWT: $e');
@@ -248,16 +278,25 @@ class SignalRService {
       // 2. Ambil tenantId dari secure storage
       final tenantId = await storage.read(key: 'tenant_id');
       if (tenantId == null || tenantId.isEmpty) {
-        debugPrint('SignalR: ⚠️ TenantId not available yet, subscription deferred');
-        debugPrint('SignalR: ⚠️ Will be called via trySubscribe() when ChatService loads accounts');
+        debugPrint(
+          'SignalR: ⚠️ TenantId not available yet, subscription deferred',
+        );
+        debugPrint(
+          'SignalR: ⚠️ Will be called via trySubscribe() when ChatService loads accounts',
+        );
         return;
       }
 
-      debugPrint('SignalR: 📡 Subscribing user - UserId: $userId, TenantId: $tenantId');
+      debugPrint(
+        'SignalR: 📡 Subscribing user - UserId: $userId, TenantId: $tenantId',
+      );
 
       // 3. Subscribe sebagai Agent (untuk pesan & room yang di-assign ke agent ini)
       try {
-        await _hubConnection!.invoke('SubscribeUserAgent', args: [userId, tenantId]);
+        await _hubConnection!.invoke(
+          'SubscribeUserAgent',
+          args: [userId, tenantId],
+        );
         debugPrint('SignalR: ✅ Subscribed as Agent');
       } catch (e) {
         debugPrint('SignalR: ❌ SubscribeUserAgent failed: $e');
@@ -272,7 +311,9 @@ class SignalRService {
       }
 
       _isSubscribed = true;
-      debugPrint('SignalR: 🎉 Subscription complete - ready to receive real-time events!');
+      debugPrint(
+        'SignalR: 🎉 Subscription complete - ready to receive real-time events!',
+      );
     } catch (e) {
       debugPrint('SignalR: ❌ Subscription failed: $e');
     }
@@ -305,7 +346,9 @@ class SignalRService {
   /// args[3] = JSON string of sender info ({Name, Photo}) — optional
   void _handleTerimaPesan(List<Object?>? arguments) {
     if (arguments == null || arguments.length < 2) {
-      debugPrint('SignalR: TerimaPesan - invalid arguments (length: ${arguments?.length})');
+      debugPrint(
+        'SignalR: TerimaPesan - invalid arguments (length: ${arguments?.length})',
+      );
       return;
     }
 
@@ -317,7 +360,8 @@ class SignalRService {
       // Parse message JSON
       Map<String, dynamic> messageData = {};
       if (arguments[1] is String) {
-        messageData = jsonDecode(arguments[1] as String) as Map<String, dynamic>;
+        messageData =
+            jsonDecode(arguments[1] as String) as Map<String, dynamic>;
       } else if (arguments[1] is Map) {
         messageData = Map<String, dynamic>.from(arguments[1] as Map);
       }
@@ -326,15 +370,20 @@ class SignalRService {
       Map<String, dynamic>? senderData;
       if (arguments.length > 3 && arguments[3] is String) {
         try {
-          senderData = jsonDecode(arguments[3] as String) as Map<String, dynamic>;
+          senderData =
+              jsonDecode(arguments[3] as String) as Map<String, dynamic>;
         } catch (e) {
-          debugPrint('Error caught at _handleTerimaPesan (parse senderData): $e');
+          debugPrint(
+            'Error caught at _handleTerimaPesan (parse senderData): $e',
+          );
         }
       }
 
       final msgContent = messageData['Msg']?.toString() ?? '';
       if (msgContent == 'Site.Inbox.DeletedMessage') {
-        debugPrint('SignalR: 🚫 Ignoring Site.Inbox.DeletedMessage to preserve local last message');
+        debugPrint(
+          'SignalR: 🚫 Ignoring Site.Inbox.DeletedMessage to preserve local last message',
+        );
         return;
       }
 
@@ -351,7 +400,9 @@ class SignalRService {
         _recentTerimaPesan[roomId]!.removeAt(0);
       }
 
-      debugPrint('SignalR: 📩 TerimaPesan | room=$roomId | msg=${messageData['Msg']}');
+      debugPrint(
+        'SignalR: 📩 TerimaPesan | room=$roomId | msg=${messageData['Msg']}',
+      );
 
       // Emit to typed stream (untuk consumer lain: chat_detail_page, dll)
       _terimaPesanController.add(parsed);
@@ -366,7 +417,6 @@ class SignalRService {
 
       // ── Langsung trigger notifikasi dari sini (seperti project mentor) ──
       _handleNewMessageNotification(roomId, messageData, senderData);
-
     } catch (e) {
       debugPrint('SignalR: ❌ Error parsing TerimaPesan: $e');
     }
@@ -387,7 +437,10 @@ class SignalRService {
     try {
       final msgText = messageData['Msg']?.toString() ?? '';
       final senderName = senderData?['Name']?.toString() ?? 'Pesan Baru';
-      final isMe = messageData['IsMe'] == true || messageData['LastIsMe'] == true || senderName.toLowerCase() == 'you';
+      final isMe =
+          messageData['IsMe'] == true ||
+          messageData['LastIsMe'] == true ||
+          senderName.toLowerCase() == 'you';
 
       // Skip notifikasi untuk pesan dari kita sendiri
       if (isMe) {
@@ -397,13 +450,16 @@ class SignalRService {
 
       // Skip jika pesan kosong
       if (msgText.isEmpty) {
-        debugPrint('SignalR: 🔕 Skip notification (empty message) room=$roomId');
+        debugPrint(
+          'SignalR: 🔕 Skip notification (empty message) room=$roomId',
+        );
         return;
       }
 
       // Skip jika user sedang membuka room ini
       final currentRoomId = PushNotificationService.currentRoomId;
-      if (currentRoomId != null && (currentRoomId == roomId || currentRoomId.endsWith(roomId))) {
+      if (currentRoomId != null &&
+          (currentRoomId == roomId || currentRoomId.endsWith(roomId))) {
         debugPrint('SignalR: 🔕 Skip notification (user in room) room=$roomId');
         return;
       }
@@ -412,7 +468,9 @@ class SignalRService {
       // SignalR service tidak bisa secara akurat membedakan pesan dari diri sendiri (akibat bug backend NoBox).
       // Oleh karena itu, tugas memanggil PushNotificationService.showChatNotification dipindahkan
       // ke dalam ChatProvider -> updateRoomFromSignalR yang memiliki pencocokan teks (isMeFallback).
-      debugPrint('SignalR: 🔔 Delegating notification to ChatProvider for room=$roomId sender=$senderName');
+      debugPrint(
+        'SignalR: 🔔 Delegating notification to ChatProvider for room=$roomId sender=$senderName',
+      );
     } catch (e) {
       debugPrint('SignalR: ❌ Error delegating notification: $e');
     }
@@ -424,7 +482,9 @@ class SignalRService {
   /// args[1] = JSON string of room data ({Id, St, Ct, LastMsg, Uc, TimeMsg, ...})
   void _handleTerimaSubSpv(List<Object?>? arguments) {
     if (arguments == null || arguments.length < 2) {
-      debugPrint('SignalR: TerimaSubSpv - invalid arguments (length: ${arguments?.length})');
+      debugPrint(
+        'SignalR: TerimaSubSpv - invalid arguments (length: ${arguments?.length})',
+      );
       return;
     }
 
@@ -438,12 +498,11 @@ class SignalRService {
         roomData = Map<String, dynamic>.from(arguments[1] as Map);
       }
 
-      final parsed = {
-        'tenantId': tenantId,
-        'room': roomData,
-      };
+      final parsed = {'tenantId': tenantId, 'room': roomData};
 
-      debugPrint('SignalR: 🏠 TerimaSubSpv | room=${roomData['Id']} | lastMsg=${roomData['LastMsg']} | uc=${roomData['Uc']}');
+      debugPrint(
+        'SignalR: 🏠 TerimaSubSpv | room=${roomData['Id']} | lastMsg=${roomData['LastMsg']} | uc=${roomData['Uc']}',
+      );
 
       // Emit to typed stream
       _terimaSubSpvController.add(parsed);
@@ -470,10 +529,11 @@ class SignalRService {
       final roomId = roomData['Id']?.toString() ?? '';
       final uc = roomData['Uc'];
       final lastMsg = roomData['LastMsg']?.toString() ?? '';
-      final contactName = roomData['CtRealNm']?.toString() 
-          ?? roomData['Ct']?.toString() 
-          ?? roomData['Grp']?.toString() 
-          ?? 'Pesan Baru';
+      final contactName =
+          roomData['CtRealNm']?.toString() ??
+          roomData['Ct']?.toString() ??
+          roomData['Grp']?.toString() ??
+          'Pesan Baru';
       final agentId = roomData['AgentId'];
       final upBy = roomData['UpBy'];
 
@@ -492,27 +552,35 @@ class SignalRService {
 
       // Skip jika pesan kosong
       if (lastMsg.isEmpty) {
-        debugPrint('SignalR: 🔕 Skip SubSpv notification (empty message) room=$roomId');
+        debugPrint(
+          'SignalR: 🔕 Skip SubSpv notification (empty message) room=$roomId',
+        );
         return;
       }
 
       // Skip jika user sedang membuka room ini
       final currentRoomId = PushNotificationService.currentRoomId;
-      if (currentRoomId != null && (currentRoomId == roomId || currentRoomId.endsWith(roomId))) {
-        debugPrint('SignalR: 🔕 Skip SubSpv notification (user in room) room=$roomId');
+      if (currentRoomId != null &&
+          (currentRoomId == roomId || currentRoomId.endsWith(roomId))) {
+        debugPrint(
+          'SignalR: 🔕 Skip SubSpv notification (user in room) room=$roomId',
+        );
         return;
       }
 
       // 🔔 NOTIFIKASI DIHIDUPKAN KEMBALI DI SINI
       // Pemanggilan notifikasi di ChatProvider terlalu mudah error karena pengecekan waktu,
       // sehingga menyebabkan notifikasi Android mati/hilang. Di sini tempat yang paling aman.
-      debugPrint('SignalR: 🔔 Notification from SubSpv | room=$roomId | sender=$contactName | msg=$lastMsg');
+      debugPrint(
+        'SignalR: 🔔 Notification from SubSpv | room=$roomId | sender=$contactName | msg=$lastMsg',
+      );
       PushNotificationService.showChatNotification(
         roomId: roomId,
         roomName: contactName,
         senderName: contactName,
         message: lastMsg,
-        profileImageUrl: roomData['CtImg']?.toString() ?? roomData['LinkImg']?.toString(),
+        profileImageUrl:
+            roomData['CtImg']?.toString() ?? roomData['LinkImg']?.toString(),
       );
     } catch (e) {
       debugPrint('SignalR: ❌ Error in SubSpv notification: $e');
@@ -579,10 +647,13 @@ class SignalRService {
       final roomId = arguments[0]?.toString() ?? '';
       final contactId = arguments[2]?.toString() ?? '';
       final blockStatus = arguments[3];
-      final isBlocked = blockStatus == 1 || blockStatus == '1' || blockStatus == true;
-      
-      debugPrint('SignalR: 🚫 TerimaBlockUnblock | room=$roomId | isBlocked=$isBlocked');
-      
+      final isBlocked =
+          blockStatus == 1 || blockStatus == '1' || blockStatus == true;
+
+      debugPrint(
+        'SignalR: 🚫 TerimaBlockUnblock | room=$roomId | isBlocked=$isBlocked',
+      );
+
       _blockUnblockController.add({
         'roomId': roomId,
         'contactId': contactId,
@@ -600,10 +671,14 @@ class SignalRService {
   /// Invoke a method on the hub (fire-and-forget).
   Future<void> invoke(String methodName, {List<Object>? args}) async {
     if (!_isConnected || _hubConnection == null) {
-      debugPrint('SignalR: Not connected. Attempting to reconnect before invoking "$methodName"...');
+      debugPrint(
+        'SignalR: Not connected. Attempting to reconnect before invoking "$methodName"...',
+      );
       await connect();
       if (!_isConnected || _hubConnection == null) {
-        debugPrint('SignalR: Cannot invoke "$methodName" — reconnection failed.');
+        debugPrint(
+          'SignalR: Cannot invoke "$methodName" — reconnection failed.',
+        );
         throw Exception('SignalR not connected');
       }
     }
@@ -635,11 +710,19 @@ class SignalRService {
   }) async {
     final blockValue = shouldBlock ? 1 : 0;
     try {
-      final roomIdInt = roomId is int ? roomId : int.tryParse(roomId.toString()) ?? 0;
-      final contactIdInt = contactId is int ? contactId : int.tryParse(contactId.toString()) ?? 0;
-      final statusInt = status is int ? status : int.tryParse(status.toString()) ?? 0;
-      
-      debugPrint('SignalR: 🚫 Invoking ContactBlockUnblock: room=$roomIdInt, ct=$contactIdInt, block=$blockValue');
+      final roomIdInt = roomId is int
+          ? roomId
+          : int.tryParse(roomId.toString()) ?? 0;
+      final contactIdInt = contactId is int
+          ? contactId
+          : int.tryParse(contactId.toString()) ?? 0;
+      final statusInt = status is int
+          ? status
+          : int.tryParse(status.toString()) ?? 0;
+
+      debugPrint(
+        'SignalR: 🚫 Invoking ContactBlockUnblock: room=$roomIdInt, ct=$contactIdInt, block=$blockValue',
+      );
       await invoke(
         'ContactBlockUnblock',
         args: [roomIdInt, statusInt, contactIdInt, blockValue],
@@ -706,12 +789,12 @@ class SignalRService {
           "IdGroup": parseIntSafe(idGroup),
           "IdAccount": parseIntSafe(idAccount),
         },
-        "Msg": msgMap
+        "Msg": msgMap,
       };
 
       // Payload must be sent as a single JSON string argument according to the network log
       final jsonPayload = jsonEncode(payload);
-      
+
       debugPrint('SignalR: ✉️ Invoking JoinConversation for Room $idRoom');
       try {
         await invoke('JoinConversation', args: [idRoom.toString(), ""]);
@@ -722,17 +805,16 @@ class SignalRService {
       }
 
       debugPrint('SignalR: ✉️ Invoking KirimPesan: $jsonPayload');
-      await invoke(
-        'KirimPesan',
-        args: [jsonPayload],
-      );
+      await invoke('KirimPesan', args: [jsonPayload]);
       return null; // Return null on success
     } catch (e) {
       final errorStr = e.toString();
-      if (errorStr.contains("underlying connection being closed") || 
+      if (errorStr.contains("underlying connection being closed") ||
           errorStr.contains("Connection disconnected") ||
           errorStr.contains("invocation canceled")) {
-        debugPrint('SignalR: ⚠️ Connection reset after KirimPesan (likely processed by server): $errorStr');
+        debugPrint(
+          'SignalR: ⚠️ Connection reset after KirimPesan (likely processed by server): $errorStr',
+        );
         return null; // Treat as success like in Aplikasi
       }
       debugPrint('SignalR: ❌ Failed to send KirimPesan: $e');
@@ -748,12 +830,9 @@ class SignalRService {
     try {
       final safeRoomId = int.tryParse(idRoom.toString()) ?? idRoom;
       final safeMsgId = int.tryParse(idMsg.toString()) ?? idMsg;
-      
+
       debugPrint('SignalR: 🗑️ Invoking DelMsg: [$safeRoomId, $safeMsgId]');
-      await invoke(
-        'DelMsg',
-        args: [safeRoomId, safeMsgId],
-      );
+      await invoke('DelMsg', args: [safeRoomId, safeMsgId]);
       return null;
     } catch (e) {
       debugPrint('SignalR: ❌ Failed to invoke DelMsg: $e');

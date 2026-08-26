@@ -12,7 +12,7 @@ class ProfilePage extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final authProvider = context.watch<AuthProvider>();
     final chatProvider = context.watch<ChatProvider>();
-    
+
     final email = authProvider.currentUser ?? 'User';
     final initial = email.isNotEmpty ? email[0].toUpperCase() : 'U';
 
@@ -33,7 +33,7 @@ class ProfilePage extends StatelessWidget {
               padding: const EdgeInsets.only(top: 40, bottom: 60),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: isDark 
+                  colors: isDark
                       ? [const Color(0xFF2C3940), const Color(0xFF1F2C34)]
                       : [Colors.blue, Colors.blue.shade800],
                   begin: Alignment.topCenter,
@@ -86,13 +86,16 @@ class ProfilePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: const Text(
-                      'NoBox AI User',
+                      'NoBox.AI User',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 14,
@@ -103,9 +106,9 @@ class ProfilePage extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 30),
-            
+
             // Info Cards
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -121,28 +124,28 @@ class ProfilePage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   _buildInfoCard(
-                    isDark, 
-                    icon: Icons.email_outlined, 
-                    title: 'Email', 
+                    isDark,
+                    icon: Icons.email_outlined,
+                    title: 'Email',
                     value: email,
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   _buildInfoCard(
-                    isDark, 
-                    icon: Icons.business_outlined, 
-                    title: 'Total Akun Terhubung', 
+                    isDark,
+                    icon: Icons.business_outlined,
+                    title: 'Total Akun Terhubung',
                     value: '${chatProvider.cachedAccounts?.length ?? 0} Akun',
                   ),
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 30),
-            
+
             // About NoBox AI Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -181,22 +184,38 @@ class ProfilePage extends StatelessWidget {
                           child: OutlinedButton.icon(
                             onPressed: () async {
                               final Uri url = Uri.parse('https://nobox.ai');
-                              if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                              if (!await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              )) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Tidak dapat membuka tautan.')),
+                                    const SnackBar(
+                                      content: Text(
+                                        'Tidak dapat membuka tautan.',
+                                      ),
+                                    ),
                                   );
                                 }
                               }
                             },
                             icon: const Icon(Icons.language, size: 18),
-                            label: const Text('Kunjungi Website Resmi NoBox.AI'),
+                            label: const Text(
+                              'Kunjungi Website Resmi NoBox.AI',
+                            ),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: isDark ? Colors.blue.shade300 : Colors.blue,
+                              foregroundColor: isDark
+                                  ? Colors.blue.shade300
+                                  : Colors.blue,
                               side: BorderSide(
-                                color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.shade200,
+                                color: isDark
+                                    ? Colors.blue.withOpacity(0.3)
+                                    : Colors.blue.shade200,
                               ),
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -209,9 +228,9 @@ class ProfilePage extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 40),
-            
+
             // Footer App Version
             Center(
               child: Column(
@@ -247,7 +266,12 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoCard(bool isDark, {required IconData icon, required String title, required String value}) {
+  Widget _buildInfoCard(
+    bool isDark, {
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -267,7 +291,9 @@ class ProfilePage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue.shade50,
+              color: isDark
+                  ? Colors.blue.withOpacity(0.1)
+                  : Colors.blue.shade50,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -318,7 +344,11 @@ class _AccordionListState extends State<_AccordionList> {
   int _expandedIndex = 0;
   final List<GlobalKey> _keys = List.generate(4, (index) => GlobalKey());
 
-  Widget _buildExpandableSection(int index, {required String title, required String content}) {
+  Widget _buildExpandableSection(
+    int index, {
+    required String title,
+    required String content,
+  }) {
     final bool isExpanded = _expandedIndex == index;
     return Material(
       key: _keys[index],
@@ -365,8 +395,14 @@ class _AccordionListState extends State<_AccordionList> {
             ),
           ),
           iconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
-          collapsedIconColor: widget.isDark ? Colors.white54 : Colors.grey.shade600,
-          childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+          collapsedIconColor: widget.isDark
+              ? Colors.white54
+              : Colors.grey.shade600,
+          childrenPadding: const EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: 16,
+          ),
           children: [
             Text(
               content,
@@ -375,7 +411,6 @@ class _AccordionListState extends State<_AccordionList> {
                 fontSize: 14,
                 height: 1.6,
               ),
-              textAlign: TextAlign.justify,
             ),
           ],
         ),
@@ -391,28 +426,31 @@ class _AccordionListState extends State<_AccordionList> {
         _buildExpandableSection(
           0,
           title: 'Tentang NoBox.AI',
-          content: 'NoBox.AI adalah platform berbasis kecerdasan buatan yang dirancang untuk mengintegrasikan layanan komunikasi, pemasaran, dan customer service dalam satu sistem terpusat. Platform ini membantu bisnis mengelola interaksi pelanggan secara otomatis, terstruktur, dan efisien.\n\nNoBox.AI mendukung berbagai kanal komunikasi, seperti WhatsApp, Telegram, website, media sosial, dan marketplace, sehingga seluruh pesan pelanggan dapat dikelola dalam satu dashboard. Dengan teknologi AI yang human-like, sistem mampu memberikan respon yang cepat, relevan, dan konsisten.\n\nSelain itu, NoBox.AI dilengkapi dengan fitur Automasi, AI Agent, Human Agent, serta sistem monitoring dan pelaporan. Fitur-fitur ini memungkinkan perusahaan memantau kinerja layanan, mengelola tim, dan menganalisis data interaksi pelanggan secara menyeluruh.',
+          content:
+              'NoBox.AI adalah platform berbasis kecerdasan buatan yang dirancang untuk mengintegrasikan layanan komunikasi, pemasaran, dan customer service dalam satu sistem terpusat. Platform ini membantu bisnis mengelola interaksi pelanggan secara otomatis, terstruktur, dan efisien.\n\nNoBox.AI mendukung berbagai kanal komunikasi, seperti WhatsApp, Telegram, website, media sosial, dan marketplace, sehingga seluruh pesan pelanggan dapat dikelola dalam satu dashboard. Dengan teknologi AI yang human-like, sistem mampu memberikan respon yang cepat, relevan, dan konsisten.\n\nSelain itu, NoBox.AI dilengkapi dengan fitur Automasi, AI Agent, Human Agent, serta sistem monitoring dan pelaporan. Fitur-fitur ini memungkinkan perusahaan memantau kinerja layanan, mengelola tim, dan menganalisis data interaksi pelanggan secara menyeluruh.',
         ),
         const SizedBox(height: 12),
         _buildExpandableSection(
           1,
           title: 'Mengapa NoBox.AI?',
-          content: 'NoBox.AI membantu bisnis meningkatkan kualitas layanan pelanggan tanpa harus menambah beban kerja secara manual. Dengan sistem otomatis, perusahaan dapat merespons pelanggan lebih cepat dan lebih akurat.',
+          content:
+              'NoBox.AI membantu bisnis meningkatkan kualitas layanan pelanggan tanpa harus menambah beban kerja secara manual. Dengan sistem otomatis, perusahaan dapat merespons pelanggan lebih cepat dan lebih akurat.',
         ),
         const SizedBox(height: 12),
         _buildExpandableSection(
           2,
           title: 'Keunggulan Utama',
-          content: '• Menghemat waktu dan biaya operasional melalui automasi layanan.\n• Meningkatkan kepuasan pelanggan dengan respon yang cepat dan konsisten.\n• Memudahkan pengelolaan komunikasi dari berbagai platform dalam satu sistem.\n• Mendukung pengambilan keputusan berbasis data melalui fitur laporan dan monitoring.\n• Fleksibel dan dapat disesuaikan dengan kebutuhan bisnis.\n\nDengan keunggulan tersebut, NoBox.AI menjadi solusi yang tepat bagi UMKM hingga perusahaan besar untuk membangun layanan pelanggan yang profesional, modern, dan berkelanjutan.',
+          content:
+              '• Menghemat waktu dan biaya operasional melalui automasi layanan.\n• Meningkatkan kepuasan pelanggan dengan respon yang cepat dan konsisten.\n• Memudahkan pengelolaan komunikasi dari berbagai platform dalam satu sistem.\n• Mendukung pengambilan keputusan berbasis data melalui fitur laporan dan monitoring.\n• Fleksibel dan dapat disesuaikan dengan kebutuhan bisnis.\n\nDengan keunggulan tersebut, NoBox.AI menjadi solusi yang tepat bagi UMKM hingga perusahaan besar untuk membangun layanan pelanggan yang profesional, modern, dan berkelanjutan.',
         ),
         const SizedBox(height: 12),
         _buildExpandableSection(
           3,
           title: 'Target Pengguna',
-          content: 'NoBox.AI dirancang untuk membantu berbagai jenis organisasi dan pelaku usaha dalam mengelola komunikasi dan layanan pelanggan secara lebih efektif:\n\n• UMKM: Mengelola pesan, promosi, dan layanan otomatis tanpa tim besar.\n• Perusahaan Menengah & Besar: Mendukung operasional CS kompleks dengan sistem terintegrasi dan pelaporan.\n• Startup Digital: Membangun sistem layanan pelanggan modern berbasis AI.\n• Lembaga Pendidikan: Melayani pertanyaan siswa dan orang tua lintas kanal.\n• Instansi Pemerintah: Mendukung pelayanan masyarakat yang responsif dan transparan.\n• E-Commerce & Marketplace: Pengelolaan pesanan dan komplain secara otomatis dan terpusat.',
+          content:
+              'NoBox.AI dirancang untuk membantu berbagai jenis organisasi dan pelaku usaha dalam mengelola komunikasi dan layanan pelanggan secara lebih efektif:\n\n• UMKM: Mengelola pesan, promosi, dan layanan otomatis tanpa tim besar.\n• Perusahaan Menengah & Besar: Mendukung operasional CS kompleks dengan sistem terintegrasi dan pelaporan.\n• Startup Digital: Membangun sistem layanan pelanggan modern berbasis AI.\n• Lembaga Pendidikan: Melayani pertanyaan siswa dan orang tua lintas kanal.\n• Instansi Pemerintah: Mendukung pelayanan masyarakat yang responsif dan transparan.\n• E-Commerce & Marketplace: Pengelolaan pesanan dan komplain secara otomatis dan terpusat.',
         ),
       ],
     );
   }
 }
-
