@@ -134,16 +134,7 @@ class ProfilePage extends StatelessWidget {
                     isDark, 
                     icon: Icons.business_outlined, 
                     title: 'Total Akun Terhubung', 
-                    value: '${chatProvider.accounts.length} Akun',
-                  ),
-                  
-                  const SizedBox(height: 12),
-                  
-                  _buildInfoCard(
-                    isDark, 
-                    icon: Icons.chat_bubble_outline, 
-                    title: 'Total Channel Tersedia', 
-                    value: '${chatProvider.channels.length} Channel',
+                    value: '${chatProvider.cachedAccounts?.length ?? 0} Akun',
                   ),
                 ],
               ),
