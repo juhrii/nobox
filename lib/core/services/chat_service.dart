@@ -2419,11 +2419,7 @@ class ChatService {
       final contactFields = <String, dynamic>{};
 
       // Fields that belong to ChatroomsRow
-      const chatroomKeys = {
-        'CtRealNm', 'IsPin', 'CtIsBlock', 'TagsIds', 'FnId', 'DealId', 
-        'CampaignId', 'CtImg',
-        'Country', 'State', 'City', 'Address', 'Postal'
-      };
+      const chatroomKeys = {'CtRealNm', 'IsPin', 'CtIsBlock', 'TagsIds', 'FnId', 'DealId', 'CampaignId', 'CtImg'};
       
       for (final entry in contactData.entries) {
         if (chatroomKeys.contains(entry.key)) {
@@ -2442,7 +2438,7 @@ class ChatService {
         }
         
         // Kasus khusus untuk Block: harus di-update di kedua tabel agar konsisten 
-        // (Chatrooms untuk DetailRoom, Contact untuk Inbox/GetList via CtIsBlock)
+        // (Chatrooms untuk DetailRoom, Contact untuk Inbox/GetList)
         if (entry.key == 'IsBlock' || entry.key == 'CtIsBlock') {
           roomFields['IsBlock'] = entry.value;
           contactFields['IsBlock'] = entry.value;
