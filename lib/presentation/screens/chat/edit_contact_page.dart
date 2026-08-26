@@ -70,8 +70,46 @@ class _EditContactPageState extends State<EditContactPage> {
     _nameController = TextEditingController(text: widget.chat.sender);
     _addressController = TextEditingController();
     _postalCodeController = TextEditingController();
-    _loadCountries();
-    _loadContactData();
+    _initializeData();
+  }
+
+  Future<void> _initializeData() async {
+    await Future.wait([
+      _loadCountries(),
+      _loadContactData(),
+    ]);
+    
+    // FIX: Resolusi otomatis ISO Code berdasarkan nama Negara & Provinsi.
+    // Tanpa ini, pengguna tidak bisa klik dropdown City (karena _selectedStateCode masih null).
+    if (_selectedCountryName != null && _countries.isNotEmpty) {
+      try {
+        final country = _countries.firstWhere(
+          (c) => c.name.toLowerCase() == _selectedCountryName!.toLowerCase()
+        );
+        _selectedCountryCode = country.isoCode;
+        
+        if (_selectedStateName != null) {
+          await _loadStates(country.isoCode);
+          try {
+            final state = _states.firstWhere(
+              (s) => s.name.toLowerCase() == _selectedStateName!.toLowerCase()
+            );
+            _selectedStateCode = state.isoCode;
+
+            if (_selectedCityName != null) {
+              await _loadCities(country.isoCode, state.isoCode);
+            }
+          } catch (_) {
+            // Provinsi tidak ditemukan di database country_state_city
+          }
+        } else {
+          await _loadStates(country.isoCode);
+        }
+      } catch (_) {
+        // Negara tidak ditemukan di database country_state_city
+      }
+      if (mounted) setState(() {});
+    }
   }
 
   // FITUR: Memuat Data Kontak (API Call)
