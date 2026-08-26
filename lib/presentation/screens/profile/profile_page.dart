@@ -349,7 +349,7 @@ class _AccordionListState extends State<_AccordionList> {
     required String title,
     required String content,
   }) {
-    final bool isInitiallyExpanded = index == 0;
+    final bool isInitiallyExpanded = false;
     return Material(
       key: _keys[index],
       color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
