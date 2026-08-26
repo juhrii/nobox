@@ -2426,15 +2426,6 @@ class ChatService {
           roomFields[entry.key] = entry.value;
         } else {
           contactFields[entry.key] = entry.value;
-          
-          // FIX: Sertakan juga singkatan field lokasi karena backend NoBox terkadang menggunakan 
-          // nama kolom singkatan (Cntry, Stt, Cty) di tabel Contact.
-          if (entry.key == 'Country') contactFields['Cntry'] = entry.value;
-          if (entry.key == 'State') {
-            contactFields['Stt'] = entry.value;
-            contactFields['Province'] = entry.value;
-          }
-          if (entry.key == 'City') contactFields['Cty'] = entry.value;
         }
         
         // Kasus khusus untuk Block: harus di-update di kedua tabel agar konsisten 
@@ -2517,24 +2508,11 @@ class ChatService {
                 },
               );
               debugPrint('ChatService: Contact update status=${contactResponse.statusCode} response=${contactResponse.data}');
-              
-              // TAMPILKAN ERROR KE LAYAR JIKA GAGAL:
-              if (contactResponse.statusCode != 200 && contactResponse.statusCode != 204) {
-                 return ApiResponse.failure('DEBUG_ERR_STATUS: ${contactResponse.statusCode} -> ${contactResponse.data}', 500);
-              }
-              final rData = contactResponse.data;
-              if (rData is Map && rData['IsError'] == true) {
-                 return ApiResponse.failure('DEBUG_ERR_API: ${rData['ErrorMessage']}', 500);
-              }
             } catch (e) {
-              if (e is DioException) {
-                 return ApiResponse.failure('DEBUG_ERR_DIO: ${e.response?.data}', 500);
-              }
-              return ApiResponse.failure('DEBUG_ERR_CATCH: $e', 500);
+              debugPrint('ChatService: Contact/Update API exception (non-critical): $e');
             }
           } else {
             debugPrint('ChatService: No contact ID found, skipping Contact/Update');
-            return ApiResponse.failure('DEBUG_ERR_CATCH: ctRealId is null', 500);
           }
         } catch (e) {
           debugPrint('ChatService: Contact update process error (non-critical): $e');

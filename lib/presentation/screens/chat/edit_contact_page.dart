@@ -155,23 +155,23 @@ class _EditContactPageState extends State<EditContactPage> {
             }
           }
 
-          // Fallback: gunakan data lokasi lokal jika server tidak punya data
+          // Override: gunakan data lokasi lokal (optimistic save) jika ada
           final localLocation = chatProvider.getSavedContactLocation(widget.chat.id);
           if (localLocation != null) {
-            if (_addressController.text.isEmpty && localLocation['Address'] != null) {
+            if (localLocation['Address'] != null && localLocation['Address']!.isNotEmpty) {
               _addressController.text = localLocation['Address']!;
             }
-            if (_postalCodeController.text.isEmpty && localLocation['Postal'] != null) {
+            if (localLocation['Postal'] != null && localLocation['Postal']!.isNotEmpty) {
               _postalCodeController.text = localLocation['Postal']!;
             }
-            if (_selectedCountryName == null && localLocation['Country'] != null) {
-              _selectedCountryName = localLocation['Country'];
+            if (localLocation['Country'] != null && localLocation['Country']!.isNotEmpty) {
+              _selectedCountryName = localLocation['Country']!;
             }
-            if (_selectedStateName == null && localLocation['State'] != null) {
-              _selectedStateName = localLocation['State'];
+            if (localLocation['State'] != null && localLocation['State']!.isNotEmpty) {
+              _selectedStateName = localLocation['State']!;
             }
-            if (_selectedCityName == null && localLocation['City'] != null) {
-              _selectedCityName = localLocation['City'];
+            if (localLocation['City'] != null && localLocation['City']!.isNotEmpty) {
+              _selectedCityName = localLocation['City']!;
             }
           }
 

@@ -354,16 +354,22 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
             }
           }
           
-          // Fallback: gunakan data lokasi lokal (optimistic save) jika server tidak punya/gagal update data
+          // Override: gunakan data lokasi lokal (optimistic save) jika ada
           final localLocation = chatProvider.getSavedContactLocation(widget.chat.id);
           if (localLocation != null) {
-            if (_contactCountry.isEmpty && localLocation['Country'] != null) {
+            if (localLocation['Address'] != null && localLocation['Address']!.isNotEmpty) {
+              _contactAddress = localLocation['Address']!;
+            }
+            if (localLocation['Postal'] != null && localLocation['Postal']!.isNotEmpty) {
+              _contactPostal = localLocation['Postal']!;
+            }
+            if (localLocation['Country'] != null && localLocation['Country']!.isNotEmpty) {
               _contactCountry = localLocation['Country']!;
             }
-            if (_contactState.isEmpty && localLocation['State'] != null) {
-              _contactState = localLocation['State']!;  
+            if (localLocation['State'] != null && localLocation['State']!.isNotEmpty) {
+              _contactState = localLocation['State']!;
             }
-            if (_contactCity.isEmpty && localLocation['City'] != null) {
+            if (localLocation['City'] != null && localLocation['City']!.isNotEmpty) {
               _contactCity = localLocation['City']!;
             }
           }
