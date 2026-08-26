@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -29,9 +30,33 @@ class BackgroundServiceManager {
         return;
       }
 
-      await _channel.invokeMethod('startBackgroundService', {'token': token});
+      // Ambil tenantId
+      final tenantId = await storage.read(key: 'tenant_id') ?? '';
+
+      // Ekstrak userId dari JWT
+      String userId = '1';
+      try {
+        final parts = token.split('.');
+        if (parts.length == 3) {
+          final payload = base64Url.normalize(parts[1]);
+          final decoded = utf8.decode(base64Url.decode(payload));
+          final payloadMap = jsonDecode(decoded);
+          userId = payloadMap['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']
+              ?? payloadMap['nameid']
+              ?? payloadMap['sub']
+              ?? '1';
+        }
+      } catch (e) {
+        debugPrint('BackgroundServiceManager: Failed to decode JWT: $e');
+      }
+
+      await _channel.invokeMethod('startBackgroundService', {
+        'token': token,
+        'userId': userId,
+        'tenantId': tenantId,
+      });
       _isRunning = true;
-      debugPrint('BackgroundServiceManager: ✅ Background service started.');
+      debugPrint('BackgroundServiceManager: ✅ Background service started. userId: $userId, tenantId: $tenantId');
     } on PlatformException catch (e) {
       debugPrint('BackgroundServiceManager: ❌ PlatformException: ${e.message}');
     } on MissingPluginException {

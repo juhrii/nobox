@@ -24,11 +24,15 @@ class SignalRBackgroundService : Service() {
         private const val ACTION_START = "START_SIGNALR_SERVICE"
         private const val ACTION_STOP = "STOP_SIGNALR_SERVICE"
         private const val EXTRA_TOKEN = "EXTRA_JWT_TOKEN"
+        private const val EXTRA_USERID = "EXTRA_USERID"
+        private const val EXTRA_TENANTID = "EXTRA_TENANTID"
 
-        fun startService(context: Context, token: String) {
+        fun startService(context: Context, token: String, userId: String, tenantId: String) {
             val intent = Intent(context, SignalRBackgroundService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_TOKEN, token)
+                putExtra(EXTRA_USERID, userId)
+                putExtra(EXTRA_TENANTID, tenantId)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -47,6 +51,8 @@ class SignalRBackgroundService : Service() {
 
     private var hubConnection: HubConnection? = null
     private var token: String? = null
+    private var userId: String = "1"
+    private var tenantId: String = ""
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
@@ -79,7 +85,9 @@ class SignalRBackgroundService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 token = intent.getStringExtra(EXTRA_TOKEN)
-                Log.d(TAG, "START received. Token length=${token?.length ?: 0}")
+                userId = intent.getStringExtra(EXTRA_USERID) ?: "1"
+                tenantId = intent.getStringExtra(EXTRA_TENANTID) ?: ""
+                Log.d(TAG, "START received. Token length=${token?.length ?: 0}, User=$userId, Tenant=$tenantId")
                 startForeground(NOTIFICATION_ID, createServiceNotification("Menghubungkan..."))
                 startSignalRListener()
             }
@@ -104,11 +112,21 @@ class SignalRBackgroundService : Service() {
                 .withAccessTokenProvider(Single.defer { Single.just(token ?: "") })
                 .build()
 
-            // Pakai Object agar fleksibel menerima String maupun Map dari server
+            // Register handlers with 2, 3, and 4 arguments to prevent signature mismatch exceptions
             hubConnection?.on("TerimaPesan", { rawRoom: Any, rawMsg: Any ->
-                Log.d(TAG, ">>> TerimaPesan! room=${rawRoom}, msg=${rawMsg.toString().take(100)}")
+                Log.d(TAG, ">>> TerimaPesan (2 args)! room=${rawRoom}")
                 handleIncomingMessage(rawRoom.toString(), rawMsg.toString())
             }, Object::class.java, Object::class.java)
+
+            hubConnection?.on("TerimaPesan", { rawRoom: Any, rawMsg: Any, arg3: Any ->
+                Log.d(TAG, ">>> TerimaPesan (3 args)! room=${rawRoom}")
+                handleIncomingMessage(rawRoom.toString(), rawMsg.toString())
+            }, Object::class.java, Object::class.java, Object::class.java)
+
+            hubConnection?.on("TerimaPesan", { rawRoom: Any, rawMsg: Any, arg3: Any, arg4: Any ->
+                Log.d(TAG, ">>> TerimaPesan (4 args)! room=${rawRoom}")
+                handleIncomingMessage(rawRoom.toString(), rawMsg.toString())
+            }, Object::class.java, Object::class.java, Object::class.java, Object::class.java)
 
             // Retry mechanism dengan exponential backoff
             val maxRetries = 3
@@ -120,6 +138,13 @@ class SignalRBackgroundService : Service() {
                     hubConnection?.start()?.blockingAwait()
                     Log.d(TAG, "CONNECTED! id=${hubConnection?.connectionId}")
                     updateServiceNotification("Tersambung / Aktif")
+                    
+                    // Wajib Subscribe User agar backend mengirimkan event TerimaPesan
+                    if (userId.isNotEmpty() && tenantId.isNotEmpty()) {
+                        Log.d(TAG, "Subscribing user: userId=$userId, tenantId=$tenantId")
+                        hubConnection?.send("SubscribeUser", userId, tenantId)
+                    }
+                    
                     return // Berhasil, keluar dari loop
                 } catch (e: Exception) {
                     Log.e(TAG, "Connection attempt ${attempt + 1} FAILED: ${e.message}")

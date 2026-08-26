@@ -20,7 +20,9 @@ class MainActivity: FlutterActivity() {
                 when (call.method) {
                     "startBackgroundService" -> {
                         val token = call.argument<String>("token") ?: ""
-                        SignalRBackgroundService.startService(this, token)
+                        val userId = call.argument<String>("userId") ?: ""
+                        val tenantId = call.argument<String>("tenantId") ?: ""
+                        SignalRBackgroundService.startService(this, token, userId, tenantId)
                         result.success(true)
                     }
                     "stopBackgroundService" -> {
