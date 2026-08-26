@@ -20,6 +20,7 @@ import '../../../core/utils/app_routes.dart';
 import '../../../core/model/filter_data_item.dart';
 import 'chat_detail_page.dart';
 import 'archive_list_page.dart';
+import '../profile/profile_page.dart' as profile;
 import '../../widgets/chat_list_skeleton.dart';
 import '../../widgets/connection_status_banner.dart';
 import '../../widgets/channel_icon.dart';
@@ -355,10 +356,26 @@ class _ChatListPageState extends State<ChatListPage>
                           size: 28,
                         ),
                         onSelected: (value) {
-                          if (value == 'archived') {
+                          if (value == 'profile') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const profile.ProfilePage(),
+                              ),
+                            );
+                          } else if (value == 'archived') {
                             Navigator.pushNamed(
                               context,
                               AppRoutes.archivedChats,
+                            );
+                          } else if (value == 'help') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const Scaffold(
+                                  body: Center(child: Text('Help Center Coming Soon')),
+                                ),
+                              ),
                             );
                           } else if (value == 'dark_mode') {
                             // Delay theme toggle to next frame so the popup menu
@@ -377,6 +394,25 @@ class _ChatListPageState extends State<ChatListPage>
                         ),
                         color: isDark ? const Color(0xFF2C3940) : Colors.white,
                         itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'profile',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.account_circle,
+                                  size: 24,
+                                  color: isDark
+                                      ? Colors.white70
+                                      : Colors.black87,
+                                ),
+                                const SizedBox(width: 16),
+                                const Text(
+                                  'Profil NoBox.ai',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
                           PopupMenuItem(
                             value: 'dark_mode',
                             child: Row(
@@ -410,6 +446,25 @@ class _ChatListPageState extends State<ChatListPage>
                                 const SizedBox(width: 16),
                                 const Text(
                                   'Archived Conversation',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'help',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.help_outline,
+                                  size: 24,
+                                  color: isDark
+                                      ? Colors.white70
+                                      : Colors.black87,
+                                ),
+                                const SizedBox(width: 16),
+                                const Text(
+                                  'Help',
                                   style: TextStyle(fontSize: 16),
                                 ),
                               ],
