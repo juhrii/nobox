@@ -316,10 +316,12 @@ class _AccordionList extends StatefulWidget {
 
 class _AccordionListState extends State<_AccordionList> {
   int _expandedIndex = 0;
+  final List<GlobalKey> _keys = List.generate(4, (index) => GlobalKey());
 
   Widget _buildExpandableSection(int index, {required String title, required String content}) {
     final bool isExpanded = _expandedIndex == index;
     return Material(
+      key: _keys[index],
       color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -336,6 +338,17 @@ class _AccordionListState extends State<_AccordionList> {
             if (expanded) {
               setState(() {
                 _expandedIndex = index;
+              });
+              // Auto scroll to the expanded item after a short delay to allow animation
+              Future.delayed(const Duration(milliseconds: 200), () {
+                if (_keys[index].currentContext != null) {
+                  Scrollable.ensureVisible(
+                    _keys[index].currentContext!,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    alignment: 0.1, // Sedikit jarak dari atas layar
+                  );
+                }
               });
             } else if (_expandedIndex == index) {
               setState(() {
