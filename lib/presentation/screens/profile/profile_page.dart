@@ -319,11 +319,11 @@ class _AccordionListState extends State<_AccordionList> {
 
   Widget _buildExpandableSection(int index, {required String title, required String content}) {
     final bool isExpanded = _expandedIndex == index;
-    return Container(
-      decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
+    return Material(
+      color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
+        side: BorderSide(
           color: widget.isDark ? Colors.white12 : Colors.grey.shade200,
         ),
       ),
