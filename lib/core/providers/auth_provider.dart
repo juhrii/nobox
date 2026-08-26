@@ -134,12 +134,20 @@ class AuthProvider with ChangeNotifier {
         await prefs.setString(_userEmailKey, email);
         
         // Simpan token di secure storage & SharedPreferences (sebagai fallback di OS tertentu)
-        await _secureStorage.write(key: _secureTokenKey, value: response.data!);
+        try {
+          await _secureStorage.write(key: _secureTokenKey, value: response.data!);
+        } catch (e) {
+          debugPrint('AuthProvider: SecureStorage write token error: $e');
+        }
         await prefs.setString(_secureTokenKey, response.data!);
         
         // Simpan credentials untuk auto re-login saat token expired
-        await _secureStorage.write(key: AppConfig.lastUsernameKey, value: email);
-        await _secureStorage.write(key: AppConfig.lastPasswordKey, value: password);
+        try {
+          await _secureStorage.write(key: AppConfig.lastUsernameKey, value: email);
+          await _secureStorage.write(key: AppConfig.lastPasswordKey, value: password);
+        } catch (e) {
+          debugPrint('AuthProvider: SecureStorage write credentials error: $e');
+        }
         await prefs.setString(AppConfig.lastUsernameKey, email);
         await prefs.setString(AppConfig.lastPasswordKey, password);
         debugPrint('AuthProvider: ✅ Credentials saved for auto re-login');
@@ -189,7 +197,11 @@ class AuthProvider with ChangeNotifier {
       if (!response.isError && response.data != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_userEmailKey, savedUsername);
-        await _secureStorage.write(key: _secureTokenKey, value: response.data!);
+        try {
+          await _secureStorage.write(key: _secureTokenKey, value: response.data!);
+        } catch (e) {
+          debugPrint('AuthProvider: SecureStorage write token error in tryAutoReLogin: $e');
+        }
         await prefs.setString(_secureTokenKey, response.data!);
 
         _currentUser = savedUsername;
@@ -227,7 +239,11 @@ class AuthProvider with ChangeNotifier {
     await prefs.remove(_userEmailKey);
     
     // Hapus token dari secure storage & fallback
-    await _secureStorage.delete(key: _secureTokenKey);
+    try {
+      await _secureStorage.delete(key: _secureTokenKey);
+    } catch (e) {
+      debugPrint('AuthProvider: SecureStorage delete token error in logout: $e');
+    }
     await prefs.remove(_secureTokenKey);
     
     // JANGAN hapus last_username & last_password saat logout
