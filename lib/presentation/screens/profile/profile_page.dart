@@ -213,8 +213,8 @@ class _AccordionList extends StatefulWidget {
 }
 
 class _AccordionListState extends State<_AccordionList> {
-  final List<GlobalKey> _keys = List.generate(4, (index) => GlobalKey());
-  final List<ExpansionTileController> _controllers = List.generate(4, (index) => ExpansionTileController());
+  final List<GlobalKey> _keys = List.generate(3, (index) => GlobalKey());
+  final List<ExpansionTileController> _controllers = List.generate(3, (index) => ExpansionTileController());
 
   Widget _buildExpandableSection(
     int index, {
@@ -239,7 +239,7 @@ class _AccordionListState extends State<_AccordionList> {
           onExpansionChanged: (expanded) {
             if (expanded) {
               // Collapse other tiles smoothly
-              for (int i = 0; i < 4; i++) {
+              for (int i = 0; i < _controllers.length; i++) {
                 if (i != index && _controllers[i].isExpanded) {
                   _controllers[i].collapse();
                 }
@@ -296,30 +296,23 @@ class _AccordionListState extends State<_AccordionList> {
       children: [
         _buildExpandableSection(
           0,
-          title: 'Tentang NoBox.AI',
+          title: 'Gambaran Umum',
           content:
-              'NoBox.AI adalah platform berbasis kecerdasan buatan yang dirancang untuk mengintegrasikan layanan komunikasi, pemasaran, dan customer service dalam satu sistem terpusat. Platform ini membantu bisnis mengelola interaksi pelanggan secara otomatis, terstruktur, dan efisien.\n\nNoBox.AI mendukung berbagai kanal komunikasi, seperti WhatsApp, Telegram, website, media sosial, dan marketplace, sehingga seluruh pesan pelanggan dapat dikelola dalam satu dashboard. Dengan teknologi AI yang human-like, sistem mampu memberikan respon yang cepat, relevan, dan konsisten.\n\nSelain itu, NoBox.AI dilengkapi dengan fitur Automasi, AI Agent, Human Agent, serta sistem monitoring dan pelaporan. Fitur-fitur ini memungkinkan perusahaan memantau kinerja layanan, mengelola tim, dan menganalisis data interaksi pelanggan secara menyeluruh.',
+              'NoBox.AI adalah aplikasi kecerdasan buatan (AI) yang dirancang untuk meningkatkan kualitas layanan marketing dan customer service di instansi pendidikan, bisnis, dan pemerintahan. Platform ini membantu mengumpulkan, mengelola, dan menganalisis data pelanggan secara terintegrasi.\n\nDengan dukungan chatbot cerdas dan sistem omnichannel, NoBox.AI mampu menangani komunikasi pelanggan selama 24 jam nonstop sepanjang tahun, sehingga bisnis dapat memberikan layanan yang lebih cepat, konsisten, dan profesional.',
         ),
         const SizedBox(height: 12),
         _buildExpandableSection(
           1,
-          title: 'Mengapa NoBox.AI?',
+          title: 'Modul Utama NoBox.AI',
           content:
-              'NoBox.AI membantu bisnis meningkatkan kualitas layanan pelanggan tanpa harus menambah beban kerja secara manual. Dengan sistem otomatis, perusahaan dapat merespons pelanggan lebih cepat dan lebih akurat.',
+              'NoBox.AI terdiri dari beberapa modul utama yang saling terintegrasi untuk mendukung operasional bisnis secara menyeluruh, mulai dari komunikasi pelanggan hingga pengelolaan sistem.\n\n• Pesan: Mengelola seluruh percakapan pelanggan dari berbagai kanal komunikasi.\n• CRM: Menyimpan dan mengelola data pelanggan, status prospek, dan aktivitas penjualan.\n• Formulir: Membuat formulir digital seperti pendaftaran dan survei pelanggan.\n• Promosi: Pengiriman pesan promosi dan campaign pemasaran secara terjadwal.\n• Kontak: Mengelola database pelanggan.\n• Akun: Mengatur data akun pengguna, lisensi, dan status layanan.\n• AI Agents: Mengelola chatbot berbasis AI sesuai skenario.\n• Human Agents: Mengatur agen manusia untuk percakapan lanjutan.\n• Berlangganan: Informasi paket layanan dan fitur yang tersedia.\n• Billing: Mengelola tagihan dan status transaksi.\n• Pengaturan: Mengatur sistem secara menyeluruh termasuk profil, file manager, dan integrasi.',
         ),
         const SizedBox(height: 12),
         _buildExpandableSection(
           2,
-          title: 'Keunggulan Utama',
+          title: 'Keunggulan NoBox.AI',
           content:
-              '• Menghemat waktu dan biaya operasional melalui automasi layanan.\n• Meningkatkan kepuasan pelanggan dengan respon yang cepat dan konsisten.\n• Memudahkan pengelolaan komunikasi dari berbagai platform dalam satu sistem.\n• Mendukung pengambilan keputusan berbasis data melalui fitur laporan dan monitoring.\n• Fleksibel dan dapat disesuaikan dengan kebutuhan bisnis.\n\nDengan keunggulan tersebut, NoBox.AI menjadi solusi yang tepat bagi UMKM hingga perusahaan besar untuk membangun layanan pelanggan yang profesional, modern, dan berkelanjutan.',
-        ),
-        const SizedBox(height: 12),
-        _buildExpandableSection(
-          3,
-          title: 'Target Pengguna',
-          content:
-              'NoBox.AI dirancang untuk membantu berbagai jenis organisasi dan pelaku usaha dalam mengelola komunikasi dan layanan pelanggan secara lebih efektif:\n\n• UMKM: Mengelola pesan, promosi, dan layanan otomatis tanpa tim besar.\n• Perusahaan Menengah & Besar: Mendukung operasional CS kompleks dengan sistem terintegrasi dan pelaporan.\n• Startup Digital: Membangun sistem layanan pelanggan modern berbasis AI.\n• Lembaga Pendidikan: Melayani pertanyaan siswa dan orang tua lintas kanal.\n• Instansi Pemerintah: Mendukung pelayanan masyarakat yang responsif dan transparan.\n• E-Commerce & Marketplace: Pengelolaan pesanan dan komplain secara otomatis dan terpusat.',
+              'NoBox.AI memiliki berbagai keunggulan yang mendukung kemudahan penggunaan, keamanan data, dan integrasi sistem.\n\nTampilan:\n• Menu Per Role User: Tampilan menu disesuaikan dengan peran pengguna\n• Tracking Data: Memudahkan pemantauan aktivitas dan data sistem\n• Tampilan Fleksibel: Layout dapat disesuaikan dengan kebutuhan pengguna\n• Pilihan Tema: Tersedia tema terang dan gelap\n\nKeamanan:\n• Hak Akses User: Pengaturan hak akses berdasarkan role pengguna\n\nIntegrasi:\n• Import Kontak: Mendukung file Excel dan CSV\n• Export Kontak: Mendukung format Google Contacts',
         ),
       ],
     );
