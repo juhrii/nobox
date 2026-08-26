@@ -21,6 +21,7 @@ import '../../../core/model/filter_data_item.dart';
 import 'chat_detail_page.dart';
 import 'archive_list_page.dart';
 import '../profile/profile_page.dart' as profile;
+import '../about/about_page.dart' as about;
 import '../../widgets/chat_list_skeleton.dart';
 import '../../widgets/connection_status_banner.dart';
 import '../../widgets/channel_icon.dart';
@@ -372,9 +373,7 @@ class _ChatListPageState extends State<ChatListPage>
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => const Scaffold(
-                                  body: Center(child: Text('Help Center Coming Soon')),
-                                ),
+                                builder: (context) => const about.AboutPage(),
                               ),
                             );
                           } else if (value == 'dark_mode') {
