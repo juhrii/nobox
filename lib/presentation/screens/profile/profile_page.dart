@@ -34,7 +34,7 @@ class ProfilePage extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: isDark 
-                      ? [const Color(0xFF1F2C34), const Color(0xFF121B22)]
+                      ? [const Color(0xFF2C3940), const Color(0xFF1F2C34)]
                       : [Colors.blue, Colors.blue.shade800],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
