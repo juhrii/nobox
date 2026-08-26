@@ -175,30 +175,7 @@ class ProfilePage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildExpandableSection(
-                          isDark,
-                          title: 'Tentang NoBox.AI',
-                          content: 'NoBox.AI adalah platform berbasis kecerdasan buatan yang dirancang untuk mengintegrasikan layanan komunikasi, pemasaran, dan customer service dalam satu sistem terpusat. Platform ini membantu bisnis mengelola interaksi pelanggan secara otomatis, terstruktur, dan efisien.\n\nNoBox.AI mendukung berbagai kanal komunikasi, seperti WhatsApp, Telegram, website, media sosial, dan marketplace, sehingga seluruh pesan pelanggan dapat dikelola dalam satu dashboard. Dengan teknologi AI yang human-like, sistem mampu memberikan respon yang cepat, relevan, dan konsisten.\n\nSelain itu, NoBox.AI dilengkapi dengan fitur Automasi, AI Agent, Human Agent, serta sistem monitoring dan pelaporan. Fitur-fitur ini memungkinkan perusahaan memantau kinerja layanan, mengelola tim, dan menganalisis data interaksi pelanggan secara menyeluruh.',
-                          initiallyExpanded: true,
-                        ),
-                        const SizedBox(height: 12),
-                        _buildExpandableSection(
-                          isDark,
-                          title: 'Mengapa NoBox.AI?',
-                          content: 'NoBox.AI membantu bisnis meningkatkan kualitas layanan pelanggan tanpa harus menambah beban kerja secara manual. Dengan sistem otomatis, perusahaan dapat merespons pelanggan lebih cepat dan lebih akurat.',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildExpandableSection(
-                          isDark,
-                          title: 'Keunggulan Utama',
-                          content: '• Menghemat waktu dan biaya operasional melalui automasi layanan.\n• Meningkatkan kepuasan pelanggan dengan respon yang cepat dan konsisten.\n• Memudahkan pengelolaan komunikasi dari berbagai platform dalam satu sistem.\n• Mendukung pengambilan keputusan berbasis data melalui fitur laporan dan monitoring.\n• Fleksibel dan dapat disesuaikan dengan kebutuhan bisnis.\n\nDengan keunggulan tersebut, NoBox.AI menjadi solusi yang tepat bagi UMKM hingga perusahaan besar untuk membangun layanan pelanggan yang profesional, modern, dan berkelanjutan.',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildExpandableSection(
-                          isDark,
-                          title: 'Target Pengguna',
-                          content: 'NoBox.AI dirancang untuk membantu berbagai jenis organisasi dan pelaku usaha dalam mengelola komunikasi dan layanan pelanggan secara lebih efektif:\n\n• UMKM: Mengelola pesan, promosi, dan layanan otomatis tanpa tim besar.\n• Perusahaan Menengah & Besar: Mendukung operasional CS kompleks dengan sistem terintegrasi dan pelaporan.\n• Startup Digital: Membangun sistem layanan pelanggan modern berbasis AI.\n• Lembaga Pendidikan: Melayani pertanyaan siswa dan orang tua lintas kanal.\n• Instansi Pemerintah: Mendukung pelayanan masyarakat yang responsif dan transparan.\n• E-Commerce & Marketplace: Pengelolaan pesanan dan komplain secara otomatis dan terpusat.',
-                        ),
+                        _AccordionList(isDark: isDark),
                         const SizedBox(height: 24),
                         Center(
                           child: OutlinedButton.icon(
@@ -270,46 +247,6 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildExpandableSection(bool isDark, {required String title, required String content, bool initiallyExpanded = false}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? Colors.white12 : Colors.grey.shade200,
-        ),
-      ),
-      child: Theme(
-        data: ThemeData().copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
-          title: Text(
-            title,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          iconColor: isDark ? Colors.blue.shade300 : Colors.blue,
-          collapsedIconColor: isDark ? Colors.white54 : Colors.grey.shade600,
-          childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-          children: [
-            Text(
-              content,
-              style: TextStyle(
-                color: isDark ? Colors.white70 : Colors.grey.shade700,
-                fontSize: 14,
-                height: 1.6,
-              ),
-              textAlign: TextAlign.justify,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildInfoCard(bool isDark, {required IconData icon, required String title, required String value}) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -368,3 +305,101 @@ class ProfilePage extends StatelessWidget {
     );
   }
 }
+
+class _AccordionList extends StatefulWidget {
+  final bool isDark;
+  const _AccordionList({required this.isDark});
+
+  @override
+  State<_AccordionList> createState() => _AccordionListState();
+}
+
+class _AccordionListState extends State<_AccordionList> {
+  int _expandedIndex = 0;
+
+  Widget _buildExpandableSection(int index, {required String title, required String content}) {
+    final bool isExpanded = _expandedIndex == index;
+    return Container(
+      decoration: BoxDecoration(
+        color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: widget.isDark ? Colors.white12 : Colors.grey.shade200,
+        ),
+      ),
+      child: Theme(
+        data: ThemeData().copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: Key(index.toString() + isExpanded.toString()),
+          initiallyExpanded: isExpanded,
+          onExpansionChanged: (expanded) {
+            if (expanded) {
+              setState(() {
+                _expandedIndex = index;
+              });
+            } else if (_expandedIndex == index) {
+              setState(() {
+                _expandedIndex = -1;
+              });
+            }
+          },
+          title: Text(
+            title,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: widget.isDark ? Colors.white : Colors.black87,
+            ),
+          ),
+          iconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
+          collapsedIconColor: widget.isDark ? Colors.white54 : Colors.grey.shade600,
+          childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+          children: [
+            Text(
+              content,
+              style: TextStyle(
+                color: widget.isDark ? Colors.white70 : Colors.grey.shade700,
+                fontSize: 14,
+                height: 1.6,
+              ),
+              textAlign: TextAlign.justify,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildExpandableSection(
+          0,
+          title: 'Tentang NoBox.AI',
+          content: 'NoBox.AI adalah platform berbasis kecerdasan buatan yang dirancang untuk mengintegrasikan layanan komunikasi, pemasaran, dan customer service dalam satu sistem terpusat. Platform ini membantu bisnis mengelola interaksi pelanggan secara otomatis, terstruktur, dan efisien.\n\nNoBox.AI mendukung berbagai kanal komunikasi, seperti WhatsApp, Telegram, website, media sosial, dan marketplace, sehingga seluruh pesan pelanggan dapat dikelola dalam satu dashboard. Dengan teknologi AI yang human-like, sistem mampu memberikan respon yang cepat, relevan, dan konsisten.\n\nSelain itu, NoBox.AI dilengkapi dengan fitur Automasi, AI Agent, Human Agent, serta sistem monitoring dan pelaporan. Fitur-fitur ini memungkinkan perusahaan memantau kinerja layanan, mengelola tim, dan menganalisis data interaksi pelanggan secara menyeluruh.',
+        ),
+        const SizedBox(height: 12),
+        _buildExpandableSection(
+          1,
+          title: 'Mengapa NoBox.AI?',
+          content: 'NoBox.AI membantu bisnis meningkatkan kualitas layanan pelanggan tanpa harus menambah beban kerja secara manual. Dengan sistem otomatis, perusahaan dapat merespons pelanggan lebih cepat dan lebih akurat.',
+        ),
+        const SizedBox(height: 12),
+        _buildExpandableSection(
+          2,
+          title: 'Keunggulan Utama',
+          content: '• Menghemat waktu dan biaya operasional melalui automasi layanan.\n• Meningkatkan kepuasan pelanggan dengan respon yang cepat dan konsisten.\n• Memudahkan pengelolaan komunikasi dari berbagai platform dalam satu sistem.\n• Mendukung pengambilan keputusan berbasis data melalui fitur laporan dan monitoring.\n• Fleksibel dan dapat disesuaikan dengan kebutuhan bisnis.\n\nDengan keunggulan tersebut, NoBox.AI menjadi solusi yang tepat bagi UMKM hingga perusahaan besar untuk membangun layanan pelanggan yang profesional, modern, dan berkelanjutan.',
+        ),
+        const SizedBox(height: 12),
+        _buildExpandableSection(
+          3,
+          title: 'Target Pengguna',
+          content: 'NoBox.AI dirancang untuk membantu berbagai jenis organisasi dan pelaku usaha dalam mengelola komunikasi dan layanan pelanggan secara lebih efektif:\n\n• UMKM: Mengelola pesan, promosi, dan layanan otomatis tanpa tim besar.\n• Perusahaan Menengah & Besar: Mendukung operasional CS kompleks dengan sistem terintegrasi dan pelaporan.\n• Startup Digital: Membangun sistem layanan pelanggan modern berbasis AI.\n• Lembaga Pendidikan: Melayani pertanyaan siswa dan orang tua lintas kanal.\n• Instansi Pemerintah: Mendukung pelayanan masyarakat yang responsif dan transparan.\n• E-Commerce & Marketplace: Pengelolaan pesanan dan komplain secara otomatis dan terpusat.',
+        ),
+      ],
+    );
+  }
+}
+
