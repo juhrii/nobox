@@ -341,15 +341,15 @@ class _AccordionList extends StatefulWidget {
 }
 
 class _AccordionListState extends State<_AccordionList> {
-  int _expandedIndex = 0;
   final List<GlobalKey> _keys = List.generate(4, (index) => GlobalKey());
+  final List<ExpansionTileController> _controllers = List.generate(4, (index) => ExpansionTileController());
 
   Widget _buildExpandableSection(
     int index, {
     required String title,
     required String content,
   }) {
-    final bool isExpanded = _expandedIndex == index;
+    final bool isInitiallyExpanded = index == 0;
     return Material(
       key: _keys[index],
       color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
@@ -362,13 +362,16 @@ class _AccordionListState extends State<_AccordionList> {
       child: Theme(
         data: ThemeData().copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          key: Key(index.toString() + isExpanded.toString()),
-          initiallyExpanded: isExpanded,
+          controller: _controllers[index],
+          initiallyExpanded: isInitiallyExpanded,
           onExpansionChanged: (expanded) {
             if (expanded) {
-              setState(() {
-                _expandedIndex = index;
-              });
+              // Collapse other tiles smoothly
+              for (int i = 0; i < 4; i++) {
+                if (i != index && _controllers[i].isExpanded) {
+                  _controllers[i].collapse();
+                }
+              }
               // Auto scroll to the expanded item after a short delay to allow animation
               Future.delayed(const Duration(milliseconds: 200), () {
                 if (_keys[index].currentContext != null) {
@@ -379,10 +382,6 @@ class _AccordionListState extends State<_AccordionList> {
                     alignment: 0.1, // Sedikit jarak dari atas layar
                   );
                 }
-              });
-            } else if (_expandedIndex == index) {
-              setState(() {
-                _expandedIndex = -1;
               });
             }
           },
