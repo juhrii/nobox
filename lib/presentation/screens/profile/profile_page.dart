@@ -183,7 +183,7 @@ class ProfilePage extends StatelessWidget {
                         Center(
                           child: OutlinedButton.icon(
                             onPressed: () async {
-                              final Uri url = Uri.parse('https://nobox.ai');
+                              final Uri url = Uri.parse('https://docs.nobox.ai/id/docs');
                               if (!await launchUrl(
                                 url,
                                 mode: LaunchMode.externalApplication,
@@ -201,7 +201,7 @@ class ProfilePage extends StatelessWidget {
                             },
                             icon: const Icon(Icons.language, size: 18),
                             label: const Text(
-                              'Kunjungi Website Resmi NoBox.AI',
+                              'Baca Dokumentasi Resmi NoBox.AI',
                             ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: isDark
