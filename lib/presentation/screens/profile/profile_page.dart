@@ -117,47 +117,72 @@ class ProfilePage extends StatelessWidget {
                       children: [
                         _AccordionList(isDark: isDark),
                         const SizedBox(height: 24),
-                        Center(
-                          child: OutlinedButton.icon(
-                            onPressed: () async {
-                              final Uri url = Uri.parse('https://docs.nobox.ai/id/docs');
-                              if (!await launchUrl(
-                                url,
-                                mode: LaunchMode.externalApplication,
-                              )) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Tidak dapat membuka tautan.',
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final Uri url = Uri.parse('https://nobox.ai/');
+                                if (!await launchUrl(
+                                  url,
+                                  mode: LaunchMode.externalApplication,
+                                )) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Tidak dapat membuka tautan.'),
                                       ),
-                                    ),
-                                  );
+                                    );
+                                  }
                                 }
-                              }
-                            },
-                            icon: const Icon(Icons.language, size: 18),
-                            label: const Text(
-                              'Baca Dokumentasi Resmi NoBox.AI',
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: isDark
-                                  ? Colors.blue.shade300
-                                  : Colors.blue,
-                              side: BorderSide(
-                                color: isDark
-                                    ? Colors.blue.withOpacity(0.3)
-                                    : Colors.blue.shade200,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                              },
+                              icon: const Icon(Icons.open_in_new, size: 18),
+                              label: const Text('Kunjungi Website NoBox.AI'),
+                              style: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                backgroundColor: isDark ? Colors.blue.shade700 : Colors.blue.shade600,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final Uri url = Uri.parse('https://docs.nobox.ai/id/docs');
+                                if (!await launchUrl(
+                                  url,
+                                  mode: LaunchMode.externalApplication,
+                                )) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Tidak dapat membuka tautan.'),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.menu_book, size: 18),
+                              label: const Text('Baca Dokumentasi Resmi'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: isDark
+                                    ? Colors.blue.shade300
+                                    : Colors.blue,
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.blue.withOpacity(0.3)
+                                      : Colors.blue.shade200,
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
