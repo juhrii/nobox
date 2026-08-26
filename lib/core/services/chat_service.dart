@@ -2419,7 +2419,11 @@ class ChatService {
       final contactFields = <String, dynamic>{};
 
       // Fields that belong to ChatroomsRow
-      const chatroomKeys = {'CtRealNm', 'IsPin', 'CtIsBlock', 'TagsIds', 'FnId', 'DealId', 'CampaignId', 'CtImg'};
+      const chatroomKeys = {
+        'CtRealNm', 'IsPin', 'CtIsBlock', 'TagsIds', 'FnId', 'DealId', 
+        'CampaignId', 'CtImg',
+        'Country', 'State', 'City', 'Address', 'Postal'
+      };
       
       for (final entry in contactData.entries) {
         if (chatroomKeys.contains(entry.key)) {
@@ -2517,11 +2521,24 @@ class ChatService {
                 },
               );
               debugPrint('ChatService: Contact update status=${contactResponse.statusCode} response=${contactResponse.data}');
+              
+              // TAMPILKAN ERROR KE LAYAR JIKA GAGAL:
+              if (contactResponse.statusCode != 200 && contactResponse.statusCode != 204) {
+                 return ApiResponse.failure('DEBUG_ERR_STATUS: ${contactResponse.statusCode} -> ${contactResponse.data}', 500);
+              }
+              final rData = contactResponse.data;
+              if (rData is Map && rData['IsError'] == true) {
+                 return ApiResponse.failure('DEBUG_ERR_API: ${rData['ErrorMessage']}', 500);
+              }
             } catch (e) {
-              debugPrint('ChatService: Contact/Update API exception (non-critical): $e');
+              if (e is DioException) {
+                 return ApiResponse.failure('DEBUG_ERR_DIO: ${e.response?.data}', 500);
+              }
+              return ApiResponse.failure('DEBUG_ERR_CATCH: $e', 500);
             }
           } else {
             debugPrint('ChatService: No contact ID found, skipping Contact/Update');
+            return ApiResponse.failure('DEBUG_ERR_CATCH: ctRealId is null', 500);
           }
         } catch (e) {
           debugPrint('ChatService: Contact update process error (non-critical): $e');

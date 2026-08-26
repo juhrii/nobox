@@ -2946,11 +2946,12 @@ class ChatProvider with ChangeNotifier {
     if (!response.isError) {
       return true;
     }
-    // Meskipun API gagal, kita tetap return true jika data sudah di-persist lokal
-    debugPrint(
-      'ChatProvider: ⚠️ updateContactInfo API returned error: ${response.error} — but local data is persisted',
-    );
-    return true;
+    
+    // TEMPORARY DEBUG: Munculkan error di layar!
+    _error = 'DEBUG ERROR: ${response.error}';
+    notifyListeners();
+    debugPrint('ChatProvider: ⚠️ updateContactInfo API returned error: ${response.error}');
+    return false;
   }
 
   Future<bool> toggleAiAgent(String contactId, bool isMuted) async {
