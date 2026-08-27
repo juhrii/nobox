@@ -2764,8 +2764,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         nLower.contains('sticker') ||
         nLower.contains('stiker');
 
+    final isAnimatedSticker =
+        pLower.endsWith('.webm') ||
+        pLower.endsWith('.tgs') ||
+        nLower.endsWith('.webm') ||
+        nLower.endsWith('.tgs');
+
+    final displayContent = isAnimatedSticker ? '🎬 Sticker' : (isStickerFile ? '🌟 Sticker' : '🎬 Video');
+
     final newMessage = Message(
-      content: isStickerFile ? '🌟 Sticker' : '🎬 Video',
+      content: displayContent,
       isMe: true,
       time: timeString,
       status: MessageStatus.sent,
@@ -2782,7 +2790,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
 
     _scrollToBottom();
-    chatProvider.updateLocalLastMessage(chat.id, '🎬 Video');
+    chatProvider.updateLocalLastMessage(chat.id, displayContent, lastMessageType: isStickerFile ? '16' : '4');
 
     final messageIndex = _messages.indexOf(newMessage);
 
