@@ -2428,7 +2428,15 @@ class _ChatListPageState extends State<ChatListPage>
           final isContact = typeVal == '14' || typeVal == '10';
 
           if (isSticker) {
-            displayMessage = '🌟 Sticker';
+            if (typeVal == '17' ||
+                ['.webm', '.tgs'].any((ext) =>
+                    filename.contains(ext) ||
+                    originalName.contains(ext) ||
+                    trimmedMsg.toLowerCase().contains(ext))) {
+              displayMessage = '🎬 Sticker';
+            } else {
+              displayMessage = '🌟 Sticker';
+            }
             parsedAsMedia = true;
           } else if (isDocument && !isSticker) {
             String docName = 'Dokumen';
@@ -2585,8 +2593,14 @@ class _ChatListPageState extends State<ChatListPage>
         } else {
           displayMessage = '🎬 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
         }
-      } else if (overrideType == '16' || overrideType.contains('sticker')) {
-        displayMessage = '🌟 Sticker';
+      } else if (overrideType == '16' || overrideType == '17' || overrideType.contains('sticker')) {
+        if (overrideType == '17' ||
+            displayMessage.toLowerCase().contains('.webm') ||
+            displayMessage.toLowerCase().contains('.tgs')) {
+          displayMessage = '🎬 Sticker';
+        } else {
+          displayMessage = '🌟 Sticker';
+        }
       } else if (overrideType.contains('document') ||
           overrideType.contains('file') ||
           overrideType == '5') {
