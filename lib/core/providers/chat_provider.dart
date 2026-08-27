@@ -2924,8 +2924,8 @@ class ChatProvider with ChangeNotifier {
     // agar lokasi tetap tersimpan meski API Contact/Update gagal.
     final locationFields = <String, String>{};
     for (final key in ['Country', 'State', 'City', 'Address', 'Postal']) {
-      if (contactData[key] != null && contactData[key].toString().isNotEmpty) {
-        locationFields[key] = contactData[key].toString();
+      if (contactData.containsKey(key)) {
+        locationFields[key] = contactData[key]?.toString() ?? '';
       }
     }
     if (locationFields.isNotEmpty) {

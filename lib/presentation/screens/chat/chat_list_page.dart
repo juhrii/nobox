@@ -2450,11 +2450,13 @@ class _ChatListPageState extends State<ChatListPage>
                 ['.webm', '.tgs'].any((ext) =>
                     filename.contains(ext) ||
                     originalName.contains(ext) ||
-                    trimmedMsg.toLowerCase().contains(ext))) {
+                    trimmedMsg.toLowerCase().contains(ext)) ||
+                displayMessage.contains('🎬')) {
               displayMessage = '🎬 Sticker';
             } else {
               displayMessage = '🌟 Sticker';
             }
+            debugPrint('DEBUG STICKER JSON: isSticker=$isSticker, typeVal=$typeVal, filename=$filename, originalName=$originalName, msg=$trimmedMsg => result=$displayMessage');
             parsedAsMedia = true;
           } else if (isDocument && !isSticker) {
             String docName = 'Dokumen';
@@ -2614,11 +2616,13 @@ class _ChatListPageState extends State<ChatListPage>
       } else if (overrideType == '16' || overrideType == '17' || overrideType.contains('sticker')) {
         if (overrideType == '17' ||
             displayMessage.toLowerCase().contains('.webm') ||
-            displayMessage.toLowerCase().contains('.tgs')) {
+            displayMessage.toLowerCase().contains('.tgs') ||
+            displayMessage.contains('🎬')) {
           displayMessage = '🎬 Sticker';
         } else {
           displayMessage = '🌟 Sticker';
         }
+        debugPrint('DEBUG STICKER OVERRIDE: overrideType=$overrideType, displayMessage (original)=${chat.lastMessage} => result=$displayMessage');
       } else if (overrideType.contains('document') ||
           overrideType.contains('file') ||
           overrideType == '5') {
