@@ -1352,6 +1352,8 @@ class ChatProvider with ChangeNotifier {
               typeStr = '4';
             else if (realLastMsg.messageType == MessageType.document)
               typeStr = '5';
+            else if (realLastMsg.messageType == MessageType.sticker)
+              typeStr = '16';
 
             updateLocalLastMessage(
               roomId,

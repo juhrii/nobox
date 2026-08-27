@@ -564,7 +564,8 @@ class Message {
       return false;
     }
 
-    bool isAnimated(dynamic fileData, String filePath, String originalName, String content) {
+    bool isAnimated(dynamic fileData, String filePath, String originalName, String content, String typeVal) {
+      if (typeVal == '17') return true;
       final fLower = filePath.toLowerCase();
       final oLower = originalName.toLowerCase();
       if (fLower.contains('.webm') || oLower.contains('.webm') || fLower.contains('.tgs') || oLower.contains('.tgs') || content.toLowerCase().contains('bergerak') || content.toLowerCase().contains('animated')) return true;
@@ -587,7 +588,7 @@ class Message {
       if (isAbsoluteSticker(firstFile, typeVal, filePath, originalName, content)) {
         msgType = MessageType.sticker;
         imgUrl = filePath.startsWith('http') || filePath.isEmpty ? filePath : 'https://id.nobox.ai/upload/$filePath';
-        content = isAnimated(firstFile, filePath, originalName, content) ? '🎬 Sticker' : '🌟 Sticker';
+        content = isAnimated(firstFile, filePath, originalName, content, typeVal) ? '🎬 Sticker' : '🌟 Sticker';
       } else if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(firstFile) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath)) {
         // Voice note: cek ekstensi audio ATAU flag Ptt:true ATAU nama file mengandung voice note — SEBELUM cek document (type 5)
         // Server NoBox kadang mengembalikan Type=5 untuk voice notes
@@ -659,7 +660,7 @@ class Message {
       if (isAbsoluteSticker(json['File'], typeVal, filePath, originalName, content)) {
         msgType = MessageType.sticker;
         imgUrl = filePath.startsWith('http') || filePath.isEmpty ? filePath : 'https://id.nobox.ai/upload/$filePath';
-        content = isAnimated(json['File'], filePath, originalName, content) ? '🎬 Sticker' : '🌟 Sticker';
+        content = isAnimated(json['File'], filePath, originalName, content, typeVal) ? '🎬 Sticker' : '🌟 Sticker';
       } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath)) {
         // Voice note: cek typeVal=='2', ekstensi audio, nama file, ATAU flag Ptt:true — sebelum cek document (type 5)
         if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath) || (content.trim().isEmpty && !_isWebLink(filePath) && filePath.isNotEmpty)) {
