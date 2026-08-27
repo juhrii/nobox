@@ -297,12 +297,66 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
           ],
         );
       }
-      return Row(
-        children: [
-          const Text('🌟 ', style: TextStyle(fontSize: 14)),
-          Text(chat.lastMessageType!, style: TextStyle(fontSize: 13, color: messageColor, fontStyle: FontStyle.italic)),
-        ],
-      );
+
+      String mappedType = chat.lastMessageType!;
+      String icon = '🌟 ';
+      
+      switch (mappedType.toLowerCase()) {
+        case '1':
+        case 'text':
+          mappedType = 'Text';
+          break;
+        case '2':
+        case 'audio':
+        case 'voice note':
+          mappedType = 'Pesan Suara';
+          icon = '🎤 ';
+          break;
+        case '3':
+        case 'image':
+        case 'photo':
+          mappedType = 'Foto';
+          icon = '📷 ';
+          break;
+        case '4':
+        case 'video':
+          mappedType = 'Video';
+          icon = '🎬 ';
+          break;
+        case '5':
+        case 'document':
+        case 'file':
+          mappedType = 'Dokumen';
+          icon = '📄 ';
+          break;
+        case '10':
+        case '14':
+        case 'contact':
+          mappedType = 'Kontak';
+          icon = '👤 ';
+          break;
+        case '11':
+        case '15':
+        case 'location':
+          mappedType = 'Lokasi';
+          icon = '📍 ';
+          break;
+        case '16':
+        case '17':
+        case 'sticker':
+          mappedType = 'Sticker';
+          icon = '🌟 ';
+          break;
+      }
+
+      if (mappedType != 'Text') {
+        return Row(
+          children: [
+            Text(icon, style: const TextStyle(fontSize: 14)),
+            Text(mappedType, style: TextStyle(fontSize: 13, color: messageColor, fontStyle: FontStyle.italic)),
+          ],
+        );
+      }
     } 
     String displayMessage = chat.lastMessage;
     if (displayMessage.startsWith('{') && displayMessage.contains('"Filename"')) {

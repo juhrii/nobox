@@ -836,6 +836,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               _debugApiState = 'Error parsing pesan: $e';
             }
           });
+          // Mulai polling setelah data arsip selesai dimuat
+          if (mounted) _startChatSyncPolling();
         });
       }
     } else {
@@ -1290,6 +1292,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               );
             }
           }
+          // Mulai polling setelah pesan awal selesai dimuat
+          if (mounted) _startChatSyncPolling();
         });
       }
     }
@@ -2247,8 +2251,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       _statusProvider = Provider.of<ChatStatusProvider>(context, listen: false);
       _loadInitialMessages();
       _subscribeToSignalR();
-      _startChatSyncPolling(); // <-- START CONTINUOUS SYNC
-      _fetchQuickReplies('');
+      // Polling dimulai setelah _loadInitialMessages selesai (di dalam fungsinya)
+      // _fetchQuickReplies hanya dipanggil saat user mengetik '/' (lazy)
     });
   }
 

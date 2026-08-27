@@ -564,15 +564,15 @@ class Message {
       return false;
     }
 
-    bool isAnimated(dynamic fileData, String filePath, String originalName, String content, String typeVal) {
+    bool isAnimated(dynamic fileData, String filePath, String originalName, String content, String? typeVal) {
       if (typeVal == '17') return true;
       final fLower = filePath.toLowerCase();
       final oLower = originalName.toLowerCase();
-      if (fLower.contains('.webm') || oLower.contains('.webm') || fLower.contains('.tgs') || oLower.contains('.tgs') || content.toLowerCase().contains('bergerak') || content.toLowerCase().contains('animated')) return true;
+      if (fLower.contains('.webm') || oLower.contains('.webm') || fLower.contains('.tgs') || oLower.contains('.tgs') || fLower.contains('.mp4') || oLower.contains('.mp4') || content.toLowerCase().contains('bergerak') || content.toLowerCase().contains('animated') || content.contains('🎬')) return true;
       try {
         final rawFileStr = fileData != null ? jsonEncode(fileData).toLowerCase() : '';
         final rawJsonStr = jsonEncode(json).toLowerCase();
-        if (rawFileStr.contains('"isanimated":true') || rawFileStr.contains('"isanimatedsticker":true') || rawFileStr.contains('video/webm') || rawFileStr.contains('animated') || rawJsonStr.contains('"isanimated":true') || rawJsonStr.contains('"isanimatedsticker":true') || rawJsonStr.contains('video/webm') || rawJsonStr.contains('animated sticker') || rawJsonStr.contains('stiker bergerak')) return true;
+        if (rawFileStr.contains('"isanimated":true') || rawFileStr.contains('"isanimatedsticker":true') || rawFileStr.contains('video/webm') || rawFileStr.contains('video/mp4') || rawFileStr.contains('animated') || rawJsonStr.contains('"isanimated":true') || rawJsonStr.contains('"isanimatedsticker":true') || rawJsonStr.contains('video/webm') || rawJsonStr.contains('video/mp4') || rawJsonStr.contains('animated sticker') || rawJsonStr.contains('stiker bergerak')) return true;
       } catch (_) {}
       return false;
     }

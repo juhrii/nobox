@@ -805,8 +805,10 @@ class _ChatListPageState extends State<ChatListPage>
               String label,
               String? value,
               List<String> options,
-              ValueChanged<String?> onChanged,
-            ) {
+              ValueChanged<String?> onChanged, {
+              bool enabled = true,
+              String hintText = '--select--',
+            }) {
               // Pastikan nilai yang dipilih ada di dalam daftar opsi, jika tidak kembalikan ke null
               final safeValue = (value != null && options.contains(value))
                   ? value
@@ -827,10 +829,17 @@ class _ChatListPageState extends State<ChatListPage>
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: SearchableDropdown<String>(
-                        value: safeValue,
-                        options: options,
-                        onChanged: onChanged,
+                      child: Opacity(
+                        opacity: enabled ? 1.0 : 0.5,
+                        child: IgnorePointer(
+                          ignoring: !enabled,
+                          child: SearchableDropdown<String>(
+                            value: safeValue,
+                            hint: hintText,
+                            options: options,
+                            onChanged: onChanged,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -998,6 +1007,8 @@ class _ChatListPageState extends State<ChatListPage>
                           (val) {
                             setDialogState(() => selectedAccount = val);
                           },
+                          enabled: selectedChannel != null,
+                          hintText: selectedChannel != null ? '--select--' : 'Pilih Channel dulu',
                         ),
 
                         // Tombol Radio untuk Pilihan Tujuan (To)
@@ -2447,7 +2458,7 @@ class _ChatListPageState extends State<ChatListPage>
 
           if (isSticker) {
             if (typeVal == '17' ||
-                ['.webm', '.tgs'].any((ext) =>
+                ['.webm', '.tgs', '.mp4'].any((ext) =>
                     filename.contains(ext) ||
                     originalName.contains(ext) ||
                     trimmedMsg.toLowerCase().contains(ext)) ||
