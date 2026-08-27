@@ -844,7 +844,22 @@ class _ChatListPageState extends State<ChatListPage>
               'Name',
               'ChannelName',
             ]);
-            final accountNames = toUniqueNames(accounts, [
+            List<Map<String, dynamic>> filteredAccounts = accounts;
+            if (selectedChannel != null) {
+              final selectedChannelIndex = channelNames.indexOf(selectedChannel!);
+              if (selectedChannelIndex != -1) {
+                final channelObj = channels[selectedChannelIndex];
+                final channelId = channelObj['Id']?.toString() ?? channelObj['ChId']?.toString();
+                if (channelId != null) {
+                  filteredAccounts = accounts.where((acc) {
+                    final accChannel = acc['Channel']?.toString() ?? acc['ChId']?.toString() ?? acc['ChannelId']?.toString();
+                    return accChannel == channelId;
+                  }).toList();
+                }
+              }
+            }
+
+            final accountNames = toUniqueNames(filteredAccounts, [
               'Name',
               'AccountName',
               'Nm',
@@ -968,7 +983,10 @@ class _ChatListPageState extends State<ChatListPage>
                           selectedChannel,
                           channelNames,
                           (val) {
-                            setDialogState(() => selectedChannel = val);
+                            setDialogState(() {
+                              selectedChannel = val;
+                              selectedAccount = null;
+                            });
                           },
                         ),
 
