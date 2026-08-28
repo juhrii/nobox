@@ -20,9 +20,12 @@ class ProfilePage extends StatelessWidget {
       ),
       backgroundColor: isDark ? const Color(0xFF121B22) : Colors.grey[50],
       body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Hero Section
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              children: [
+                // Hero Section
             TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0.0, end: 1.0),
               duration: const Duration(milliseconds: 800),
@@ -254,6 +257,8 @@ class ProfilePage extends StatelessWidget {
             const SizedBox(height: 40),
           ],
         ),
+          ),
+        ),
       ),
     );
   }
@@ -262,6 +267,35 @@ class ProfilePage extends StatelessWidget {
 class _ProfileMenuList extends StatelessWidget {
   final bool isDark;
   const _ProfileMenuList({required this.isDark});
+
+  Widget _buildRichText(String text, BuildContext context, bool isDark) {
+    final List<TextSpan> spans = [];
+    final parts = text.split('**');
+    
+    final baseStyle = TextStyle(
+      color: isDark ? Colors.white70 : Colors.grey.shade700,
+      fontSize: 14,
+      height: 1.5,
+    );
+
+    for (int i = 0; i < parts.length; i++) {
+      if (i % 2 == 1) {
+        spans.add(TextSpan(
+          text: parts[i],
+          style: baseStyle.copyWith(
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ));
+      } else {
+        spans.add(TextSpan(
+          text: parts[i],
+          style: baseStyle,
+        ));
+      }
+    }
+    return Text.rich(TextSpan(children: spans));
+  }
 
   Widget _buildMenuSection(
     BuildContext context,
@@ -279,41 +313,25 @@ class _ProfileMenuList extends StatelessWidget {
             color: isDark ? Colors.white12 : Colors.grey.shade200,
           ),
         ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProfileDetailPage(
-                  title: title,
-                  content: content,
-                ),
+        clipBehavior: Clip.antiAlias,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            title: Text(
+              title,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
               ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: isDark ? Colors.blue.shade300 : Colors.blue,
-                ),
-              ],
             ),
+            iconColor: isDark ? Colors.blue.shade300 : Colors.blue,
+            collapsedIconColor: isDark ? Colors.blue.shade300 : Colors.blue,
+            childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+            expandedCrossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildRichText(content, context, isDark),
+            ],
           ),
         ),
       ),
