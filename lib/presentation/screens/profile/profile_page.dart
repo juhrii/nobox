@@ -244,9 +244,17 @@ class ProfilePage extends StatelessWidget {
   }
 }
 
-class _ProfileMenuList extends StatelessWidget {
+class _ProfileMenuList extends StatefulWidget {
   final bool isDark;
   const _ProfileMenuList({required this.isDark});
+
+  @override
+  State<_ProfileMenuList> createState() => _ProfileMenuListState();
+}
+
+class _ProfileMenuListState extends State<_ProfileMenuList> {
+  final List<ExpansionTileController> _controllers = List.generate(7, (index) => ExpansionTileController());
+  final List<GlobalKey> _itemKeys = List.generate(7, (index) => GlobalKey());
 
   Widget _buildRichText(String text, BuildContext context, bool isDark) {
     final List<TextSpan> spans = [];
@@ -284,33 +292,56 @@ class _ProfileMenuList extends StatelessWidget {
     required String content,
   }) {
     return Padding(
+      key: _itemKeys[index],
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        color: isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
+        color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: isDark ? Colors.white12 : Colors.grey.shade200,
+            color: widget.isDark ? Colors.white12 : Colors.grey.shade200,
           ),
         ),
         clipBehavior: Clip.antiAlias,
         child: Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
+            controller: _controllers[index],
+            onExpansionChanged: (isExpanded) {
+              if (isExpanded) {
+                // Tutup item lain
+                for (int i = 0; i < _controllers.length; i++) {
+                  if (i != index && _controllers[i].isExpanded) {
+                    _controllers[i].collapse();
+                  }
+                }
+                // Gulir ke item ini setelah sedikit delay agar animasi expand mulai
+                Future.delayed(const Duration(milliseconds: 200), () {
+                  if (_itemKeys[index].currentContext != null) {
+                    Scrollable.ensureVisible(
+                      _itemKeys[index].currentContext!,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      alignment: 0.1, // Beri sedikit margin di atas
+                    );
+                  }
+                });
+              }
+            },
             title: Text(
               title,
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black87,
+                color: widget.isDark ? Colors.white : Colors.black87,
               ),
             ),
-            iconColor: isDark ? Colors.blue.shade300 : Colors.blue,
-            collapsedIconColor: isDark ? Colors.blue.shade300 : Colors.blue,
+            iconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
+            collapsedIconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
             childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
             expandedCrossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildRichText(content, context, isDark),
+              _buildRichText(content, context, widget.isDark),
             ],
           ),
         ),
