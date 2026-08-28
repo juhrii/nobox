@@ -589,37 +589,43 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     final cleanMessage = _cleanContent(widget.message.content);
     final hasReply = widget.message.repliedMessage != null;
 
+    final lines = cleanMessage.split('\n');
+    final textColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(lines.length, (index) {
+        final isLastLine = index == lines.length - 1;
+        final textToRender = lines[index].isEmpty ? '\u200B' : lines[index];
+        return _buildTextWithLinks(
+          textToRender,
+          isMe,
+          isDarkMode,
+          trailing: (!hasReply && isLastLine) ? _buildTimestampRow(isMe) : null,
+        );
+      }),
+    );
+
     if (hasReply) {
       return IntrinsicWidth(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-          _buildTextWithLinks(cleanMessage, isMe, isDarkMode),
-          const SizedBox(height: 2),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              _buildTimestampRow(isMe),
-            ],
-          ),
-        ],
+            textColumn,
+            const SizedBox(height: 2),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _buildTimestampRow(isMe),
+              ],
+            ),
+          ],
         ),
       );
     }
 
-    return Wrap(
-      alignment: WrapAlignment.end,
-      crossAxisAlignment: WrapCrossAlignment.end,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 4.0, bottom: 2.0, top: 2.0),
-          child: _buildTextWithLinks(cleanMessage, isMe, isDarkMode),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 2.0),
-          child: _buildTimestampRow(isMe),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(right: 4.0, bottom: 2.0, top: 2.0),
+      child: textColumn,
     );
   }
 
