@@ -125,94 +125,74 @@ class ProfilePage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        if (!isDark)
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                  _ProfileMenuList(isDark: isDark),
+                  const SizedBox(height: 32),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final Uri url = Uri.parse('https://nobox.ai/');
+                          if (!await launchUrl(
+                            url,
+                            mode: LaunchMode.externalApplication,
+                          )) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Tidak dapat membuka tautan.'),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.open_in_new, size: 18),
+                        label: const Text('Kunjungi Website NoBox.AI'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: isDark ? Colors.blue.shade700 : Colors.blue.shade600,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _ProfileMenuList(isDark: isDark),
-                        const SizedBox(height: 24),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            ElevatedButton.icon(
-                              onPressed: () async {
-                                final Uri url = Uri.parse('https://nobox.ai/');
-                                if (!await launchUrl(
-                                  url,
-                                  mode: LaunchMode.externalApplication,
-                                )) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Tidak dapat membuka tautan.'),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                              icon: const Icon(Icons.open_in_new, size: 18),
-                              label: const Text('Kunjungi Website NoBox.AI'),
-                              style: ElevatedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                backgroundColor: isDark ? Colors.blue.shade700 : Colors.blue.shade600,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            OutlinedButton.icon(
-                              onPressed: () async {
-                                final Uri url = Uri.parse('https://docs.nobox.ai/id/docs');
-                                if (!await launchUrl(
-                                  url,
-                                  mode: LaunchMode.externalApplication,
-                                )) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Tidak dapat membuka tautan.'),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                              icon: const Icon(Icons.menu_book, size: 18),
-                              label: const Text('Baca Dokumentasi Resmi'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: isDark
-                                    ? Colors.blue.shade300
-                                    : Colors.blue,
-                                side: BorderSide(
-                                  color: isDark
-                                      ? Colors.blue.withOpacity(0.3)
-                                      : Colors.blue.shade200,
-                                ),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ],
+                          elevation: 0,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final Uri url = Uri.parse('https://docs.nobox.ai/id/docs');
+                          if (!await launchUrl(
+                            url,
+                            mode: LaunchMode.externalApplication,
+                          )) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Tidak dapat membuka tautan.'),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.menu_book, size: 18),
+                        label: const Text('Baca Dokumentasi Resmi'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isDark
+                              ? Colors.blue.shade300
+                              : Colors.blue,
+                          side: BorderSide(
+                            color: isDark
+                                ? Colors.blue.withOpacity(0.3)
+                                : Colors.blue.shade200,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
