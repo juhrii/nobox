@@ -594,13 +594,11 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: List.generate(lines.length, (index) {
-        final isLastLine = index == lines.length - 1;
         final textToRender = lines[index].isEmpty ? '\u200B' : lines[index];
         return _buildTextWithLinks(
           textToRender,
           isMe,
           isDarkMode,
-          trailing: (!hasReply && isLastLine) ? _buildTimestampRow(isMe) : null,
         );
       }),
     );
@@ -624,8 +622,19 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     }
 
     return Padding(
-      padding: const EdgeInsets.only(right: 4.0, bottom: 2.0, top: 2.0),
-      child: textColumn,
+      padding: const EdgeInsets.only(top: 2.0, bottom: 2.0, right: 4.0),
+      child: Wrap(
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.end,
+        spacing: 8.0, // Space between text and timestamp if on same line
+        children: [
+          textColumn,
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2.0),
+            child: _buildTimestampRow(isMe),
+          ),
+        ],
+      ),
     );
   }
 
