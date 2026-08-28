@@ -2420,9 +2420,6 @@ class _ChatListPageState extends State<ChatListPage>
                 '.tgs',
                 '.webp',
                 '.ezgif',
-                'sticker',
-                'stiker',
-                'animated',
               ].any(
                 (s) =>
                     filename.contains(s) ||
@@ -2592,7 +2589,7 @@ class _ChatListPageState extends State<ChatListPage>
         !exactAudioLabels.contains(lowerTrimmed) &&
         !exactPhotoLabels.contains(lowerTrimmed) &&
         !exactVideoLabels.contains(lowerTrimmed) &&
-        !lowerTrimmed.contains('sticker');
+        !exactStickerLabels.contains(lowerTrimmed);
     if (!parsedAsMedia &&
         !isLikelyPlainText &&
         chat.lastMessageType != null &&
@@ -2621,7 +2618,7 @@ class _ChatListPageState extends State<ChatListPage>
             .trim();
         if (displayMessage.toLowerCase().contains('.webm') ||
             displayMessage.toLowerCase().contains('.tgs') ||
-            displayMessage.toLowerCase().contains('sticker')) {
+            exactStickerLabels.contains(displayMessage.toLowerCase())) {
           displayMessage = '🎬 Sticker';
         } else {
           displayMessage = '🎬 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';

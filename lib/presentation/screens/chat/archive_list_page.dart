@@ -379,7 +379,7 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
         !displayMessage.startsWith('📎') && !displayMessage.startsWith('📍') &&
         !displayMessage.startsWith('👤') && !displayMessage.startsWith('🌟')) {
       final lower = displayMessage.toLowerCase().trim();
-      if (['.webm', '.tgs', '.webp'].any((ext) => lower.endsWith(ext)) || lower.contains('sticker') || lower.contains('stiker')) {
+      if (['.webm', '.tgs', '.webp'].any((ext) => lower.endsWith(ext)) || ['sticker', '🌟 sticker', '🎬 sticker', 'stiker'].contains(lower)) {
         if (lower.endsWith('.webm') || lower.endsWith('.tgs')) {
           displayMessage = '🎬 Sticker';
         } else {
