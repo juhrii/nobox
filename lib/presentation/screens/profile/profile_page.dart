@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -20,44 +22,64 @@ class ProfilePage extends StatelessWidget {
         child: Column(
           children: [
             // Hero Section
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.only(top: 30, bottom: 40, left: 24, right: 24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [const Color(0xFF2C3940), const Color(0xFF1F2C34)]
-                      : [Colors.blue.shade600, Colors.blue.shade800],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Image.asset(
-                      'assets/nobox2.png',
-                      height: 50,
-                      width: 50,
-                    ),
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 20 * (1 - value)),
+                    child: child,
                   ),
-                  const SizedBox(height: 20),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(top: 30, bottom: 40, left: 24, right: 24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [const Color(0xFF2C3940), const Color(0xFF1F2C34)]
+                        : [Colors.blue.shade600, Colors.blue.shade800],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark ? Colors.black26 : Colors.blue.withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 15,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Image.asset(
+                        'assets/nobox2.png',
+                        height: 50,
+                        width: 50,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                   const Text(
                     'NoBox.AI',
                     style: TextStyle(
@@ -182,6 +204,32 @@ class ProfilePage extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            const SizedBox(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _SocialIconButton(
+                                  icon: FontAwesomeIcons.instagram,
+                                  color: const Color(0xFFE1306C),
+                                  onPressed: () => launchUrl(Uri.parse('https://instagram.com/nobox.ai'), mode: LaunchMode.externalApplication),
+                                  isDark: isDark,
+                                ),
+                                const SizedBox(width: 20),
+                                _SocialIconButton(
+                                  icon: FontAwesomeIcons.linkedinIn,
+                                  color: const Color(0xFF0077B5),
+                                  onPressed: () => launchUrl(Uri.parse('https://linkedin.com/company/nobox-ai'), mode: LaunchMode.externalApplication),
+                                  isDark: isDark,
+                                ),
+                                const SizedBox(width: 20),
+                                _SocialIconButton(
+                                  icon: FontAwesomeIcons.whatsapp,
+                                  color: const Color(0xFF25D366),
+                                  onPressed: () => launchUrl(Uri.parse('https://wa.me/6281133333333'), mode: LaunchMode.externalApplication), // Placeholder WA
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ],
@@ -195,30 +243,36 @@ class ProfilePage extends StatelessWidget {
 
             // Footer App Version
             Center(
-              child: Column(
-                children: [
-                  Image.asset(
-                    'assets/nobox2.png',
-                    height: 40,
-                    color: isDark ? Colors.white30 : Colors.grey[400],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'NoBox Chat App',
-                    style: TextStyle(
-                      color: isDark ? Colors.white54 : Colors.grey[600],
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Versi 1.0.0',
-                    style: TextStyle(
-                      color: isDark ? Colors.white30 : Colors.grey[500],
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+              child: FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snapshot) {
+                  final version = snapshot.hasData ? snapshot.data!.version : '1.0.0';
+                  return Column(
+                    children: [
+                      Image.asset(
+                        'assets/nobox2.png',
+                        height: 40,
+                        color: isDark ? Colors.white30 : Colors.grey[400],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'NoBox Chat App',
+                        style: TextStyle(
+                          color: isDark ? Colors.white54 : Colors.grey[600],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Versi $version',
+                        style: TextStyle(
+                          color: isDark ? Colors.white30 : Colors.grey[500],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  );
+                }
               ),
             ),
             const SizedBox(height: 40),
@@ -247,9 +301,11 @@ class _AccordionListState extends State<_AccordionList> {
     required String content,
   }) {
     final bool isInitiallyExpanded = false;
-    return Material(
-      key: _keys[index],
-      color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        key: _keys[index],
+        color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
@@ -290,10 +346,14 @@ class _AccordionListState extends State<_AccordionList> {
               color: widget.isDark ? Colors.white : Colors.black87,
             ),
           ),
-          iconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
-          collapsedIconColor: widget.isDark
-              ? Colors.white54
-              : Colors.grey.shade600,
+          trailing: AnimatedRotation(
+            turns: _controllers[index].isExpanded ? 0.125 : 0, // 0.125 = 45 degrees (+ becomes x)
+            duration: const Duration(milliseconds: 200),
+            child: Icon(
+              Icons.add,
+              color: widget.isDark ? Colors.blue.shade300 : Colors.blue,
+            ),
+          ),
           childrenPadding: const EdgeInsets.only(
             left: 16,
             right: 16,
@@ -391,6 +451,48 @@ class _AccordionListState extends State<_AccordionList> {
               'NoBox.AI memiliki berbagai keunggulan yang mendukung kemudahan penggunaan, keamanan data, dan integrasi sistem.\n\n**Tampilan:**\n• **Menu Per Role User:** Tampilan menu disesuaikan dengan peran pengguna\n• **Tracking Data:** Memudahkan pemantauan aktivitas dan data sistem\n• **Tampilan Fleksibel:** Layout dapat disesuaikan dengan kebutuhan pengguna\n• **Pilihan Tema:** Tersedia tema terang dan gelap\n\n**Keamanan:**\n• **Hak Akses User:** Pengaturan hak akses berdasarkan role pengguna\n\n**Integrasi:**\n• **Import Kontak:** Mendukung file Excel dan CSV\n• **Export Kontak:** Mendukung format Google Contacts',
         ),
       ],
+    );
+  }
+}
+
+class _SocialIconButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+  final bool isDark;
+
+  const _SocialIconButton({
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(12),
+        splashColor: color.withOpacity(0.2),
+        highlightColor: color.withOpacity(0.1),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.white12 : Colors.grey.shade200,
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 24,
+          ),
+        ),
+      ),
     );
   }
 }
