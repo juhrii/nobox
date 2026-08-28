@@ -2237,19 +2237,16 @@ class _ChatListPageState extends State<ChatListPage>
     // langsung atur ke Voice Note agar tidak tertimpa oleh chat.lastMessageType ("Document") yang usang.
     final lowerTrimmed = trimmedMsg.toLowerCase();
     final exactAudioLabels = [
-      'voice note',
       '🎵 voice note',
-      'pesan suara',
       '🎤 pesan suara',
-      'audio',
       'voice(empty)',
       'voice (empty)',
     ];
 
-    final exactPhotoLabels = ['photo', '📷 photo', 'image', 'foto', '📷 foto'];
-    final exactVideoLabels = ['video', '🎥 video', '🎬 video'];
+    final exactPhotoLabels = ['📷 photo', '📷 foto'];
+    final exactVideoLabels = ['🎥 video', '🎬 video'];
 
-    final exactStickerLabels = ['sticker', '🌟 sticker', '🎬 sticker'];
+    final exactStickerLabels = ['🌟 sticker', '🎬 sticker'];
 
     if (exactStickerLabels.contains(lowerTrimmed)) {
       displayMessage = '🌟 Sticker';
