@@ -527,7 +527,6 @@ class Message {
           fLower.contains('.ezgif') || oLower.contains('.ezgif') ||
           fLower.contains('sticker') || oLower.contains('sticker') ||
           fLower.contains('stiker') || oLower.contains('stiker') ||
-          cLower.contains('sticker') || cLower.contains('stiker') ||
           cLower.contains('stiker bergerak')) {
         return true;
       }

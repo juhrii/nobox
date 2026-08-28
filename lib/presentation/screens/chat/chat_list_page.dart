@@ -2249,7 +2249,9 @@ class _ChatListPageState extends State<ChatListPage>
     final exactPhotoLabels = ['photo', '📷 photo', 'image', 'foto', '📷 foto'];
     final exactVideoLabels = ['video', '🎥 video', '🎬 video'];
 
-    if (lowerTrimmed.contains('sticker')) {
+    final exactStickerLabels = ['sticker', '🌟 sticker', '🎬 sticker'];
+
+    if (exactStickerLabels.contains(lowerTrimmed)) {
       displayMessage = '🌟 Sticker';
       parsedAsMedia = true;
     } else if (exactAudioLabels.contains(lowerTrimmed)) {
