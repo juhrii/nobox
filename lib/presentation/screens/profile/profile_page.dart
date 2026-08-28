@@ -102,6 +102,7 @@ class ProfilePage extends StatelessWidget {
                 ],
               ),
             ),
+          ),
 
             const SizedBox(height: 30),
 
@@ -209,21 +210,21 @@ class ProfilePage extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 _SocialIconButton(
-                                  icon: FontAwesomeIcons.instagram,
+                                  icon: FaIcon(FontAwesomeIcons.instagram, size: 24, color: const Color(0xFFE1306C)),
                                   color: const Color(0xFFE1306C),
                                   onPressed: () => launchUrl(Uri.parse('https://instagram.com/nobox.ai'), mode: LaunchMode.externalApplication),
                                   isDark: isDark,
                                 ),
                                 const SizedBox(width: 20),
                                 _SocialIconButton(
-                                  icon: FontAwesomeIcons.linkedinIn,
+                                  icon: FaIcon(FontAwesomeIcons.linkedinIn, size: 24, color: const Color(0xFF0077B5)),
                                   color: const Color(0xFF0077B5),
                                   onPressed: () => launchUrl(Uri.parse('https://linkedin.com/company/nobox-ai'), mode: LaunchMode.externalApplication),
                                   isDark: isDark,
                                 ),
                                 const SizedBox(width: 20),
                                 _SocialIconButton(
-                                  icon: FontAwesomeIcons.whatsapp,
+                                  icon: FaIcon(FontAwesomeIcons.whatsapp, size: 24, color: const Color(0xFF25D366)),
                                   color: const Color(0xFF25D366),
                                   onPressed: () => launchUrl(Uri.parse('https://wa.me/6281133333333'), mode: LaunchMode.externalApplication), // Placeholder WA
                                   isDark: isDark,
@@ -371,8 +372,9 @@ class _AccordionListState extends State<_AccordionList> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildRichText(String text, TextStyle baseStyle) {
     final List<TextSpan> spans = [];
@@ -456,7 +458,7 @@ class _AccordionListState extends State<_AccordionList> {
 }
 
 class _SocialIconButton extends StatelessWidget {
-  final IconData icon;
+  final Widget icon;
   final Color color;
   final VoidCallback onPressed;
   final bool isDark;
@@ -486,11 +488,7 @@ class _SocialIconButton extends StatelessWidget {
               color: isDark ? Colors.white12 : Colors.grey.shade200,
             ),
           ),
-          child: Icon(
-            icon,
-            color: color,
-            size: 24,
-          ),
+          child: icon,
         ),
       ),
     );
