@@ -108,24 +108,24 @@ class ProfilePage extends StatelessWidget {
 
             // About NoBox AI Section
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Tentang NoBox AI',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: isDark ? Colors.white70 : Colors.black87,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: isDark ? const Color(0xFF1F2C34) : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         if (!isDark)
                           BoxShadow(
@@ -204,32 +204,6 @@ class ProfilePage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 24),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _SocialIconButton(
-                                  icon: FaIcon(FontAwesomeIcons.instagram, size: 24, color: const Color(0xFFE1306C)),
-                                  color: const Color(0xFFE1306C),
-                                  onPressed: () => launchUrl(Uri.parse('https://instagram.com/nobox.ai'), mode: LaunchMode.externalApplication),
-                                  isDark: isDark,
-                                ),
-                                const SizedBox(width: 20),
-                                _SocialIconButton(
-                                  icon: FaIcon(FontAwesomeIcons.linkedinIn, size: 24, color: const Color(0xFF0077B5)),
-                                  color: const Color(0xFF0077B5),
-                                  onPressed: () => launchUrl(Uri.parse('https://linkedin.com/company/nobox-ai'), mode: LaunchMode.externalApplication),
-                                  isDark: isDark,
-                                ),
-                                const SizedBox(width: 20),
-                                _SocialIconButton(
-                                  icon: FaIcon(FontAwesomeIcons.whatsapp, size: 24, color: const Color(0xFF25D366)),
-                                  color: const Color(0xFF25D366),
-                                  onPressed: () => launchUrl(Uri.parse('https://wa.me/6281133333333'), mode: LaunchMode.externalApplication), // Placeholder WA
-                                  isDark: isDark,
-                                ),
-                              ],
                             ),
                           ],
                         ),
@@ -347,14 +321,8 @@ class _AccordionListState extends State<_AccordionList> {
               color: widget.isDark ? Colors.white : Colors.black87,
             ),
           ),
-          trailing: AnimatedRotation(
-            turns: _controllers[index].isExpanded ? 0.5 : 0, // 0.5 = 180 degrees (arrow up)
-            duration: const Duration(milliseconds: 200),
-            child: Icon(
-              Icons.keyboard_arrow_down,
-              color: widget.isDark ? Colors.blue.shade300 : Colors.blue,
-            ),
-          ),
+          iconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
+          collapsedIconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
           childrenPadding: const EdgeInsets.only(
             left: 16,
             right: 16,
@@ -453,44 +421,6 @@ class _AccordionListState extends State<_AccordionList> {
               'NoBox.AI memiliki berbagai keunggulan yang mendukung kemudahan penggunaan, keamanan data, dan integrasi sistem.\n\n**Tampilan:**\n• **Menu Per Role User:** Tampilan menu disesuaikan dengan peran pengguna\n• **Tracking Data:** Memudahkan pemantauan aktivitas dan data sistem\n• **Tampilan Fleksibel:** Layout dapat disesuaikan dengan kebutuhan pengguna\n• **Pilihan Tema:** Tersedia tema terang dan gelap\n\n**Keamanan:**\n• **Hak Akses User:** Pengaturan hak akses berdasarkan role pengguna\n\n**Integrasi:**\n• **Import Kontak:** Mendukung file Excel dan CSV\n• **Export Kontak:** Mendukung format Google Contacts',
         ),
       ],
-    );
-  }
-}
-
-class _SocialIconButton extends StatelessWidget {
-  final Widget icon;
-  final Color color;
-  final VoidCallback onPressed;
-  final bool isDark;
-
-  const _SocialIconButton({
-    required this.icon,
-    required this.color,
-    required this.onPressed,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
-        splashColor: color.withOpacity(0.2),
-        highlightColor: color.withOpacity(0.1),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? Colors.white12 : Colors.grey.shade200,
-            ),
-          ),
-          child: icon,
-        ),
-      ),
     );
   }
 }
