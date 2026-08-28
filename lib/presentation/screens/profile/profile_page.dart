@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'profile_detail_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -138,7 +139,7 @@ class ProfilePage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _AccordionList(isDark: isDark),
+                        _ProfileMenuList(isDark: isDark),
                         const SizedBox(height: 24),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -258,163 +259,115 @@ class ProfilePage extends StatelessWidget {
   }
 }
 
-class _AccordionList extends StatefulWidget {
+class _ProfileMenuList extends StatelessWidget {
   final bool isDark;
-  const _AccordionList({required this.isDark});
+  const _ProfileMenuList({required this.isDark});
 
-  @override
-  State<_AccordionList> createState() => _AccordionListState();
-}
-
-class _AccordionListState extends State<_AccordionList> {
-  final List<GlobalKey> _keys = List.generate(7, (index) => GlobalKey());
-  final List<ExpansionTileController> _controllers = List.generate(7, (index) => ExpansionTileController());
-
-  Widget _buildExpandableSection(
+  Widget _buildMenuSection(
+    BuildContext context,
     int index, {
     required String title,
     required String content,
   }) {
-    final bool isInitiallyExpanded = false;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        key: _keys[index],
-        color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: widget.isDark ? Colors.white12 : Colors.grey.shade200,
+        color: isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isDark ? Colors.white12 : Colors.grey.shade200,
+          ),
         ),
-      ),
-      child: Theme(
-        data: ThemeData().copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          controller: _controllers[index],
-          initiallyExpanded: isInitiallyExpanded,
-          onExpansionChanged: (expanded) {
-            if (expanded) {
-              // Collapse other tiles smoothly
-              for (int i = 0; i < _controllers.length; i++) {
-                if (i != index && _controllers[i].isExpanded) {
-                  _controllers[i].collapse();
-                }
-              }
-              // Auto scroll to the expanded item after a short delay to allow animation
-              Future.delayed(const Duration(milliseconds: 200), () {
-                if (_keys[index].currentContext != null) {
-                  Scrollable.ensureVisible(
-                    _keys[index].currentContext!,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    alignment: 0.1, // Sedikit jarak dari atas layar
-                  );
-                }
-              });
-            }
-          },
-          title: Text(
-            title,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: widget.isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          iconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
-          collapsedIconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
-          childrenPadding: const EdgeInsets.only(
-            left: 16,
-            right: 16,
-            bottom: 16,
-          ),
-          children: [
-            _buildRichText(
-              content,
-              TextStyle(
-                color: widget.isDark ? Colors.white70 : Colors.grey.shade700,
-                fontSize: 14,
-                height: 1.6,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProfileDetailPage(
+                  title: title,
+                  content: content,
+                ),
               ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: isDark ? Colors.blue.shade300 : Colors.blue,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
-    ),
-  );
-}
-
-  Widget _buildRichText(String text, TextStyle baseStyle) {
-    final List<TextSpan> spans = [];
-    final parts = text.split('**');
-    
-    for (int i = 0; i < parts.length; i++) {
-      if (i % 2 == 1) {
-        spans.add(TextSpan(
-          text: parts[i],
-          style: baseStyle.copyWith(
-            fontWeight: FontWeight.bold,
-            color: widget.isDark ? Colors.white : Colors.black87,
-          ),
-        ));
-      } else {
-        spans.add(TextSpan(
-          text: parts[i],
-          style: baseStyle,
-        ));
-      }
-    }
-    return Text.rich(TextSpan(children: spans));
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildExpandableSection(
+        _buildMenuSection(
+          context,
           0,
           title: 'Tentang NoBox.AI',
           content:
               'NoBox.AI adalah platform berbasis kecerdasan buatan yang dirancang untuk mengintegrasikan layanan komunikasi, pemasaran, dan customer service dalam satu sistem terpusat. Platform ini membantu bisnis mengelola interaksi pelanggan secara otomatis, terstruktur, dan efisien.\n\nNoBox.AI mendukung berbagai kanal komunikasi, seperti WhatsApp, Telegram, website, media sosial, dan marketplace, sehingga seluruh pesan pelanggan dapat dikelola dalam satu dashboard. Dengan teknologi AI yang human-like, sistem mampu memberikan respon yang cepat, relevan, dan konsisten.\n\nSelain itu, NoBox.AI dilengkapi dengan fitur Automasi, AI Agent, Human Agent, serta sistem monitoring dan pelaporan. Fitur-fitur ini memungkinkan perusahaan memantau kinerja layanan, mengelola tim, dan menganalisis data interaksi pelanggan secara menyeluruh.',
         ),
-        const SizedBox(height: 12),
-        _buildExpandableSection(
+        _buildMenuSection(
+          context,
           1,
           title: 'Mengapa NoBox.AI?',
           content:
               'NoBox.AI membantu bisnis meningkatkan kualitas layanan pelanggan tanpa harus menambah beban kerja secara manual. Dengan sistem otomatis, perusahaan dapat merespons pelanggan lebih cepat dan lebih akurat.',
         ),
-        const SizedBox(height: 12),
-        _buildExpandableSection(
+        _buildMenuSection(
+          context,
           2,
           title: 'Keunggulan Utama',
           content:
               '• Menghemat waktu dan biaya operasional melalui automasi layanan.\n• Meningkatkan kepuasan pelanggan dengan respon yang cepat dan konsisten.\n• Memudahkan pengelolaan komunikasi dari berbagai platform dalam satu sistem.\n• Mendukung pengambilan keputusan berbasis data melalui fitur laporan dan monitoring.\n• Fleksibel dan dapat disesuaikan dengan kebutuhan bisnis.\n\nDengan keunggulan tersebut, NoBox.AI menjadi solusi yang tepat bagi UMKM hingga perusahaan besar untuk membangun layanan pelanggan yang profesional, modern, dan berkelanjutan.',
         ),
-        const SizedBox(height: 12),
-        _buildExpandableSection(
+        _buildMenuSection(
+          context,
           3,
           title: 'Target Pengguna',
           content:
               'NoBox.AI dirancang untuk membantu berbagai jenis organisasi dan pelaku usaha dalam mengelola komunikasi dan layanan pelanggan secara lebih efektif:\n\n• **UMKM:** Mengelola pesan, promosi, dan layanan otomatis tanpa tim besar.\n• **Perusahaan Menengah & Besar:** Mendukung operasional CS kompleks dengan sistem terintegrasi dan pelaporan.\n• **Startup Digital:** Membangun sistem layanan pelanggan modern berbasis AI.\n• **Lembaga Pendidikan:** Melayani pertanyaan siswa dan orang tua lintas kanal.\n• **Instansi Pemerintah:** Mendukung pelayanan masyarakat yang responsif dan transparan.\n• **E-Commerce & Marketplace:** Pengelolaan pesanan dan komplain secara otomatis dan terpusat.',
         ),
-        const SizedBox(height: 12),
-        _buildExpandableSection(
+        _buildMenuSection(
+          context,
           4,
           title: 'Gambaran Umum',
           content:
               'NoBox.AI adalah aplikasi kecerdasan buatan (AI) yang dirancang untuk meningkatkan kualitas layanan marketing dan customer service di instansi pendidikan, bisnis, dan pemerintahan. Platform ini membantu mengumpulkan, mengelola, dan menganalisis data pelanggan secara terintegrasi.\n\nDengan dukungan chatbot cerdas dan sistem omnichannel, NoBox.AI mampu menangani komunikasi pelanggan selama 24 jam nonstop sepanjang tahun, sehingga bisnis dapat memberikan layanan yang lebih cepat, konsisten, dan profesional.',
         ),
-        const SizedBox(height: 12),
-        _buildExpandableSection(
+        _buildMenuSection(
+          context,
           5,
           title: 'Modul Utama NoBox.AI',
           content:
               'NoBox.AI terdiri dari beberapa modul utama yang saling terintegrasi untuk mendukung operasional bisnis secara menyeluruh, mulai dari komunikasi pelanggan hingga pengelolaan sistem.\n\n• **Pesan:** Mengelola seluruh percakapan pelanggan dari berbagai kanal komunikasi.\n• **CRM:** Menyimpan dan mengelola data pelanggan, status prospek, dan aktivitas penjualan.\n• **Formulir:** Membuat formulir digital seperti pendaftaran dan survei pelanggan.\n• **Promosi:** Pengiriman pesan promosi dan campaign pemasaran secara terjadwal.\n• **Kontak:** Mengelola database pelanggan.\n• **Akun:** Mengatur data akun pengguna, lisensi, dan status layanan.\n• **AI Agents:** Mengelola chatbot berbasis AI sesuai skenario.\n• **Human Agents:** Mengatur agen manusia untuk percakapan lanjutan.\n• **Berlangganan:** Informasi paket layanan dan fitur yang tersedia.\n• **Billing:** Mengelola tagihan dan status transaksi.\n• **Pengaturan:** Mengatur sistem secara menyeluruh termasuk profil, file manager, dan integrasi.',
         ),
-        const SizedBox(height: 12),
-        _buildExpandableSection(
+        _buildMenuSection(
+          context,
           6,
           title: 'Detail Keunggulan',
           content:
