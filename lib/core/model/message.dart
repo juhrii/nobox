@@ -443,7 +443,7 @@ class Message {
 
     // Helper untuk mengekstrak path file dari array Files atau field File
     String extractFilePath(dynamic fileData) {
-      String filePath = fileData.toString();
+      String filePath = fileData.toString().replaceAll('\\', '/');
       
       // Perbaikan untuk bug serialisasi backend yang mengirimkan nama class alih-alih file
       if (filePath.contains('NoboxWhatsapp') || filePath.contains('MessageResponse')) {
@@ -732,6 +732,12 @@ class Message {
         audioPath = '';
         content = '';
       }
+    } else if ((typeVal == '16' || content.contains('.webp') || content.contains('.tgs')) && content.trim().isNotEmpty && !content.startsWith('{') && !content.startsWith('[')) {
+      // Fallback khusus stiker jika URL dikirim mentah di dalam field Msg
+      msgType = MessageType.sticker;
+      final cleanedPath = content.trim();
+      imgUrl = cleanedPath.startsWith('http') ? cleanedPath : 'https://id.nobox.ai/upload/$cleanedPath';
+      content = '🌟 Sticker';
     } else if ((typeVal == '16' || typeVal == '3' || typeVal == '4' || typeVal == '5' || typeVal == '2') && (content.startsWith('{') || content.startsWith('['))) {
       // Fallback: API NoBox sering mengirim URL media di dalam field Msg bukan di Files/File
       final filePath = extractFilePath(content);
