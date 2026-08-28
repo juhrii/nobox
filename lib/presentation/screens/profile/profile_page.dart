@@ -348,10 +348,10 @@ class _AccordionListState extends State<_AccordionList> {
             ),
           ),
           trailing: AnimatedRotation(
-            turns: _controllers[index].isExpanded ? 0.125 : 0, // 0.125 = 45 degrees (+ becomes x)
+            turns: _controllers[index].isExpanded ? 0.5 : 0, // 0.5 = 180 degrees (arrow up)
             duration: const Duration(milliseconds: 200),
             child: Icon(
-              Icons.add,
+              Icons.keyboard_arrow_down,
               color: widget.isDark ? Colors.blue.shade300 : Colors.blue,
             ),
           ),
