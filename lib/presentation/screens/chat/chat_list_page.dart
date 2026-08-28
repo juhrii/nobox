@@ -2246,7 +2246,7 @@ class _ChatListPageState extends State<ChatListPage>
     final exactPhotoLabels = ['📷 photo', '📷 foto'];
     final exactVideoLabels = ['🎥 video', '🎬 video'];
 
-    final exactStickerLabels = ['🌟 sticker', '🎬 sticker'];
+    final exactStickerLabels = ['🌟 sticker', '🎬 sticker', 'sticker', 'stiker'];
 
     if (exactStickerLabels.contains(lowerTrimmed)) {
       displayMessage = '🌟 Sticker';
