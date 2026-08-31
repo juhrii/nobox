@@ -808,6 +808,13 @@ class Message {
       parsedAck = isSystem ? 0 : 2;
     }
 
+    // FIX: Jika server mengirim Ack: 0 untuk pesan biasa (seperti Telegram/Forward), 
+    // ubah menjadi 1 (Centang) karena pesan ini sudah ada di database server.
+    // Jam (0) hanya untuk pesan yang belum sampai ke server sama sekali.
+    if (parsedAck == 0 && !isSystem) {
+      parsedAck = 1;
+    }
+
     // FIX: Parse pesan balasan (Reply Context) agar tidak hilang saat keluar masuk halaman (atau saat via SignalR)
     Message? parsedRepliedMsg;
     final rawReplyMsg = json['ReplyMsg'] ?? json['replyMsg'];

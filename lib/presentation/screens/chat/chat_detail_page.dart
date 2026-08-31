@@ -5302,47 +5302,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                                   message.content == '📷 Photo')
                               ? ''
                               : message.content;
-                          final isTelegram =
-                              target.chId == '2' ||
-                              target.channelType.toLowerCase().contains(
-                                'telegram',
-                              ) ||
-                              target.channelName.toLowerCase().contains(
-                                'telegram',
+                          final sendError = await chatProvider
+                              .sendMessageViaSignalR(
+                                chat: target,
+                                type: requestBodyType.toString(),
+                                msg: finalContent,
+                                fileJson: attachmentStr,
                               );
-                          bool isError = false;
-                          String errorMessage = '';
-
-                          if (isTelegram) {
-                            final sendError = await chatProvider
-                                .sendMessageViaSignalR(
-                                  chat: target,
-                                  type: requestBodyType.toString(),
-                                  msg: finalContent,
-                                  fileJson: attachmentStr,
-                                );
-                            isError = (sendError != null);
-                            if (isError)
-                              errorMessage =
-                                  sendError ?? 'SignalR delivery failed';
-                          } else {
-                            final request = MessageRequest(
-                              receiver: target.id,
-                              content: finalContent,
-                              accountId: target.accountId,
-                              channelId: target.chId,
-                              contactId: target.contactId,
-                              extId: fallbackExtId,
-                              groupId: target.groupId,
-                              attachment: attachmentStr,
-                              bodyType: requestBodyType,
-                            );
-                            final resp = await _chatService.sendMessage(
-                              request,
-                            );
-                            isError = resp.isError;
-                            errorMessage = resp.error ?? '';
-                          }
+                          bool isError = (sendError != null);
+                          String errorMessage = sendError ?? 'SignalR delivery failed';
 
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
