@@ -517,7 +517,7 @@ class Message {
     }
 
     bool isAbsoluteSticker(dynamic fileData, String? typeVal, String filePath, String originalName, String content) {
-      if (typeVal == '16' || typeVal == '17') return true;
+      if (typeVal == '16' || typeVal == '17' || typeVal == '7') return true;
       final fLower = filePath.toLowerCase();
       final oLower = originalName.toLowerCase();
       final cLower = content.toLowerCase();
@@ -531,7 +531,7 @@ class Message {
         return true;
       }
       final jsonType = (json['Type'] ?? json['MessageType'] ?? '').toString().toLowerCase();
-      if (jsonType == '16' || jsonType == '17' || jsonType.contains('sticker') || jsonType.contains('stiker')) return true;
+      if (jsonType == '16' || jsonType == '17' || jsonType == '7' || jsonType.contains('sticker') || jsonType.contains('stiker')) return true;
 
       // Cek metadata stiker dari WhatsApp / Baileys / WaaS / NoBox API
       try {
@@ -732,7 +732,7 @@ class Message {
         audioPath = '';
         content = '';
       }
-    } else if ((typeVal == '16' || content.contains('.webp') || content.contains('.tgs')) && content.trim().isNotEmpty && !content.startsWith('{') && !content.startsWith('[')) {
+    } else if ((typeVal == '16' || typeVal == '7' || content.contains('.webp') || content.contains('.tgs')) && content.trim().isNotEmpty && !content.startsWith('{') && !content.startsWith('[')) {
       // Fallback khusus stiker jika URL dikirim mentah di dalam field Msg
       msgType = MessageType.sticker;
       final cleanedPath = content.trim();
@@ -808,13 +808,17 @@ class Message {
       parsedAck = isSystem ? 0 : 2;
     }
 
-    // FIX: Parse pesan balasan (Reply Context) agar tidak hilang saat keluar masuk halaman
+    // FIX: Parse pesan balasan (Reply Context) agar tidak hilang saat keluar masuk halaman (atau saat via SignalR)
     Message? parsedRepliedMsg;
-    if (json['ReplyMsg'] != null && json['ReplyMsg'].toString().isNotEmpty) {
+    final rawReplyMsg = json['ReplyMsg'] ?? json['replyMsg'];
+    final rawReplyId = json['ReplyId'] ?? json['replyId'] ?? json['ReplyMsgId'] ?? json['replyMsgId'];
+    final rawReplyFrom = json['ReplyFrom'] ?? json['replyFrom'];
+
+    if (rawReplyMsg != null && rawReplyMsg.toString().isNotEmpty) {
       parsedRepliedMsg = Message(
-        id: json['ReplyId']?.toString() ?? '',
-        content: json['ReplyMsg']?.toString() ?? '',
-        isMe: json['ReplyFrom']?.toString() == currentUserEmail,
+        id: rawReplyId?.toString() ?? '',
+        content: rawReplyMsg?.toString() ?? '',
+        isMe: rawReplyFrom?.toString() == currentUserEmail,
         time: '', // Waktu tidak dikirimkan oleh API untuk pesan balasan
         rawTime: '',
       );

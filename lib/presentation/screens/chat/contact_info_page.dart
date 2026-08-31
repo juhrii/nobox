@@ -1954,7 +1954,10 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                       runSpacing: 8,
                       children: _currentTags.map((tag) {
                         return Chip(
-                          label: Text(tag, style: const TextStyle(fontSize: 12)),
+                          label: Text(tag, style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white : Colors.black87,
+                          )),
                           backgroundColor: isDark ? Colors.grey.shade800 : Colors.blue.shade50,
                           side: BorderSide.none,
                           deleteIcon: const Icon(Icons.close, size: 16),

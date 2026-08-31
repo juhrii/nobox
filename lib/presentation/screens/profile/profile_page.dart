@@ -26,217 +26,236 @@ class ProfilePage extends StatelessWidget {
             child: Column(
               children: [
                 // Hero Section
-            TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeOutCubic,
-              builder: (context, value, child) {
-                return Opacity(
-                  opacity: value,
-                  child: Transform.translate(
-                    offset: Offset(0, 20 * (1 - value)),
-                    child: child,
-                  ),
-                );
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.only(top: 30, bottom: 40, left: 24, right: 24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark
-                        ? [const Color(0xFF2C3940), const Color(0xFF1F2C34)]
-                        : [Colors.blue.shade600, Colors.blue.shade800],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(30),
-                    bottomRight: Radius.circular(30),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDark ? Colors.black26 : Colors.blue.withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 20 * (1 - value)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.only(
+                      top: 30,
+                      bottom: 40,
+                      left: 24,
+                      right: 24,
                     ),
-                  ],
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isDark
+                            ? [const Color(0xFF2C3940), const Color(0xFF1F2C34)]
+                            : [Colors.blue.shade600, Colors.blue.shade800],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(30),
+                        bottomRight: Radius.circular(30),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark
+                              ? Colors.black26
+                              : Colors.blue.withOpacity(0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 15,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            'assets/nobox2.png',
+                            height: 50,
+                            width: 50,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'NoBox.AI',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'AI-Powered Omnichannel Platform',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.white.withOpacity(0.9),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
+
+                const SizedBox(height: 30),
+
+                // About NoBox AI Section
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Text(
+                          'Informasi NoBox.AI',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white70 : Colors.black87,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _ProfileMenuList(isDark: isDark),
+                      const SizedBox(height: 32),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              final Uri url = Uri.parse('https://nobox.ai/');
+                              if (!await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              )) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Tidak dapat membuka tautan.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.open_in_new, size: 18),
+                            label: const Text('Kunjungi Website NoBox.AI'),
+                            style: ElevatedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: isDark
+                                  ? Colors.blue.shade700
+                                  : Colors.blue.shade600,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              final Uri url = Uri.parse(
+                                'https://docs.nobox.ai/id/docs',
+                              );
+                              if (!await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              )) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Tidak dapat membuka tautan.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.menu_book, size: 18),
+                            label: const Text('Baca Dokumentasi Resmi'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: isDark
+                                  ? Colors.blue.shade300
+                                  : Colors.blue,
+                              side: BorderSide(
+                                color: isDark
+                                    ? Colors.blue.withOpacity(0.3)
+                                    : Colors.blue.shade200,
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      child: Image.asset(
-                        'assets/nobox2.png',
-                        height: 50,
-                        width: 50,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  const Text(
-                    'NoBox.AI',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'AI-Powered Omnichannel Platform',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.9),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-            const SizedBox(height: 30),
-
-            // About NoBox AI Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Tentang NoBox AI',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _ProfileMenuList(isDark: isDark),
-                  const SizedBox(height: 32),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          final Uri url = Uri.parse('https://nobox.ai/');
-                          if (!await launchUrl(
-                            url,
-                            mode: LaunchMode.externalApplication,
-                          )) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Tidak dapat membuka tautan.'),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        icon: const Icon(Icons.open_in_new, size: 18),
-                        label: const Text('Kunjungi Website NoBox.AI'),
-                        style: ElevatedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          backgroundColor: isDark ? Colors.blue.shade700 : Colors.blue.shade600,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          final Uri url = Uri.parse('https://docs.nobox.ai/id/docs');
-                          if (!await launchUrl(
-                            url,
-                            mode: LaunchMode.externalApplication,
-                          )) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Tidak dapat membuka tautan.'),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        icon: const Icon(Icons.menu_book, size: 18),
-                        label: const Text('Baca Dokumentasi Resmi'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark
-                              ? Colors.blue.shade300
-                              : Colors.blue,
-                          side: BorderSide(
-                            color: isDark
-                                ? Colors.blue.withOpacity(0.3)
-                                : Colors.blue.shade200,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
-                ],
-              ),
-            ),
+                ),
 
-            const SizedBox(height: 40),
+                const SizedBox(height: 40),
 
-            // Footer App Version
-            Center(
-              child: FutureBuilder<PackageInfo>(
-                future: PackageInfo.fromPlatform(),
-                builder: (context, snapshot) {
-                  final version = snapshot.hasData ? snapshot.data!.version : '1.0.0';
-                  return Column(
-                    children: [
-                      Image.asset(
-                        'assets/nobox2.png',
-                        height: 40,
-                        color: isDark ? Colors.white30 : Colors.grey[400],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'NoBox Chat App',
-                        style: TextStyle(
-                          color: isDark ? Colors.white54 : Colors.grey[600],
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Versi $version',
-                        style: TextStyle(
-                          color: isDark ? Colors.white30 : Colors.grey[500],
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-              ),
+                // Footer App Version
+                Center(
+                  child: FutureBuilder<PackageInfo>(
+                    future: PackageInfo.fromPlatform(),
+                    builder: (context, snapshot) {
+                      final version = snapshot.hasData
+                          ? snapshot.data!.version
+                          : '1.0.0';
+                      return Column(
+                        children: [
+                          Image.asset(
+                            'assets/nobox2.png',
+                            height: 40,
+                            color: isDark ? Colors.white30 : Colors.grey[400],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'NoBox Chat App',
+                            style: TextStyle(
+                              color: isDark ? Colors.white54 : Colors.grey[600],
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Versi $version',
+                            style: TextStyle(
+                              color: isDark ? Colors.white30 : Colors.grey[500],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 40),
+              ],
             ),
-            const SizedBox(height: 40),
-          ],
-        ),
           ),
         ),
       ),
@@ -253,13 +272,16 @@ class _ProfileMenuList extends StatefulWidget {
 }
 
 class _ProfileMenuListState extends State<_ProfileMenuList> {
-  final List<ExpansionTileController> _controllers = List.generate(7, (index) => ExpansionTileController());
+  final List<ExpansionTileController> _controllers = List.generate(
+    7,
+    (index) => ExpansionTileController(),
+  );
   final List<GlobalKey> _itemKeys = List.generate(7, (index) => GlobalKey());
 
   Widget _buildRichText(String text, BuildContext context, bool isDark) {
     final List<TextSpan> spans = [];
     final parts = text.split('**');
-    
+
     final baseStyle = TextStyle(
       color: isDark ? Colors.white70 : Colors.grey.shade700,
       fontSize: 14,
@@ -268,18 +290,17 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
 
     for (int i = 0; i < parts.length; i++) {
       if (i % 2 == 1) {
-        spans.add(TextSpan(
-          text: parts[i],
-          style: baseStyle.copyWith(
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : Colors.black87,
+        spans.add(
+          TextSpan(
+            text: parts[i],
+            style: baseStyle.copyWith(
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
           ),
-        ));
+        );
       } else {
-        spans.add(TextSpan(
-          text: parts[i],
-          style: baseStyle,
-        ));
+        spans.add(TextSpan(text: parts[i], style: baseStyle));
       }
     }
     return Text.rich(TextSpan(children: spans));
@@ -294,12 +315,22 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
     return Padding(
       key: _itemKeys[index],
       padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: widget.isDark ? const Color(0xFF2C3940) : Colors.grey.shade50,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: widget.isDark ? Colors.white12 : Colors.grey.shade200,
+      child: Container(
+        decoration: BoxDecoration(
+          color: widget.isDark ? const Color(0xFF2C3940) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: widget.isDark 
+                  ? Colors.black.withOpacity(0.3) 
+                  : Colors.blue.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(
+            color: widget.isDark ? Colors.white12 : Colors.transparent,
+            width: 1,
           ),
         ),
         clipBehavior: Clip.antiAlias,
@@ -331,18 +362,23 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
             title: Text(
               title,
               style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: widget.isDark ? Colors.white : Colors.black87,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: widget.isDark ? Colors.white : const Color(0xFF1F2C34),
+                letterSpacing: 0.3,
               ),
             ),
             iconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
-            collapsedIconColor: widget.isDark ? Colors.blue.shade300 : Colors.blue,
-            childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+            collapsedIconColor: widget.isDark
+                ? Colors.blue.shade300
+                : Colors.blue,
+            childrenPadding: const EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: 16,
+            ),
             expandedCrossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildRichText(content, context, widget.isDark),
-            ],
+            children: [_buildRichText(content, context, widget.isDark)],
           ),
         ),
       ),

@@ -641,7 +641,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
   Widget _buildStickerMessage(bool isMe, bool isDarkMode) {
     final imageUrl = widget.message.imageUrl ?? widget.message.videoUrl ?? '';
     final lowerUrl = imageUrl.toLowerCase();
-    final isAnimatedVideoSticker = lowerUrl.contains('.webm') || lowerUrl.contains('.mp4') || lowerUrl.contains('.mov') || lowerUrl.contains('.tgs') || lowerUrl.contains('.ezgif');
+    final isAnimatedVideoSticker = lowerUrl.contains('.webm') || lowerUrl.contains('.mp4') || lowerUrl.contains('.mov');
 
     return Column(
       crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,

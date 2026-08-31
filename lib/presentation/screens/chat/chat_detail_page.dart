@@ -3973,6 +3973,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       final Color iconColor = isDark ? Colors.white70 : Colors.black87;
 
       return AppBar(
+        automaticallyImplyLeading: MediaQuery.of(context).size.width <= 800,
         backgroundColor: bgColor,
         surfaceTintColor: bgColor,
         iconTheme: IconThemeData(color: iconColor),
@@ -4094,6 +4095,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     // ── ARCHIVED APP BAR ──
     if (chat.isArchived) {
       return AppBar(
+        automaticallyImplyLeading: MediaQuery.of(context).size.width <= 800,
         backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue,
         surfaceTintColor: isDark ? AppTheme.darkSurface : Colors.blue,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -4136,6 +4138,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     // ── NORMAL APP BAR (non-archived) ──
     return AppBar(
+      automaticallyImplyLeading: MediaQuery.of(context).size.width <= 800,
       backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue,
       surfaceTintColor: isDark ? AppTheme.darkSurface : Colors.blue,
       iconTheme: const IconThemeData(color: Colors.white),

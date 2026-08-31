@@ -15,7 +15,7 @@ class AboutPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tentang'),
+        title: const Text('NoBox.AI'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
       ),

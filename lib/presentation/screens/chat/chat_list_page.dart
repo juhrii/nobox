@@ -36,7 +36,14 @@ import '../../widgets/authenticated_avatar.dart';
 // =====================================================================
 
 class ChatListPage extends StatefulWidget {
-  const ChatListPage({super.key});
+  final void Function(ChatModel)? onChatSelected;
+  final String? selectedChatId;
+
+  const ChatListPage({
+    super.key,
+    this.onChatSelected,
+    this.selectedChatId,
+  });
 
   @override
   State<ChatListPage> createState() => _ChatListPageState();
@@ -566,7 +573,13 @@ class _ChatListPageState extends State<ChatListPage>
                         if (chatProvider.error != null) ...[
                           const SizedBox(height: 8),
                           Text(
-                            chatProvider.error!,
+                            chatProvider.error!.contains('500') 
+                                ? 'Server NoBox sedang mengalami gangguan (Error 500). Silakan coba lagi nanti.'
+                                : chatProvider.error!.contains('SocketException')
+                                    ? 'Tidak ada koneksi internet atau server tidak dapat dijangkau.'
+                                    : chatProvider.error!.length > 100 
+                                        ? 'Gagal memuat obrolan. Silakan coba lagi.' 
+                                        : chatProvider.error!,
                             style: const TextStyle(
                               color: Colors.red,
                               fontSize: 13,
@@ -643,8 +656,52 @@ class _ChatListPageState extends State<ChatListPage>
   }
 
   List<Widget> _buildTabsWithBadges(BuildContext context) {
+    final chatProvider = context.watch<ChatProvider>();
+    final counts = {
+      'All': chatProvider.totalUnreadCount,
+      'Unassigned': chatProvider.unassignedUnread,
+      'Assigned': chatProvider.assignedUnread,
+      'Resolved': chatProvider.resolvedUnread,
+    };
+
     return List.generate(_tabs.length, (i) {
-      return Tab(text: _tabs[i]);
+      final tabName = _tabs[i];
+      final unreadCount = counts[tabName] ?? 0;
+
+      return Tab(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(tabName),
+            if (unreadCount > 0 && tabName == 'Unassigned') ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Center(
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
     });
   }
 
@@ -1724,13 +1781,17 @@ class _ChatListPageState extends State<ChatListPage>
                                               .insertLocalChat(newChat);
                                         }
 
-                                        await Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                ChatDetailPage(chat: newChat),
-                                          ),
-                                        );
+                                        if (widget.onChatSelected != null) {
+                                          widget.onChatSelected!(newChat);
+                                        } else {
+                                          await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  ChatDetailPage(chat: newChat),
+                                            ),
+                                          );
+                                        }
                                         if (mounted) {
                                           context
                                               .read<ChatProvider>()
@@ -1896,7 +1957,21 @@ class _ChatListPageState extends State<ChatListPage>
     ChatProvider chatProvider,
     bool isDark,
   ) {
-    final isSelected = _selectedChats.contains(chat.id);
+    final isMultiSelected = _selectedChats.contains(chat.id);
+    final isActiveMaster = widget.selectedChatId == chat.id;
+
+    Color _getTileColor() {
+      if (isMultiSelected) {
+        return isDark
+            ? Colors.blue.shade900.withOpacity(0.3)
+            : Colors.blue.shade50;
+      } else if (isActiveMaster) {
+        return isDark
+            ? Colors.white.withOpacity(0.08)
+            : Colors.grey.shade200;
+      }
+      return isDark ? const Color(0xFF1F2C34) : Colors.white;
+    }
 
     return _SwipeableChatTile(
       key: ValueKey('swipe_${chat.id}'),
@@ -1904,11 +1979,7 @@ class _ChatListPageState extends State<ChatListPage>
       chatProvider: chatProvider,
       isDark: isDark,
       child: Container(
-        color: isSelected
-            ? (isDark
-                  ? Colors.blue.shade900.withOpacity(0.3)
-                  : Colors.blue.shade50)
-            : (isDark ? const Color(0xFF1F2C34) : Colors.white),
+        color: _getTileColor(),
         child: Column(
           children: [
             Container(
@@ -1922,7 +1993,7 @@ class _ChatListPageState extends State<ChatListPage>
               onTap: () async {
                 if (_selectedChats.isNotEmpty) {
                   setState(() {
-                    if (isSelected)
+                    if (isMultiSelected)
                       _selectedChats.remove(chat.id);
                     else
                       _selectedChats.add(chat.id);
@@ -1930,14 +2001,17 @@ class _ChatListPageState extends State<ChatListPage>
                   return;
                 }
                 chatProvider.markAsRead(chat.id);
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => ChatDetailPage(chat: chat)),
-                );
+                if (widget.onChatSelected != null) {
+                  widget.onChatSelected!(chat);
+                } else {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => ChatDetailPage(chat: chat)),
+                  );
+                }
 
-                if (mounted) {
-                  // Refresh list percakapan setelah kembali dari ruang chat
-                  // untuk memastikan last message tersinkronisasi akurat.
+                // Kita hanya refresh jika onChatSelected null (mode mobile navigation)
+                if (mounted && widget.onChatSelected == null) {
                   chatProvider.refreshFirstPage();
                 }
               },
@@ -1966,10 +2040,10 @@ class _ChatListPageState extends State<ChatListPage>
                                 height: 48,
                                 alignment: Alignment.center,
                                 child: Icon(
-                                  isSelected
+                                  isMultiSelected
                                       ? Icons.check_circle
                                       : Icons.radio_button_unchecked,
-                                  color: isSelected
+                                  color: isMultiSelected
                                       ? Colors.blue.shade600
                                       : Colors.grey.shade400,
                                   size: 28,
@@ -2038,7 +2112,7 @@ class _ChatListPageState extends State<ChatListPage>
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: 12,
-                                              color: Colors.grey.shade600,
+                                              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                                             ),
                                           ),
                                         ),

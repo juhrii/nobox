@@ -22,6 +22,7 @@ import 'presentation/screens/chat/chat_list_page.dart';
 import 'presentation/screens/chat/chat_detail_page.dart';
 import 'presentation/screens/chat/archive_list_page.dart';
 import 'core/utils/globals.dart';
+import 'presentation/screens/home/responsive_chat_home.dart';
 import 'core/model/message.dart';
 
 void main() {
@@ -377,7 +378,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           home: const SplashPage(),
           routes: {
             AppRoutes.login: (_) => const LoginPage(),
-            AppRoutes.home: (_) => const ChatListPage(),
+            AppRoutes.home: (_) => const ResponsiveChatHome(),
             AppRoutes.chatDetail: (_) => const ChatDetailPage(),
             AppRoutes.archivedChats: (_) => const ArchiveListPage(),
 
