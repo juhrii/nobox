@@ -336,8 +336,10 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
         clipBehavior: Clip.antiAlias,
         child: Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            controller: _controllers[index],
+          child: Material(
+            color: Colors.transparent,
+            child: ExpansionTile(
+              controller: _controllers[index],
             onExpansionChanged: (isExpanded) {
               if (isExpanded) {
                 // Tutup item lain
@@ -382,8 +384,9 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {

@@ -821,10 +821,10 @@ class Message {
     final rawReplyId = json['ReplyId'] ?? json['replyId'] ?? json['ReplyMsgId'] ?? json['replyMsgId'];
     final rawReplyFrom = json['ReplyFrom'] ?? json['replyFrom'];
 
-    if (rawReplyMsg != null && rawReplyMsg.toString().isNotEmpty) {
+    if ((rawReplyMsg != null && rawReplyMsg.toString().isNotEmpty) || (rawReplyId != null && rawReplyId.toString().isNotEmpty && rawReplyId.toString() != '0')) {
       parsedRepliedMsg = Message(
         id: rawReplyId?.toString() ?? '',
-        content: rawReplyMsg?.toString() ?? '',
+        content: rawReplyMsg?.toString().isNotEmpty == true ? rawReplyMsg.toString() : 'Pesan terkait...',
         isMe: rawReplyFrom?.toString() == currentUserEmail,
         time: '', // Waktu tidak dikirimkan oleh API untuk pesan balasan
         rawTime: '',

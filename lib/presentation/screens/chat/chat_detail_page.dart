@@ -1059,6 +1059,22 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       (m) => m.id.isEmpty || !_deletedMessageIds.contains(m.id),
                     )
                     .toList();
+
+                // FIX: Populate missing reply content from local list jika server gagal mengembalikan isi ReplyMsg
+                for (int i = 0; i < _messages.length; i++) {
+                  final msg = _messages[i];
+                  if (msg.repliedMessage != null && msg.repliedMessage!.content == 'Pesan terkait...') {
+                    final originalId = msg.repliedMessage!.id;
+                    try {
+                      final originalMsg = _messages.firstWhere((m) => m.id == originalId || m.idAlias == originalId);
+                      if (originalMsg.content.isNotEmpty) {
+                        _messages[i] = msg.copyWith(
+                          repliedMessage: msg.repliedMessage!.copyWith(content: originalMsg.content)
+                        );
+                      }
+                    } catch (_) {}
+                  }
+                }
               }
               // *** MERGE LOCAL SENT CACHE ***
               // Tambahkan pesan yang sudah dikirim tapi belum dikonfirmasi server
@@ -1167,7 +1183,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     tenantId: _chatService.currentTenantId,
                     contactId: chat.contactId,
                   );
-                  final newMsg = parsedMsg.copyWith(status: MessageStatus.read);
+                  Message newMsg = parsedMsg.copyWith(status: MessageStatus.read);
 
                   // FILTER: Strict Account Isolation untuk Injeksi SignalR
                   if (chat.accountId.isNotEmpty && !isTelegram) {
@@ -1204,6 +1220,25 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     debugPrint(
                       'ChatDetail: ⚡ INJECTING cached SignalR message ${newMsg.id} (${newMsg.content}) due to API delay',
                     );
+
+                    // FIX: Populate missing reply content from local list untuk pesan realtime masuk
+                    if (newMsg.repliedMessage != null &&
+                        newMsg.repliedMessage!.content == 'Pesan terkait...') {
+                      final originalId = newMsg.repliedMessage!.id;
+                      try {
+                        final originalMsg = _messages.firstWhere(
+                          (m) => m.id == originalId || m.idAlias == originalId,
+                        );
+                        if (originalMsg.content.isNotEmpty) {
+                          newMsg = newMsg.copyWith(
+                            repliedMessage: newMsg.repliedMessage!.copyWith(
+                              content: originalMsg.content,
+                            ),
+                          );
+                        }
+                      } catch (_) {}
+                    }
+
                     _messages.add(newMsg);
                   }
                 }
@@ -2006,7 +2041,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         // Evaluasi isMe diserahkan ke model Message.fromJson()
 
         // SignalR messages from customers should always be read immediately when on this page
-        final newMessage = parsedMessage.copyWith(status: MessageStatus.read);
+        Message newMessage = parsedMessage.copyWith(status: MessageStatus.read);
+
+        // FIX: Populate missing reply content from local list untuk pesan realtime masuk
+        if (newMessage.repliedMessage != null && newMessage.repliedMessage!.content == 'Pesan terkait...') {
+          final originalId = newMessage.repliedMessage!.id;
+          try {
+            final originalMsg = _messages.firstWhere((m) => m.id == originalId || m.idAlias == originalId);
+            if (originalMsg.content.isNotEmpty) {
+              newMessage = newMessage.copyWith(
+                repliedMessage: newMessage.repliedMessage!.copyWith(content: originalMsg.content)
+              );
+            }
+          } catch (_) {}
+        }
 
         // Incoming message verified for this room; proceed without blocking.
 
@@ -2481,11 +2529,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     String? finalReplyType;
 
     if (targetReplyMsg != null) {
-      // Prioritaskan idAlias (ID asli dari channel eksternal seperti Telegram/WA) untuk ReplyId.
-      finalReplyId =
-          (targetReplyMsg.idAlias != null && targetReplyMsg.idAlias!.isNotEmpty)
-          ? targetReplyMsg.idAlias
-          : targetReplyMsg.id;
+      if (chat.chId == '2' || chat.channelType.toLowerCase().contains('telegram') || chat.channelName.toLowerCase().contains('telegram')) {
+        // TELEGRAM: Backend NoBox kemungkinan besar membutuhkan ID internal (Primary Key) untuk meresolve balasan Telegram
+        finalReplyId = targetReplyMsg.id;
+      } else {
+        // WHATSAPP & LAINNYA: Prioritaskan idAlias (ID asli dari channel eksternal)
+        finalReplyId = (targetReplyMsg.idAlias != null && targetReplyMsg.idAlias!.isNotEmpty)
+            ? targetReplyMsg.idAlias
+            : targetReplyMsg.id;
+      }
+      
       finalReplyMsg = targetReplyMsg.content;
       finalReplyFrom = targetReplyMsg.fromId;
       if (finalReplyFrom == null || finalReplyFrom.isEmpty) {

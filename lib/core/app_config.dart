@@ -43,6 +43,14 @@ class AppConfig {
 
   // Agent Endpoints
   static const String getAgentsEndpoint = 'Services/Administration/User/List';
+  static const String retrieveUserEndpoint = 'Services/Administration/User/Retrieve';
+  
+  // Master Data Endpoints (Profile Dropdowns)
+  static const String timezoneListEndpoint = 'Services/Master/Timezone/List';
+  static const String countryListEndpoint = 'Services/Master/Countries/List';
+  static const String stateListEndpoint = 'Services/Master/States/List';
+  static const String cityListEndpoint = 'Services/Master/Cities/List';
+
   static const String addAgentToConversationEndpoint = 'Services/Chat/Chatrooms/AddAgentToConversation';
   static const String resolveConversationEndpoint = 'Services/Chat/Chatrooms/MarkResolved';
   static const String moveArchiveEndpoint = 'Services/Chat/Chatrooms/MoveArchive';

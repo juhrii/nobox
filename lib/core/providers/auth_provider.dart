@@ -43,6 +43,7 @@ class AuthProvider with ChangeNotifier {
   String? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   bool get isAuthenticating => _isAuthenticating;
+  String? get token => _token;
 
   // FITUR: Safe Read Secure Storage
   // Mencegah aplikasi gagal login jika keystore OS rusak/mengalami error

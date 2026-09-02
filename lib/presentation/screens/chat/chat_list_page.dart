@@ -21,6 +21,7 @@ import '../../../core/model/filter_data_item.dart';
 import 'chat_detail_page.dart';
 import 'archive_list_page.dart';
 import '../profile/profile_page.dart' as profile;
+import '../profile/user_profile_page.dart' as user_profile;
 import '../about/about_page.dart' as about;
 import '../../widgets/chat_list_skeleton.dart';
 import '../../widgets/connection_status_banner.dart';
@@ -364,7 +365,14 @@ class _ChatListPageState extends State<ChatListPage>
                           size: 28,
                         ),
                         onSelected: (value) {
-                          if (value == 'profile') {
+                          if (value == 'user_profile') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const user_profile.UserProfilePage(),
+                              ),
+                            );
+                          } else if (value == 'profile') {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -401,19 +409,17 @@ class _ChatListPageState extends State<ChatListPage>
                         color: isDark ? const Color(0xFF2C3940) : Colors.white,
                         itemBuilder: (context) => [
                           PopupMenuItem(
-                            value: 'profile',
+                            value: 'user_profile',
                             child: Row(
                               children: [
                                 Icon(
                                   Icons.account_circle,
                                   size: 24,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Colors.black87,
+                                  color: isDark ? Colors.white70 : Colors.black87,
                                 ),
                                 const SizedBox(width: 16),
                                 const Text(
-                                  'Profil NoBox.ai',
+                                  'Profile User',
                                   style: TextStyle(fontSize: 16),
                                 ),
                               ],
@@ -426,9 +432,7 @@ class _ChatListPageState extends State<ChatListPage>
                                 Icon(
                                   isDark ? Icons.light_mode : Icons.dark_mode,
                                   size: 24,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Colors.black87,
+                                  color: isDark ? Colors.white70 : Colors.black87,
                                 ),
                                 const SizedBox(width: 16),
                                 Text(
@@ -445,9 +449,7 @@ class _ChatListPageState extends State<ChatListPage>
                                 Icon(
                                   Icons.archive,
                                   size: 24,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Colors.black87,
+                                  color: isDark ? Colors.white70 : Colors.black87,
                                 ),
                                 const SizedBox(width: 16),
                                 const Text(
@@ -464,13 +466,28 @@ class _ChatListPageState extends State<ChatListPage>
                                 Icon(
                                   Icons.help_outline,
                                   size: 24,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : Colors.black87,
+                                  color: isDark ? Colors.white70 : Colors.black87,
                                 ),
                                 const SizedBox(width: 16),
                                 const Text(
                                   'Help',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'profile', // Ini sebelumnya Profil NoBox.ai
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.business, // Ganti dari account_circle
+                                  size: 24,
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                ),
+                                const SizedBox(width: 16),
+                                const Text(
+                                  'Tentang NoBox.ai',
                                   style: TextStyle(fontSize: 16),
                                 ),
                               ],
