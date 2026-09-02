@@ -531,24 +531,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
         _buildTextField('Username', email, cardColor, textColor, labelColor, borderColor, enabled: false),
         _buildTextField('Display Name', displayName, cardColor, textColor, labelColor, borderColor, isRequired: true),
         
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 120,
-              child: Text(
-                '2FA Authentication Email',
-                style: TextStyle(color: labelColor, fontSize: 13),
-              ),
-            ),
-            Checkbox(
-              value: false,
-              onChanged: (val) {},
-              activeColor: Colors.blue.shade400,
-            ),
-          ],
-        ),
-          const SizedBox(height: 12),
+        const SizedBox(height: 12),
           
           _buildTextField('Email', email, cardColor, textColor, labelColor, borderColor),
           _buildTextField('Mobile Phone Number', mobilePhone, cardColor, textColor, labelColor, borderColor),
