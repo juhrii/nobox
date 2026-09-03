@@ -101,6 +101,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
                 widget.value == null ? widget.hint : _asString(widget.value),
                 style: TextStyle(
                   fontSize: 14,
+                  fontWeight: FontWeight.bold,
                   color: widget.value == null
                       ? (isDark ? AppTheme.darkTextPrimary : Colors.black)
                       : (isDark ? Colors.white : Colors.black),

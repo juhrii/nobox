@@ -650,12 +650,19 @@ class _UserProfilePageState extends State<UserProfilePage> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: const Text(
-          'User Profile ',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+        title: Text(
+          'User Profile',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: isDark ? textColor : Colors.white,
+          ),
         ),
-        backgroundColor: cardColor,
-        foregroundColor: textColor,
+        iconTheme: IconThemeData(
+          color: isDark ? textColor : Colors.white,
+        ),
+        backgroundColor: isDark ? cardColor : Colors.blue,
+        foregroundColor: isDark ? textColor : Colors.white,
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -932,20 +939,20 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
         // User Image Select
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 120,
-                child: Text(
-                  'User Image',
-                  style: TextStyle(color: labelColor, fontSize: 13),
+              Text(
+                'User Image',
+                style: TextStyle(
+                  color: labelColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              Expanded(
-                child: _buildUserImageArea(cardColor, borderColor),
-              ),
+              const SizedBox(height: 6),
+              _buildUserImageArea(cardColor, borderColor),
             ],
           ),
         ),
@@ -956,135 +963,172 @@ class _UserProfilePageState extends State<UserProfilePage> {
   Widget _buildUserImageArea(Color cardColor, Color borderColor) {
     final String? serverImage = _userProfile?['UserImage']?.toString();
     final bool hasLocalImage = _selectedImage != null;
-    final bool hasServerImage =
-        serverImage != null && serverImage.isNotEmpty;
+    final bool hasServerImage = serverImage != null && serverImage.isNotEmpty;
     final bool hasImage = hasLocalImage || hasServerImage;
 
     return Container(
-      clipBehavior: Clip.antiAlias,
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         border: Border.all(color: borderColor),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(4),
         color: cardColor,
       ),
-      child: _isUploadingImage
-          ? const SizedBox(
-              height: 100,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Uploading...',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : hasImage
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    InkWell(
-                      onTap: _pickAndUploadImage,
-                      child: hasLocalImage
-                          ? Image.file(
-                              _selectedImage!,
-                              height: 150,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            )
-                          : Image.network(
-                              serverImage!.startsWith('http')
-                                  ? serverImage
-                                  : '${AppConfig.uploadUrl}$serverImage',
-                              height: 150,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => SizedBox(
-                                height: 100,
-                                child: Center(
-                                  child: Icon(
-                                    Icons.broken_image,
-                                    size: 40,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ),
-                            ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Button Group (Select File | Trash)
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: borderColor),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _pickAndUploadImage,
+                    borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(4),
+                        bottomLeft: Radius.circular(4)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Row(
                         children: [
-                          OutlinedButton.icon(
-                            onPressed: _pickAndUploadImage,
-                            icon: const Icon(Icons.edit, size: 16),
-                            label: const Text('Change'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.blue.shade400,
-                              side: BorderSide(
-                                color:
-                                    Colors.blue.shade400.withOpacity(0.5),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                            ),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: _removeImage,
-                            icon: const Icon(Icons.delete_outline,
-                                size: 16),
-                            label: const Text('Remove'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red.shade400,
-                              side: BorderSide(
-                                color:
-                                    Colors.red.shade400.withOpacity(0.5),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
+                          Icon(Icons.file_upload_outlined,
+                              size: 18, color: Colors.blue.shade600),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Select File',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                )
-              : SizedBox(
-                  height: 100,
-                  child: Center(
-                    child: OutlinedButton.icon(
-                      onPressed: _pickAndUploadImage,
-                      icon: const Icon(Icons.upload_file, size: 18),
-                      label: const Text('Select File'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.blue.shade400,
-                        side: BorderSide(
-                          color: Colors.blue.shade400.withOpacity(0.5),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                      ),
+                  ),
+                ),
+                Container(width: 1, height: 34, color: borderColor),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _removeImage,
+                    borderRadius: const BorderRadius.only(
+                        topRight: Radius.circular(4),
+                        bottomRight: Radius.circular(4)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Icon(Icons.delete_outline,
+                          size: 18, color: Colors.red.shade400),
                     ),
                   ),
                 ),
+              ],
+            ),
+          ),
+          
+          if (_isUploadingImage || hasImage) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              height: 200,
+              decoration: BoxDecoration(
+                border: Border.all(color: borderColor),
+                color: Colors.transparent,
+              ),
+              child: _isUploadingImage
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Uploading...',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    )
+                  : InkWell(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => Dialog(
+                            backgroundColor: Colors.transparent,
+                            insetPadding: const EdgeInsets.all(16),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                InteractiveViewer(
+                                  child: hasLocalImage
+                                      ? Image.file(_selectedImage!)
+                                      : Image.network(
+                                          serverImage!.startsWith('http')
+                                              ? serverImage
+                                              : '${AppConfig.uploadUrl}$serverImage',
+                                          errorBuilder: (_, __, ___) =>
+                                              const Icon(
+                                            Icons.broken_image,
+                                            size: 64,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                ),
+                                Positioned(
+                                  top: 0,
+                                  right: 0,
+                                  child: Container(
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black45,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.close,
+                                          color: Colors.white),
+                                      onPressed: () => Navigator.pop(context),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      child: hasLocalImage
+                          ? Image.file(
+                              _selectedImage!,
+                              fit: BoxFit.contain,
+                            )
+                          : Image.network(
+                              serverImage!.startsWith('http')
+                                  ? serverImage
+                                  : '${AppConfig.uploadUrl}$serverImage',
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Icon(
+                                  Icons.broken_image,
+                                  size: 40,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                    ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1890,7 +1934,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
               children: [
                 TextSpan(
                   text: label,
-                  style: TextStyle(color: labelColor, fontSize: 13),
+                  style: TextStyle(color: labelColor, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -1900,7 +1944,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
             initialValue: value,
             enabled: enabled,
             onChanged: onChanged,
-            style: TextStyle(color: textColor, fontSize: 14),
+            style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(
@@ -1957,7 +2001,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
               children: [
                 TextSpan(
                   text: label,
-                  style: TextStyle(color: labelColor, fontSize: 13),
+                  style: TextStyle(color: labelColor, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
