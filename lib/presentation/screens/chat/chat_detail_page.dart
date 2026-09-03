@@ -5343,13 +5343,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                             }
                           }
 
-                          final String fallbackExtId =
-                              target.ctRealId.isNotEmpty
-                              ? target.ctRealId
-                              : (target.link.isNotEmpty
-                                    ? target.link
-                                    : target.sender);
-
                           final String finalContent =
                               (message.messageType != MessageType.text &&
                                   message.content == '📷 Photo')
@@ -5364,6 +5357,26 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                               );
                           bool isError = (sendError != null);
                           String errorMessage = sendError ?? 'SignalR delivery failed';
+
+                          if (!isError) {
+                            String displayContent = finalContent;
+                            if (message.messageType == MessageType.image) {
+                              displayContent = '📷 Photo';
+                            } else if (message.messageType == MessageType.video) {
+                              displayContent = '🎥 Video';
+                            } else if (message.messageType == MessageType.voice) {
+                              displayContent = '🎤 Pesan Suara';
+                            } else if (message.messageType == MessageType.document) {
+                              displayContent = '📄 ${message.documentName ?? 'Dokumen'}';
+                            }
+                            chatProvider.updateLocalLastMessage(
+                              target.id,
+                              displayContent,
+                              lastMessageType: requestBodyType.toString(),
+                              isFromMe: true,
+                              updateTimeAndPosition: true,
+                            );
+                          }
 
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -5483,53 +5496,55 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                               }
                             }
 
-                            final String fallbackExtId =
-                                target.ctRealId.isNotEmpty
-                                ? target.ctRealId
-                                : (target.link.isNotEmpty
-                                      ? target.link
-                                      : target.sender);
-
                             final String finalContent =
                                 (msg.messageType != MessageType.text &&
                                     msg.content == '📷 Photo')
                                 ? ''
                                 : msg.content;
-                            final isTelegram =
-                                target.chId == '2' ||
-                                target.channelType.toLowerCase().contains(
-                                  'telegram',
-                                ) ||
-                                target.channelName.toLowerCase().contains(
-                                  'telegram',
-                                );
 
-                            if (isTelegram) {
-                              final sendError = await chatProvider
-                                  .sendMessageViaSignalR(
-                                    chat: target,
-                                    type: requestBodyType.toString(),
-                                    msg: finalContent,
-                                    fileJson: attachmentStr,
-                                  );
-                              if (sendError != null) hasError = true;
-                            } else {
-                              final request = MessageRequest(
-                                receiver: target.id,
-                                content: finalContent,
-                                accountId: target.accountId,
-                                channelId: target.chId,
-                                contactId: target.contactId,
-                                extId: fallbackExtId,
-                                groupId: target.groupId,
-                                attachment: attachmentStr,
-                                bodyType: requestBodyType,
-                              );
-                              final resp = await _chatService.sendMessage(
-                                request,
-                              );
-                              if (resp.isError) hasError = true;
+                            final sendError = await chatProvider
+                                .sendMessageViaSignalR(
+                                  chat: target,
+                                  type: requestBodyType.toString(),
+                                  msg: finalContent,
+                                  fileJson: attachmentStr,
+                                );
+                            if (sendError != null) hasError = true;
+                          }
+
+                          if (!hasError && selectedMessages.isNotEmpty) {
+                            final lastMsg = selectedMessages.last;
+                            int lastType = 1;
+                            if (lastMsg.messageType == MessageType.voice) {
+                              lastType = 2;
+                            } else if (lastMsg.messageType == MessageType.image) {
+                              lastType = 3;
+                            } else if (lastMsg.messageType == MessageType.video) {
+                              lastType = 4;
+                            } else if (lastMsg.messageType == MessageType.document) {
+                              lastType = 5;
                             }
+
+                            String displayContent = (lastMsg.messageType != MessageType.text && lastMsg.content == '📷 Photo')
+                                ? ''
+                                : lastMsg.content;
+                            if (lastMsg.messageType == MessageType.image) {
+                              displayContent = '📷 Photo';
+                            } else if (lastMsg.messageType == MessageType.video) {
+                              displayContent = '🎥 Video';
+                            } else if (lastMsg.messageType == MessageType.voice) {
+                              displayContent = '🎤 Pesan Suara';
+                            } else if (lastMsg.messageType == MessageType.document) {
+                              displayContent = '📄 ${lastMsg.documentName ?? 'Dokumen'}';
+                            }
+
+                            chatProvider.updateLocalLastMessage(
+                              target.id,
+                              displayContent,
+                              lastMessageType: lastType.toString(),
+                              isFromMe: true,
+                              updateTimeAndPosition: true,
+                            );
                           }
 
                           if (mounted) {

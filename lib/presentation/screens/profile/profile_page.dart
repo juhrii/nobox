@@ -361,6 +361,11 @@ class _ProfileMenuListState extends State<_ProfileMenuList> {
                 });
               }
             },
+            leading: Icon(
+              Icons.help_outline,
+              color: widget.isDark ? Colors.blue.shade300 : Colors.blue,
+              size: 22,
+            ),
             title: Text(
               title,
               style: TextStyle(

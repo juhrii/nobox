@@ -419,7 +419,7 @@ class _ChatListPageState extends State<ChatListPage>
                                 ),
                                 const SizedBox(width: 16),
                                 const Text(
-                                  'Profile User',
+                                  'User Profile',
                                   style: TextStyle(fontSize: 16),
                                 ),
                               ],
@@ -464,7 +464,7 @@ class _ChatListPageState extends State<ChatListPage>
                             child: Row(
                               children: [
                                 Icon(
-                                  Icons.help_outline,
+                                  Icons.info_outline,
                                   size: 24,
                                   color: isDark ? Colors.white70 : Colors.black87,
                                 ),
@@ -481,7 +481,7 @@ class _ChatListPageState extends State<ChatListPage>
                             child: Row(
                               children: [
                                 Icon(
-                                  Icons.business, // Ganti dari account_circle
+                                  Icons.help_outline,
                                   size: 24,
                                   color: isDark ? Colors.white70 : Colors.black87,
                                 ),
