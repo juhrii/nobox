@@ -281,20 +281,11 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                                 decoration: isNoBubble
                                     ? null
                                     : BoxDecoration(
-                                        color: widget.isSelected
-                                            ? (isMe
-                                                ? AppTheme.primaryColor
-                                                    .withOpacity(0.8)
-                                                : (isDarkMode
-                                                    ? AppTheme.darkSurface
-                                                        .withOpacity(0.8)
-                                                    : AppTheme.otherMessageColor
-                                                        .withOpacity(0.8)))
-                                            : (isMe
-                                                ? (isDarkMode ? Colors.blue.withValues(alpha: 0.15) : AppTheme.primaryColor)
-                                                : (isDarkMode
-                                                    ? AppTheme.darkSurface
-                                                    : Colors.white)),
+                                        color: isMe
+                                            ? (isDarkMode ? const Color(0xFF0B2641) : AppTheme.primaryColor)
+                                            : (isDarkMode
+                                                ? AppTheme.darkSurface
+                                                : Colors.white),
                                         borderRadius: BorderRadius.only(
                                           topLeft: const Radius.circular(12),
                                           topRight: const Radius.circular(12),

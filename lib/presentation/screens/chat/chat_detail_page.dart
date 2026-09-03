@@ -4887,7 +4887,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               Container(
                 color: isSelected
                     ? (isDark
-                          ? Colors.blue.withOpacity(0.3)
+                          ? Colors.blue.withOpacity(0.15)
                           : Colors.blue.withOpacity(0.15))
                     : Colors.transparent,
                 child: MessageBubbleWidget(
