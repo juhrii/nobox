@@ -673,29 +673,41 @@ class _UserProfilePageState extends State<UserProfilePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Action Buttons
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _buildActionButton(
-                          icon: Icons.check_circle_outline,
-                          label: 'Save',
-                          color: Colors.blue.shade400,
-                          onPressed: _saveProfile,
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OutlinedButton(
+                              onPressed: _saveProfile,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.blue.shade400,
+                                side: BorderSide(color: Colors.blue.shade400.withOpacity(0.5)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                padding: const EdgeInsets.all(12),
+                                minimumSize: const Size(0, 0),
+                              ),
+                              child: const Icon(Icons.check, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            _buildActionButton(
+                              icon: Icons.close,
+                              label: 'Unsubscribe',
+                              color: Colors.red.shade400,
+                              onPressed: () {},
+                            ),
+                            const SizedBox(width: 12),
+                            _buildActionButton(
+                              icon: Icons.exit_to_app,
+                              label: 'Exit from Tenant',
+                              color: Colors.red.shade400,
+                              onPressed: () {},
+                            ),
+                          ],
                         ),
-                        _buildActionButton(
-                          icon: Icons.close,
-                          label: 'Unsubscribe',
-                          color: Colors.red.shade400,
-                          onPressed: () {},
-                        ),
-                        _buildActionButton(
-                          icon: Icons.exit_to_app,
-                          label: 'Exit from Tenant',
-                          color: Colors.red.shade400,
-                          onPressed: () {},
-                        ),
-                      ],
+                      ),
                     ),
                     const SizedBox(height: 24),
 
