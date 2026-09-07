@@ -13,9 +13,16 @@ class ChatSettingsProvider with ChangeNotifier {
   
   static const String _bgColorKey = 'chat_bg_color';
   static const String _bgImageKey = 'chat_bg_image';
+  static const String _dateFormatKey = 'chat_date_format';
+  static const String _timeFormatKey = 'chat_time_format';
+
+  String _dateFormat = 'dd/MM/yyyy'; // Default
+  String _timeFormat = 'HH:mm'; // Default
 
   Color? get backgroundColor => _backgroundColor;
   String? get backgroundImagePath => _backgroundImagePath;
+  String get dateFormat => _dateFormat;
+  String get timeFormat => _timeFormat;
 
   // FITUR: Muat Pengaturan
   /// Memuat pengaturan yang tersimpan dari SharedPreferences
@@ -28,6 +35,15 @@ class ChatSettingsProvider with ChangeNotifier {
     }
 
     _backgroundImagePath = prefs.getString(_bgImageKey);
+    _dateFormat = prefs.getString(_dateFormatKey) ?? 'dd/MM/yyyy';
+    _timeFormat = prefs.getString(_timeFormatKey) ?? 'HH:mm';
+    notifyListeners();
+  }
+
+  void setDateTimeFormat(String dateFormat, String timeFormat) {
+    _dateFormat = dateFormat;
+    _timeFormat = timeFormat;
+    _saveSettings();
     notifyListeners();
   }
 
@@ -59,5 +75,8 @@ class ChatSettingsProvider with ChangeNotifier {
     } else {
       await prefs.remove(_bgImageKey);
     }
+
+    await prefs.setString(_dateFormatKey, _dateFormat);
+    await prefs.setString(_timeFormatKey, _timeFormat);
   }
 }

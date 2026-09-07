@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/theme_provider.dart';
+import '../../../core/providers/chat_settings_provider.dart';
 import '../../../core/app_config.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/media_service.dart';
@@ -146,10 +147,15 @@ class _UserProfilePageState extends State<UserProfilePage> {
           debugPrint(
             '>>> FETCHED PROFILE: FormatDate=${data['Entity']['FormatDate']}, FormatTime=${data['Entity']['FormatTime']}, FormatNumber=${data['Entity']['FormatNumber']}',
           );
-          if (mounted) {
-            setState(() {
-              _userProfile = data['Entity'];
-            });
+            if (mounted) {
+              setState(() {
+                _userProfile = data['Entity'];
+              });
+              
+              final dFormat = _userProfile?['FormatDate']?.toString() ?? 'DD/MM/YYYY';
+              final tFormat = _userProfile?['FormatTime']?.toString() ?? 'HH:mm';
+              context.read<ChatSettingsProvider>().setDateTimeFormat(dFormat, tFormat);
+              
             await _loadDependentAddressData();
             if (mounted) setState(() => _isLoadingProfile = false);
           }
@@ -547,7 +553,10 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       if (response.statusCode == 200) {
         if (mounted) {
-          _showTopNotification('Profile saved successfully!', isError: false);
+          final dFormat = entity['FormatDate']?.toString() ?? 'DD/MM/YYYY';
+          final tFormat = entity['FormatTime']?.toString() ?? 'HH:mm';
+          context.read<ChatSettingsProvider>().setDateTimeFormat(dFormat, tFormat);
+          _showTopNotification('Profile saved successfully.', isError: false);
         }
         await _fetchUserProfile(
           int.tryParse(entity['EntityId'].toString()) ?? 0,
@@ -1429,11 +1438,11 @@ class _UserProfilePageState extends State<UserProfilePage> {
   ) {
     final List<String> formats = [
       'HH:mm',
-      'HH:mm a',
-      'HH:mm A',
+      'hh:mm a',
+      'hh:mm A',
       'HH:mm:ss',
-      'HH:mm:ss a',
-      'HH:mm:ss A',
+      'hh:mm:ss a',
+      'hh:mm:ss A',
       'Custom Time',
     ];
     if (timeFormat.isNotEmpty && !formats.contains(timeFormat)) {
