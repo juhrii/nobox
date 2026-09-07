@@ -1637,7 +1637,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       String dec = formatNum['aDec']?.toString() ?? ',';
       String sep = formatNum['aSep']?.toString() ?? '.';
-      if (sep == r'\') sep = "'"; // Convert backslash back to apostrophe for UI rendering
+      // sep is used as-is in preview (e.g. `\` for apostrophe separator)
       int mDec = int.tryParse(formatNum['mDec']?.toString() ?? '0') ?? 0;
       String group = formatNum['dGroup']?.toString() ?? '3';
 
