@@ -61,8 +61,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
   }
 
   Future<void> _loadMasterData() async {
-    _countries = await _fetchMasterList(AppConfig.countryListEndpoint);
-    _timezones = await _fetchMasterList(AppConfig.timezoneListEndpoint);
+    // Fetch countries & timezones in parallel — no dependency between them
+    final results = await Future.wait([
+      _fetchMasterList(AppConfig.countryListEndpoint),
+      _fetchMasterList(AppConfig.timezoneListEndpoint),
+    ]);
+    _countries = results[0];
+    _timezones = results[1];
     if (mounted) setState(() {});
   }
 
@@ -172,29 +177,34 @@ class _UserProfilePageState extends State<UserProfilePage> {
     if (_userProfile == null) return;
 
     final String? ctryId = _userProfile!['CtryId']?.toString();
-    if (ctryId != null && ctryId.isNotEmpty) {
+    final String? statesId = _userProfile!['StatesId']?.toString();
+
+    // Fetch states and cities in parallel when both IDs are known
+    if (ctryId != null && ctryId.isNotEmpty &&
+        statesId != null && statesId.isNotEmpty) {
+      final results = await Future.wait([
+        _fetchMasterList(
+          AppConfig.stateListEndpoint,
+          criteria: [["CountryId"], "=", ctryId],
+        ),
+        _fetchMasterList(
+          AppConfig.cityListEndpoint,
+          criteria: [["StateId"], "=", statesId],
+        ),
+      ]);
+      if (mounted) {
+        setState(() {
+          _states = results[0];
+          _cities = results[1];
+        });
+      }
+    } else if (ctryId != null && ctryId.isNotEmpty) {
+      // Only country known — fetch states only
       final newStates = await _fetchMasterList(
         AppConfig.stateListEndpoint,
-        criteria: [
-          ["CountryId"],
-          "=",
-          ctryId,
-        ],
+        criteria: [["CountryId"], "=", ctryId],
       );
       if (mounted) setState(() => _states = newStates);
-    }
-
-    final String? statesId = _userProfile!['StatesId']?.toString();
-    if (statesId != null && statesId.isNotEmpty) {
-      final newCities = await _fetchMasterList(
-        AppConfig.cityListEndpoint,
-        criteria: [
-          ["StateId"],
-          "=",
-          statesId,
-        ],
-      );
-      if (mounted) setState(() => _cities = newCities);
     }
   }
 
@@ -1664,13 +1674,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
 
     String mapThouSepToDropdown(String val) {
-      if (val.isEmpty || val.contains('None') || val == "None ''")
-        return "None ''";
-      if (val.contains('Period') || val.contains('.')) return "Period '.'";
-      if (val.contains('Comma') || val.contains(',')) return "Comma ','";
-      if (val.contains('Apostrophe') || val.contains("'") || val.contains(r'\'))
-        return "Apostrophe '''"; // Fix UI text
-      if (val.contains('Space') || val == ' ') return "Space ' '";
+      if (val.isEmpty || val == "None ''" || val == 'None') return "None ''";
+      if (val == '.' || val == "Period '.'") return "Period '.'";
+      if (val == ',' || val == "Comma ','") return "Comma ','";
+      // val can be: `\` (backslash), `"` (double-quote from JSON), `'` (apostrophe), or old label
+      if (val == r'\' || val == '\\' || val == '"' || val == "'" ||
+          val.startsWith('Apostrophe')) return 'Apostrophe "\\"';
+      if (val == ' ' || val.startsWith('Space')) return "Space ' '";
       return "Period '.'";
     }
 
@@ -1710,7 +1720,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
         _buildDropdownField(
           'Thousand Separator',
           mapThouSepToDropdown(thouSep),
-          ["Period '.'", "Comma ','", "Apostrophe '''", "Space ' '", "None ''"],
+          ["Period '.'", "Comma ','", 'Apostrophe "\\"', "Space ' '", "None ''"],
           cardColor,
           textColor,
           labelColor,

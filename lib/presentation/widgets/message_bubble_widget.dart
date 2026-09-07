@@ -24,6 +24,7 @@ import 'forward_dialog.dart';
 import 'audio_player_widget.dart';
 import 'package:intl/intl.dart';
 import '../../../core/providers/chat_settings_provider.dart';
+import '../../../core/utils/date_time_helper.dart';
 
 import '../../../core/theme/app_theme.dart';
 
@@ -409,21 +410,12 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
   }
 
   Widget _buildTimestampRow(bool isMe) {
-    String displayTime = widget.message.time;
-    try {
-      final chatSettings = context.watch<ChatSettingsProvider>();
-      final tFormat = chatSettings.timeFormat.replaceAll('A', 'a');
-      if (widget.message.rawTime.isNotEmpty) {
-        String iso = widget.message.rawTime;
-        if (!iso.endsWith('Z') && !iso.contains('+')) {
-          iso += 'Z';
-        }
-        final dt = DateTime.parse(iso).toLocal();
-        displayTime = DateFormat(tFormat).format(dt);
-      }
-    } catch (_) {
-      displayTime = widget.message.time;
-    }
+    final chatSettings = context.watch<ChatSettingsProvider>();
+    final displayTime = DateTimeHelper.formatTime(
+      widget.message.rawTime,
+      chatSettings.timeFormat,
+      fallback: widget.message.time,
+    );
 
     return Row(
       mainAxisSize: MainAxisSize.min,

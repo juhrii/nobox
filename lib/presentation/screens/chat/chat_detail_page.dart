@@ -27,6 +27,7 @@ import 'dart:convert';
 import '../../../core/model/quick_reply_model.dart';
 
 import '../../../core/providers/chat_settings_provider.dart';
+import '../../../core/utils/date_time_helper.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/chat_provider.dart';
 import '../../widgets/authenticated_avatar.dart';
@@ -4874,7 +4875,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           Widget? dateSeparator;
           if (prevMessage == null ||
               _shouldShowDateSeparator(prevMessage, message)) {
-            dateSeparator = _buildDateSeparator(message.time, isDark);
+            dateSeparator = _buildDateSeparator(message, isDark);
           }
 
           // Normal chat bubble with swipe-to-reply + long-press selection
@@ -4990,39 +4991,22 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   /// Check if we should show a date separator between two messages
   bool _shouldShowDateSeparator(Message prev, Message current) {
-    final prevDate = _extractDate(prev.time);
-    final curDate = _extractDate(current.time);
+    final prevDate = _extractDate(prev.rawTime);
+    final curDate = _extractDate(current.rawTime);
     if (prevDate == null || curDate == null) return false;
     return prevDate.day != curDate.day ||
         prevDate.month != curDate.month ||
         prevDate.year != curDate.year;
   }
 
-  DateTime? _extractDate(String timeStr) {
-    // Format "DD Mon, HH:mm" e.g. "06 Jan, 12:29"
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
+  DateTime? _extractDate(String rawTime) {
+    if (rawTime.isEmpty) return null;
     try {
-      final parts = timeStr.split(', ');
-      if (parts.length < 2) return null;
-      final dayMonth = parts[0].split(' ');
-      if (dayMonth.length < 2) return null;
-      final day = int.parse(dayMonth[0]);
-      final monthIdx = months.indexOf(dayMonth[1]) + 1;
-      if (monthIdx == 0) return null;
-      return DateTime(DateTime.now().year, monthIdx, day);
+      String iso = rawTime;
+      if (!iso.endsWith('Z') && !iso.contains('+')) {
+        iso += 'Z';
+      }
+      return DateTime.parse(iso).toLocal();
     } catch (_) {
       return null;
     }
@@ -5035,8 +5019,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     return rawTime;
   }
 
-  Widget _buildDateSeparator(String timeStr, bool isDark) {
-    final date = _extractDate(timeStr);
+  Widget _buildDateSeparator(Message message, bool isDark) {
+    final date = _extractDate(message.rawTime);
     String label;
     if (date != null) {
       final now = DateTime.now();
@@ -5048,24 +5032,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       } else if (diff == 1) {
         label = 'Kemarin';
       } else {
-        const months = [
-          'Jan',
-          'Feb',
-          'Mar',
-          'Apr',
-          'May',
-          'Jun',
-          'Jul',
-          'Aug',
-          'Sep',
-          'Oct',
-          'Nov',
-          'Dec',
-        ];
-        label = '${date.day} ${months[date.month - 1]} ${date.year}';
+        final chatSettings = context.read<ChatSettingsProvider>();
+        label = DateTimeHelper.formatDate(
+          message.rawTime,
+          chatSettings.dateFormat,
+          fallback: message.time,
+        );
       }
     } else {
-      label = timeStr;
+      label = message.time;
     }
 
     return Padding(
