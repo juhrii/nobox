@@ -175,6 +175,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -183,7 +185,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
           width: 280,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: widget.isMe ? Colors.white.withOpacity(0.2) : Colors.grey.shade100,
+            color: widget.isMe ? Colors.white.withOpacity(0.2) : (isDark ? Colors.grey.shade800 : Colors.grey.shade100),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -237,7 +239,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                             activeTrackColor: widget.isMe ? Colors.white : AppTheme.primaryColor,
                             inactiveTrackColor: widget.isMe 
                                 ? Colors.white.withOpacity(0.3) 
-                                : Colors.grey.shade300,
+                                : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
                             thumbColor: widget.isMe ? Colors.white : AppTheme.primaryColor,
                           ),
                           child: Slider(
@@ -256,7 +258,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                               _formatDuration(_position),
                               style: TextStyle(
                                 fontSize: 12,
-                                color: widget.isMe ? Colors.white70 : AppTheme.textSecondary,
+                                color: widget.isMe ? Colors.white70 : (isDark ? Colors.grey.shade400 : AppTheme.textSecondary),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -264,7 +266,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                               _formatDuration(_duration),
                               style: TextStyle(
                                 fontSize: 12,
-                                color: widget.isMe ? Colors.white70 : AppTheme.textSecondary,
+                                color: widget.isMe ? Colors.white70 : (isDark ? Colors.grey.shade400 : AppTheme.textSecondary),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -284,14 +286,14 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                     Icon(
                       Icons.mic,
                       size: 14,
-                      color: widget.isMe ? Colors.white70 : AppTheme.textSecondary,
+                      color: widget.isMe ? Colors.white70 : (isDark ? Colors.grey.shade400 : AppTheme.textSecondary),
                     ),
                     const SizedBox(width: 6),
                     Text(
                       'Voice Note',
                       style: TextStyle(
                         fontSize: 12,
-                        color: widget.isMe ? Colors.white70 : AppTheme.textSecondary,
+                        color: widget.isMe ? Colors.white70 : (isDark ? Colors.grey.shade400 : AppTheme.textSecondary),
                         fontWeight: FontWeight.w500,
                       ),
                     ),

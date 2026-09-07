@@ -176,8 +176,24 @@ class _UserProfilePageState extends State<UserProfilePage> {
   Future<void> _loadDependentAddressData() async {
     if (_userProfile == null) return;
 
-    final String? ctryId = _userProfile!['CtryId']?.toString();
-    final String? statesId = _userProfile!['StatesId']?.toString();
+    // Try to get CtryId — fallback: resolve from country name via master list
+    String? ctryId = _userProfile!['CtryId']?.toString();
+    if ((ctryId == null || ctryId.isEmpty) && _countries.isNotEmpty) {
+      final ctryName = _userProfile!['Ctry']?.toString() ?? '';
+      if (ctryName.isNotEmpty) {
+        final found = _countries.firstWhere(
+          (e) => e['Name'] == ctryName,
+          orElse: () => <String, dynamic>{},
+        );
+        if (found['Id'] != null) {
+          ctryId = found['Id'].toString();
+          _userProfile!['CtryId'] = ctryId; // cache for later use
+        }
+      }
+    }
+
+    // Try to get StatesId — fallback: resolve from state name via master list
+    String? statesId = _userProfile!['StatesId']?.toString();
 
     // Fetch states and cities in parallel when both IDs are known
     if (ctryId != null && ctryId.isNotEmpty &&
@@ -199,12 +215,31 @@ class _UserProfilePageState extends State<UserProfilePage> {
         });
       }
     } else if (ctryId != null && ctryId.isNotEmpty) {
-      // Only country known — fetch states only
+      // Only country known — fetch states, then resolve statesId by name
       final newStates = await _fetchMasterList(
         AppConfig.stateListEndpoint,
         criteria: [["CountryId"], "=", ctryId],
       );
       if (mounted) setState(() => _states = newStates);
+
+      // Now try to resolve StatesId from name using newly fetched states
+      final stateName = _userProfile!['States']?.toString() ?? '';
+      if (stateName.isNotEmpty && newStates.isNotEmpty) {
+        final found = newStates.firstWhere(
+          (e) => e['Name'] == stateName,
+          orElse: () => <String, dynamic>{},
+        );
+        if (found['Id'] != null) {
+          statesId = found['Id'].toString();
+          _userProfile!['StatesId'] = statesId;
+          // Now fetch cities
+          final newCities = await _fetchMasterList(
+            AppConfig.cityListEndpoint,
+            criteria: [["StateId"], "=", statesId],
+          );
+          if (mounted) setState(() => _cities = newCities);
+        }
+      }
     }
   }
 
