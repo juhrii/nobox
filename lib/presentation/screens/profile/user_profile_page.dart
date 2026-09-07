@@ -462,6 +462,16 @@ class _UserProfilePageState extends State<UserProfilePage> {
     try {
       final entity = Map<String, dynamic>.from(_userProfile!);
 
+      // Sanitasi input: Ganti tanda kutip tunggal standar (') dengan tanda kutip kanan (’)
+      // agar tidak diblokir oleh filter keamanan (SQL Injection/XSS) di backend Serenity.
+      // Pengecualian: jangan ubah field konfigurasi format yang memang membutuhkan karakter asli.
+      final excludedKeys = ['FormatNumber', 'FormatDate', 'FormatTime', 'aSep', 'aDec', 'mDec', 'dGroup', 'lZero'];
+      entity.forEach((key, value) {
+        if (!excludedKeys.contains(key) && value is String && value.contains("'")) {
+          entity[key] = value.replaceAll("'", "’");
+        }
+      });
+
       debugPrint('>>> SAVING PROFILE: FormatNumber=${entity['FormatNumber']}');
 
       // Hapus field read-only bawaan Serenity agar tidak memicu error 400 "field is read only"
@@ -526,6 +536,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
         "EntityId": entity['UserId'] ?? entity['Id'],
         "Entity": entity,
       };
+
+      // Tambahkan print ini agar Anda bisa melihat JSON persis yang dikirim
+      debugPrint('>>> FINAL JSON PAYLOAD: ${jsonEncode(payload)}');
 
       final response = await ApiClient().dio.post(
         'Services/Administration/User/Update',
@@ -1605,6 +1618,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       String dec = formatNum['aDec']?.toString() ?? ',';
       String sep = formatNum['aSep']?.toString() ?? '.';
+      if (sep == r'\') sep = "'"; // Convert backslash back to apostrophe for UI rendering
       int mDec = int.tryParse(formatNum['mDec']?.toString() ?? '0') ?? 0;
       String group = formatNum['dGroup']?.toString() ?? '3';
 
@@ -1627,7 +1641,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     String _extractSep(String val) {
       if (val.contains('Space')) return ' ';
       if (val.contains('None')) return '';
-      if (val.contains('Apostrophe')) return "'"; // Revert to single quote
+      if (val.contains('Apostrophe')) return r'\'; // Replicate Web payload behavior (escaping)
       if (val.contains('Period') || val.contains('.')) return '.';
       if (val.contains('Comma') || val.contains(',')) return ',';
       return '.';
