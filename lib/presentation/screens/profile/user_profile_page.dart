@@ -10,7 +10,6 @@ import '../../../core/providers/theme_provider.dart';
 import '../../../core/providers/chat_settings_provider.dart';
 import '../../../core/app_config.dart';
 import '../../../core/services/api_client.dart';
-import '../../../core/services/media_service.dart';
 import '../../../core/utils/date_time_helper.dart';
 import '../../widgets/searchable_dropdown.dart';
 
@@ -22,6 +21,11 @@ class UserProfilePage extends StatefulWidget {
 }
 
 class _UserProfilePageState extends State<UserProfilePage> {
+  // Static Cache across page navigations for instant loading
+  static Map<String, dynamic>? _cachedProfile;
+  static List<Map<String, dynamic>>? _cachedCountries;
+  static List<Map<String, dynamic>>? _cachedTimezones;
+
   // Form Keys for Auto-Scroll Validation
   final GlobalKey _timezoneKey = GlobalKey();
   final GlobalKey _countryKey = GlobalKey();
@@ -51,10 +55,22 @@ class _UserProfilePageState extends State<UserProfilePage> {
   @override
   void initState() {
     super.initState();
-    _decodeToken();
+    // Gunakan cache jika ada agar halaman langsung terbuka secara instan tanpa loading
+    if (_cachedProfile != null) {
+      _userProfile = Map<String, dynamic>.from(_cachedProfile!);
+      _isLoadingProfile = false;
+    }
+    if (_cachedCountries != null) {
+      _countries = _cachedCountries!;
+    }
+    if (_cachedTimezones != null) {
+      _timezones = _cachedTimezones!;
+    }
+
+    _decodeToken(silent: _cachedProfile != null);
     _loadMasterData();
     _timePreviewTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) setState(() {});
+      if (mounted && !_isLoadingProfile) setState(() {});
     });
   }
 
@@ -67,11 +83,18 @@ class _UserProfilePageState extends State<UserProfilePage> {
   }
 
   Future<void> _loadMasterData() async {
+    if (_cachedCountries != null && _cachedTimezones != null) {
+      _countries = _cachedCountries!;
+      _timezones = _cachedTimezones!;
+      return;
+    }
     // Fetch countries & timezones in parallel — no dependency between them
     final results = await Future.wait([
       _fetchMasterList(AppConfig.countryListEndpoint),
       _fetchMasterList(AppConfig.timezoneListEndpoint),
     ]);
+    _cachedCountries = results[0];
+    _cachedTimezones = results[1];
     _countries = results[0];
     _timezones = results[1];
     if (mounted) setState(() {});
@@ -103,43 +126,44 @@ class _UserProfilePageState extends State<UserProfilePage> {
     return [];
   }
 
-  void _decodeToken() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final token = context.read<AuthProvider>().token;
-      if (token != null && token.isNotEmpty) {
-        try {
-          final parts = token.split('.');
-          if (parts.length == 3) {
-            final payload = parts[1];
-            String normalized = base64Url.normalize(payload);
-            String decoded = utf8.decode(base64Url.decode(normalized));
-            setState(() {
-              _jwtPayload = jsonDecode(decoded);
-            });
+  void _decodeToken({bool silent = false}) {
+    final token = context.read<AuthProvider>().token;
+    if (token != null && token.isNotEmpty) {
+      try {
+        final parts = token.split('.');
+        if (parts.length == 3) {
+          final payload = parts[1];
+          String normalized = base64Url.normalize(payload);
+          String decoded = utf8.decode(base64Url.decode(normalized));
+          setState(() {
+            _jwtPayload = jsonDecode(decoded);
+          });
 
-            // Extrak User ID untuk panggil API
-            final String? userIdStr = getJwtValue([
-              'nameidentifier',
-              'nameid',
-              'id',
-              'uid',
-              'sub',
-              'UserId',
-            ]);
-            if (userIdStr != null) {
-              _fetchUserProfile(int.tryParse(userIdStr.toString()) ?? 0);
-            } else {
-              setState(() => _isLoadingProfile = false);
-            }
+          // Extrak User ID untuk panggil API
+          final String? userIdStr = getJwtValue([
+            'nameidentifier',
+            'nameid',
+            'id',
+            'uid',
+            'sub',
+            'UserId',
+          ]);
+          if (userIdStr != null) {
+            _fetchUserProfile(
+              int.tryParse(userIdStr.toString()) ?? 0,
+              silent: silent,
+            );
+          } else {
+            if (!silent && mounted) setState(() => _isLoadingProfile = false);
           }
-        } catch (e) {
-          debugPrint('Error decoding JWT token: $e');
-          setState(() => _isLoadingProfile = false);
         }
-      } else {
-        setState(() => _isLoadingProfile = false);
+      } catch (e) {
+        debugPrint('Error decoding JWT token: $e');
+        if (!silent && mounted) setState(() => _isLoadingProfile = false);
       }
-    });
+    } else {
+      if (!silent && mounted) setState(() => _isLoadingProfile = false);
+    }
   }
 
   Future<void> _fetchUserProfile(int userId, {bool silent = false}) async {
@@ -211,16 +235,18 @@ class _UserProfilePageState extends State<UserProfilePage> {
             }
             entity['FormatTime'] = normalizedTime;
 
+            _cachedProfile = entity;
             setState(() {
               _userProfile = entity;
+              if (!silent) _isLoadingProfile = false;
             });
 
             final dFormat = _userProfile?['FormatDate']?.toString() ?? 'DD/MM/YYYY';
             final tFormat = _userProfile?['FormatTime']?.toString() ?? 'HH:mm';
             context.read<ChatSettingsProvider>().setDateTimeFormat(dFormat, tFormat);
 
-            await _loadDependentAddressData();
-            if (!silent && mounted) setState(() => _isLoadingProfile = false);
+            // Muat data alamat (Provinsi/Kota) di background tanpa memblokir layar profil
+            _loadDependentAddressData();
           }
           return;
         }
@@ -725,6 +751,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
           final tFormat = entity['FormatTime']?.toString() ?? 'HH:mm';
           context.read<ChatSettingsProvider>().setDateTimeFormat(dFormat, tFormat);
           _showTopNotification('Profile saved successfully.', isError: false);
+          _cachedProfile = entity;
           setState(() {
             _userProfile = entity;
             _isLoadingProfile = false;
@@ -793,7 +820,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
           'company',
         ]) ??
         'Nobox Chat';
-    final String role = getJwtValue(['role', 'Role', 'roles']) ?? '';
     final String displayName =
         _userProfile?['DisplayName'] ??
         getJwtValue(['givenname', 'name', 'displayname']) ??

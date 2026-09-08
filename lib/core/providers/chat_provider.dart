@@ -2297,36 +2297,41 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
+  Timer? _overrideDebounceTimer;
+
   Future<void> _saveLocalOverrides() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final Map<String, dynamic> data = _localOverrides.map(
-        (k, v) => MapEntry(k, {
-          'lastMessage': v.lastMessage,
-          'lastMessageType': v.lastMessageType,
-          'isLastMessageFromMe': v.isLastMessageFromMe,
-          'time': v.time,
-          'sender': v.sender,
-          'contactId': v.contactId,
-          'ctRealId': v.ctRealId,
-          'accountId': v.accountId,
-          'chId': v.chId,
-          'channelName': v.channelName,
-          'channelType': v.channelType,
-          'link': v.link,
-          'isGroup': v.isGroup,
-          'isBlocked': v.isBlocked,
-          'status': v.status,
-        }),
-      );
-      await prefs.setString(_localOverridesKey, jsonEncode(data));
-      await prefs.setString(
-        'override_timestamps',
-        jsonEncode(_overrideTimestamps),
-      );
-    } catch (e) {
-      debugPrint('ChatProvider: Failed to save local overrides: $e');
-    }
+    _overrideDebounceTimer?.cancel();
+    _overrideDebounceTimer = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final Map<String, dynamic> data = _localOverrides.map(
+          (k, v) => MapEntry(k, {
+            'lastMessage': v.lastMessage,
+            'lastMessageType': v.lastMessageType,
+            'isLastMessageFromMe': v.isLastMessageFromMe,
+            'time': v.time,
+            'sender': v.sender,
+            'contactId': v.contactId,
+            'ctRealId': v.ctRealId,
+            'accountId': v.accountId,
+            'chId': v.chId,
+            'channelName': v.channelName,
+            'channelType': v.channelType,
+            'link': v.link,
+            'isGroup': v.isGroup,
+            'isBlocked': v.isBlocked,
+            'status': v.status,
+          }),
+        );
+        await prefs.setString(_localOverridesKey, jsonEncode(data));
+        await prefs.setString(
+          'override_timestamps',
+          jsonEncode(_overrideTimestamps),
+        );
+      } catch (e) {
+        debugPrint('ChatProvider: Failed to save local overrides: $e');
+      }
+    });
   }
 
   // [ACTION: FILTER_APPLY] - Getter ini mengeksekusi filter (lokal) pada daftar chat

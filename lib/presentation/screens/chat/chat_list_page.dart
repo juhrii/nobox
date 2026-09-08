@@ -1810,9 +1810,14 @@ class _ChatListPageState extends State<ChatListPage>
                                           );
                                         }
                                         if (mounted) {
-                                          context
-                                              .read<ChatProvider>()
-                                              .refreshFirstPage();
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) {
+                                                if (mounted) {
+                                                  context
+                                                      .read<ChatProvider>()
+                                                      .refreshFirstPage();
+                                                }
+                                              });
                                         }
                                       }
                                     }
@@ -2028,8 +2033,13 @@ class _ChatListPageState extends State<ChatListPage>
                 }
 
                 // Kita hanya refresh jika onChatSelected null (mode mobile navigation)
+                // Jalankan setelah animasi pop selesai agar tidak terjadi freeze / frame drop
                 if (mounted && widget.onChatSelected == null) {
-                  chatProvider.refreshFirstPage();
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      chatProvider.refreshFirstPage();
+                    }
+                  });
                 }
               },
               onLongPress: () {
