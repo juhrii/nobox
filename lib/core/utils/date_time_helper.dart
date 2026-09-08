@@ -5,7 +5,12 @@ class DateTimeHelper {
   static String formatTime(String rawTime, String timeFormat, {String fallback = ''}) {
     if (rawTime.isEmpty) return fallback;
     try {
-      final tFormat = timeFormat.replaceAll('A', 'a');
+      String tFormat = timeFormat;
+      // In NoBox backend, 'HH:mm a' and 'HH:mm A' are used for 12-hour format with AM/PM
+      if (tFormat.contains(' a') || tFormat.contains(' A')) {
+        tFormat = tFormat.replaceAll('HH', 'hh');
+      }
+      tFormat = tFormat.replaceAll('A', 'a');
       String iso = rawTime;
       if (!iso.endsWith('Z') && !iso.contains('+')) {
         iso += 'Z';

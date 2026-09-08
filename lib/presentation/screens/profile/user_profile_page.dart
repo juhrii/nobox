@@ -516,7 +516,21 @@ class _UserProfilePageState extends State<UserProfilePage> {
       // Sanitasi input: Ganti tanda kutip tunggal standar (') dengan tanda kutip kanan (’)
       // agar tidak diblokir oleh filter keamanan (SQL Injection/XSS) di backend Serenity.
       // Pengecualian: jangan ubah field konfigurasi format yang memang membutuhkan karakter asli.
-      final excludedKeys = ['FormatNumber', 'FormatDate', 'FormatTime', 'aSep', 'aDec', 'mDec', 'dGroup', 'lZero'];
+      final excludedKeys = [
+        'FormatNumber',
+        'FormatDate',
+        'FormatTime',
+        'CustomDate',
+        'CustomTime',
+        'DisplayDate',
+        'DisplayTime',
+        'DisplayNumber',
+        'aSep',
+        'aDec',
+        'mDec',
+        'dGroup',
+        'lZero',
+      ];
       entity.forEach((key, value) {
         if (!excludedKeys.contains(key) && value is String && value.contains("'")) {
           entity[key] = value.replaceAll("'", "’");
@@ -525,15 +539,37 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       debugPrint('>>> SAVING PROFILE: FormatNumber=${entity['FormatNumber']}');
 
-      // Hapus field read-only bawaan Serenity agar tidak memicu error 400 "field is read only"
+      // Hapus field read-only & display-only bawaan Serenity agar tidak memicu error 400/503
       entity.remove('UpdateDate');
       entity.remove('UpdateUserId');
       entity.remove('InsertDate');
       entity.remove('InsertUserId');
+      entity.remove('DisplayDate');
+      entity.remove('DisplayTime');
+      entity.remove('DisplayNumber');
+
+      // Pastikan CustomDate dan CustomTime terisi dengan benar (sesuai FormatDate & FormatTime)
+      if (entity['FormatDate'] != null) {
+        if (entity['FormatDate'] != 'CustomDate') {
+          entity['CustomDate'] = entity['FormatDate'];
+        }
+      } else {
+        entity['FormatDate'] = 'DD/MM/YYYY';
+        entity['CustomDate'] = 'DD/MM/YYYY';
+      }
+
+      if (entity['FormatTime'] != null) {
+        if (entity['FormatTime'] != 'CustomTime') {
+          entity['CustomTime'] = entity['FormatTime'];
+        }
+      } else {
+        entity['FormatTime'] = 'HH:mm';
+        entity['CustomTime'] = 'HH:mm';
+      }
 
       // Debugging formats before save
       debugPrint(
-        '>>> SAVING PROFILE: FormatDate=${entity['FormatDate']}, FormatTime=${entity['FormatTime']}',
+        '>>> SAVING PROFILE: FormatDate=${entity['FormatDate']}, FormatTime=${entity['FormatTime']}, CustomDate=${entity['CustomDate']}, CustomTime=${entity['CustomTime']}',
       );
 
       // Resolve IDs from Names for Master Data
@@ -1339,6 +1375,49 @@ class _UserProfilePageState extends State<UserProfilePage> {
     );
   }
 
+  String _formatDisplayDate(DateTime now, String format) {
+    if (format == 'CustomDate') return 'Custom Date';
+    final d = now.day.toString().padLeft(2, '0');
+    final dNoPad = now.day.toString();
+    final m = now.month.toString().padLeft(2, '0');
+    final y = now.year.toString();
+
+    final monthsShort = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final monthsFull = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    final daysFull = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+      'Friday', 'Saturday', 'Sunday'
+    ];
+
+    final mmm = monthsShort[now.month - 1];
+    final mmmm = monthsFull[now.month - 1];
+    final dddd = daysFull[now.weekday - 1];
+
+    if (format == 'DD/MM/YYYY') return '$d/$m/$y';
+    if (format == 'DD-MM-YYYY') return '$d-$m-$y';
+    if (format == 'DD/MMM/YYYY') return '$d/$mmm/$y';
+    if (format == 'DD-MMM-YYYY') return '$d-$mmm-$y';
+    if (format == 'dddd, MMMM D, YYYY') return '$dddd, $mmmm $dNoPad, $y';
+    if (format == 'MMMM D, YYYY') return '$mmmm $dNoPad, $y';
+    if (format == 'D MMM, YYYY') return '$dNoPad $mmm, $y';
+    if (format == 'D-MMM-YYYY') return '$dNoPad-$mmm-$y';
+
+    String res = format;
+    res = res.replaceAll('DD', d);
+    res = res.replaceAll('D', dNoPad);
+    res = res.replaceAll('MMMM', mmmm);
+    res = res.replaceAll('MMM', mmm);
+    res = res.replaceAll('MM', m);
+    res = res.replaceAll('YYYY', y);
+    return res;
+  }
+
   Widget _buildDateFormatForm(
     Color cardColor,
     Color textColor,
@@ -1353,117 +1432,88 @@ class _UserProfilePageState extends State<UserProfilePage> {
       'DD-MMM-YYYY',
       'dddd, MMMM D, YYYY',
       'MMMM D, YYYY',
+      'D MMM, YYYY',
+      'D-MMM-YYYY',
+      'CustomDate',
     ];
-    if (dateFormat.isNotEmpty && !formats.contains(dateFormat)) {
-      formats.insert(0, dateFormat);
+
+    String currentFormat = dateFormat.isEmpty ? 'DD/MM/YYYY' : dateFormat;
+    if (!formats.contains(currentFormat) && currentFormat != 'CustomDate') {
+      formats.insert(formats.length - 1, currentFormat);
     }
 
-    final currentFormat = dateFormat.isEmpty ? 'DD-MM-YYYY' : dateFormat;
-
-    String getPreview(String format) {
-      final now = DateTime.now();
-      final d = now.day.toString().padLeft(2, '0');
-      final dNoPad = now.day.toString();
-      final m = now.month.toString().padLeft(2, '0');
-      final y = now.year.toString();
-
-      final monthsShort = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      final monthsFull = [
-        'January',
-        'February',
-        'March',
-        'April',
-        'May',
-        'June',
-        'July',
-        'August',
-        'September',
-        'October',
-        'November',
-        'December',
-      ];
-      final daysFull = [
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-        'Sunday',
-      ];
-
-      final mmm = monthsShort[now.month - 1];
-      final mmmm = monthsFull[now.month - 1];
-      final dddd = daysFull[now.weekday - 1];
-
-      if (format == 'DD/MM/YYYY') return '$d/$m/$y';
-      if (format == 'DD-MM-YYYY') return '$d-$m-$y';
-      if (format == 'DD/MMM/YYYY') return '$d/$mmm/$y';
-      if (format == 'DD-MMM-YYYY') return '$d-$mmm-$y';
-      if (format == 'dddd, MMMM D, YYYY') return '$dddd, $mmmm $dNoPad, $y';
-      if (format == 'MMMM D, YYYY') return '$mmmm $dNoPad, $y';
-
-      return '$d/$m/$y';
+    String dateItemAsString(String val) {
+      switch (val) {
+        case 'DD/MM/YYYY':
+          return '05/07/2022';
+        case 'DD-MM-YYYY':
+          return '05-07-2022';
+        case 'DD/MMM/YYYY':
+          return '05/Jul/2022';
+        case 'DD-MMM-YYYY':
+          return '05-Jul-2022';
+        case 'dddd, MMMM D, YYYY':
+          return 'Monday, July 5, 2022';
+        case 'MMMM D, YYYY':
+          return 'July 5, 2022';
+        case 'D MMM, YYYY':
+          return '5 July, 2022';
+        case 'D-MMM-YYYY':
+          return '5-Jul-2022';
+        case 'CustomDate':
+          return 'Custom Date';
+        default:
+          return val;
+      }
     }
 
-    final dateExamples = formats.map((f) => getPreview(f)).toList();
-    final currentExample = getPreview(currentFormat);
+    final isCustomDate = currentFormat == 'CustomDate';
+    final customDateVal = _userProfile?['CustomDate']?.toString() ?? currentFormat;
+    final previewFormat = isCustomDate ? customDateVal : currentFormat;
+    final preview = _formatDisplayDate(DateTime.now(), previewFormat);
 
     return Column(
       children: [
         _buildDropdownField(
           'Date',
-          currentExample,
-          dateExamples,
-          cardColor,
-          textColor,
-          labelColor,
-          borderColor,
-          onChanged: (val) {
-            if (val != null) {
-              final idx = dateExamples.indexOf(val);
-              if (idx != -1) {
-                setState(() {
-                  _userProfile ??= {};
-                  _userProfile!['FormatDate'] = formats[idx];
-                });
-              }
-            }
-          },
-        ),
-        _buildDropdownField(
-          'Format',
           currentFormat,
           formats,
           cardColor,
           textColor,
           labelColor,
           borderColor,
+          itemAsString: dateItemAsString,
           onChanged: (val) {
             if (val != null) {
               setState(() {
                 _userProfile ??= {};
                 _userProfile!['FormatDate'] = val;
+                if (val != 'CustomDate') {
+                  _userProfile!['CustomDate'] = val;
+                }
               });
             }
           },
         ),
+        if (isCustomDate)
+          _buildTextField(
+            'Custom Date',
+            customDateVal,
+            cardColor,
+            textColor,
+            labelColor,
+            borderColor,
+            enabled: true,
+            onChanged: (val) {
+              setState(() {
+                _userProfile ??= {};
+                _userProfile!['CustomDate'] = val;
+              });
+            },
+          ),
         _buildTextField(
           'Preview',
-          currentExample,
+          preview,
           cardColor,
           textColor,
           labelColor,
@@ -1472,6 +1522,49 @@ class _UserProfilePageState extends State<UserProfilePage> {
         ),
       ],
     );
+  }
+
+  String _formatDisplayTime(DateTime now, String format) {
+    if (format == 'CustomTime') return 'Custom Time';
+
+    final h24 = now.hour;
+    final h12raw = h24 % 12;
+    final h12 = h12raw == 0 ? 12 : h12raw;
+    final m = now.minute.toString().padLeft(2, '0');
+    final s = now.second.toString().padLeft(2, '0');
+    final isPM = h24 >= 12;
+
+    String result = format;
+
+    // AM/PM marker matching Moment.js
+    final ampmLower = isPM ? 'pm' : 'am';
+    final ampmUpper = isPM ? 'PM' : 'AM';
+
+    final bool hasAmPm = result.contains(' a') ||
+        result.contains(' A') ||
+        result.endsWith('a') ||
+        result.endsWith('A');
+
+    if (result.contains(' A')) {
+      result = result.replaceAll(' A', ' $ampmUpper');
+    } else if (result.contains(' a')) {
+      result = result.replaceAll(' a', ' $ampmLower');
+    } else if (result.endsWith('A')) {
+      result = result.replaceAll('A', ampmUpper);
+    } else if (result.endsWith('a')) {
+      result = result.replaceAll('a', ampmLower);
+    }
+
+    if (hasAmPm) {
+      result = result.replaceAll('HH', h12.toString().padLeft(2, '0'));
+    } else {
+      result = result.replaceAll('HH', h24.toString().padLeft(2, '0'));
+    }
+    result = result.replaceAll('hh', h12.toString().padLeft(2, '0'));
+    result = result.replaceAll('mm', m);
+    result = result.replaceAll('ss', s);
+
+    return result;
   }
 
   Widget _buildTimeFormatForm(
@@ -1483,95 +1576,93 @@ class _UserProfilePageState extends State<UserProfilePage> {
   ) {
     final List<String> formats = [
       'HH:mm',
-      'hh:mm a',
-      'hh:mm A',
+      'HH:mm a',
+      'HH:mm A',
       'HH:mm:ss',
-      'hh:mm:ss a',
-      'hh:mm:ss A',
-      'Custom Time',
+      'HH:mm:ss a',
+      'HH:mm:ss A',
+      'CustomTime',
     ];
-    if (timeFormat.isNotEmpty && !formats.contains(timeFormat)) {
-      formats.insert(0, timeFormat);
-    }
-    final currentFormat = timeFormat.isEmpty ? 'HH:mm' : timeFormat;
 
-    String getPreview(String format, {bool useRealTime = false}) {
-      if (format == 'Custom Time') return 'Custom Time';
+    // Normalize lowercase hh to capital HH as expected by Serenity
+    String currentFormat = timeFormat.isEmpty ? 'HH:mm' : timeFormat;
+    if (currentFormat == 'hh:mm a') currentFormat = 'HH:mm a';
+    if (currentFormat == 'hh:mm A') currentFormat = 'HH:mm A';
+    if (currentFormat == 'hh:mm:ss a') currentFormat = 'HH:mm:ss a';
+    if (currentFormat == 'hh:mm:ss A') currentFormat = 'HH:mm:ss A';
 
-      final h24 = useRealTime ? DateTime.now().hour : 15;
-      final h12 = useRealTime ? (DateTime.now().hour % 12 == 0 ? 12 : DateTime.now().hour % 12) : 3;
-      final m = useRealTime ? DateTime.now().minute.toString().padLeft(2, '0') : '30';
-      final s = useRealTime ? DateTime.now().second.toString().padLeft(2, '0') : '53';
-      final isPM = useRealTime ? DateTime.now().hour >= 12 : true; // 15:30 is PM
-
-      String result = format;
-      result = result.replaceAll('HH', h24.toString().padLeft(2, '0'));
-      result = result.replaceAll('hh', h12.toString().padLeft(2, '0'));
-      result = result.replaceAll('mm', m);
-      result = result.replaceAll('ss', s);
-
-      // Handle AM/PM
-      if (result.contains('A')) {
-        result = result.replaceAll('A', isPM ? 'PM' : 'AM');
-      } else if (result.contains('a')) {
-        result = result.replaceAll('a', isPM ? 'pm' : 'am');
-      } else if (result.contains('TT') || result.contains('tt')) {
-        result = result.replaceAll(RegExp(r'tt', caseSensitive: false), isPM ? 'PM' : 'AM');
-      }
-
-      // Fallback if somehow no hours were matched
-      if (!result.contains(RegExp(r'[0-9]'))) {
-        return '${h24.toString().padLeft(2, '0')}:$m';
-      }
-      return result;
+    if (!formats.contains(currentFormat) && currentFormat != 'CustomTime') {
+      formats.insert(formats.length - 1, currentFormat);
     }
 
-    final timeExamples = formats.map((f) => getPreview(f, useRealTime: false)).toList();
-    final staticExample = getPreview(currentFormat, useRealTime: false);
-    final dynamicExample = getPreview(currentFormat, useRealTime: true);
+    String timeItemAsString(String val) {
+      switch (val) {
+        case 'HH:mm':
+          return '15:30';
+        case 'HH:mm a':
+          return '03:30 pm';
+        case 'HH:mm A':
+          return '03:30 PM';
+        case 'HH:mm:ss':
+          return '15:30:53';
+        case 'HH:mm:ss a':
+          return '03:30:53 pm';
+        case 'HH:mm:ss A':
+          return '03:30:53 PM';
+        case 'CustomTime':
+          return 'Custom Time';
+        default:
+          return val;
+      }
+    }
+
+    final isCustomTime = currentFormat == 'CustomTime';
+    final customTimeVal = _userProfile?['CustomTime']?.toString() ?? currentFormat;
+    final previewFormat = isCustomTime ? customTimeVal : currentFormat;
+    final preview = _formatDisplayTime(DateTime.now(), previewFormat);
 
     return Column(
       children: [
         _buildDropdownField(
           'Time',
-          staticExample,
-          timeExamples,
-          cardColor,
-          textColor,
-          labelColor,
-          borderColor,
-          onChanged: (val) {
-            if (val != null) {
-              final idx = timeExamples.indexOf(val);
-              if (idx != -1) {
-                setState(() {
-                  _userProfile ??= {};
-                  _userProfile!['FormatTime'] = formats[idx];
-                });
-              }
-            }
-          },
-        ),
-        _buildDropdownField(
-          'Format',
           currentFormat,
           formats,
           cardColor,
           textColor,
           labelColor,
           borderColor,
+          itemAsString: timeItemAsString,
           onChanged: (val) {
             if (val != null) {
               setState(() {
                 _userProfile ??= {};
                 _userProfile!['FormatTime'] = val;
+                if (val != 'CustomTime') {
+                  _userProfile!['CustomTime'] = val;
+                }
               });
             }
           },
         ),
+        if (isCustomTime)
+          _buildTextField(
+            'Custom Time',
+            customTimeVal,
+            cardColor,
+            textColor,
+            labelColor,
+            borderColor,
+            enabled: true,
+            onChanged: (val) {
+              setState(() {
+                _userProfile ??= {};
+                _userProfile!['CustomTime'] = val;
+              });
+            },
+          ),
         _buildTextField(
           'Preview',
-          dynamicExample,
+          preview,
           cardColor,
           textColor,
           labelColor,
@@ -1581,6 +1672,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
       ],
     );
   }
+
 
   Widget _buildNumberFormatForm(
     Color cardColor,
@@ -2009,6 +2101,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
           ),
           const SizedBox(height: 6),
           TextFormField(
+            key: ValueKey('${label}_$value'),
             initialValue: value,
             enabled: enabled,
             onChanged: onChanged,
@@ -2050,10 +2143,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
     Color borderColor, {
     bool isRequired = false,
     GlobalKey? fieldKey,
+    String Function(String)? itemAsString,
     ValueChanged<String?>? onChanged,
   }) {
-    if (value.isNotEmpty && !options.contains(value)) {
-      options.add(value);
+    final effectiveOptions = List<String>.from(options);
+    if (value.isNotEmpty && !effectiveOptions.contains(value)) {
+      effectiveOptions.add(value);
     }
 
     return Container(
@@ -2078,7 +2173,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
           SearchableDropdown<String>(
             value: value.isEmpty ? null : value,
             hint: 'Select...',
-            options: options.toSet().toList(),
+            options: effectiveOptions.toSet().toList(),
+            itemAsString: itemAsString,
             onChanged: (val) {
               if (onChanged != null) onChanged(val);
             },
