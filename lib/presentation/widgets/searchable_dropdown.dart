@@ -53,7 +53,8 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
 
     final result = await showDialog<T>(
       context: context,
-      barrierColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.25),
+      barrierDismissible: true,
       useSafeArea: false,
       builder: (ctx) => _SearchableDropdownPopup<T>(
         options: widget.options,
@@ -181,7 +182,7 @@ class _SearchableDropdownPopupState<T> extends State<_SearchableDropdownPopup<T>
 
     final screenHeight = MediaQuery.of(context).size.height;
     final spaceBelow = screenHeight - widget.targetOffset.dy - widget.targetSize.height;
-    final showBelow = spaceBelow > 250 || spaceBelow > widget.targetOffset.dy;
+    final showBelow = spaceBelow > 220 || spaceBelow > widget.targetOffset.dy;
 
     double? top;
     double? bottom;
@@ -192,29 +193,46 @@ class _SearchableDropdownPopupState<T> extends State<_SearchableDropdownPopup<T>
       bottom = screenHeight - widget.targetOffset.dy + 4;
     }
 
+    final availableHeight = showBelow
+        ? (spaceBelow - 24)
+        : (widget.targetOffset.dy - 24);
+    final maxHeight = availableHeight.clamp(160.0, 320.0);
+
     return Stack(
       children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.pop(context),
+            child: Container(color: Colors.transparent),
+          ),
+        ),
         Positioned(
           left: widget.targetOffset.dx,
           top: top,
           bottom: bottom,
           width: widget.targetSize.width,
           child: Material(
-            elevation: 8,
+            elevation: 12,
+            shadowColor: Colors.black.withOpacity(0.6),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
+              side: BorderSide(
+                color: isDark ? const Color(0xFF25426B) : Colors.grey.shade300,
+                width: 1.2,
+              ),
             ),
             color: isDark ? AppTheme.darkSurface : Colors.white,
             clipBehavior: Clip.antiAlias,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 200),
+              constraints: BoxConstraints(maxHeight: maxHeight),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Search field
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
                     child: TextField(
                       controller: _searchController,
                       onChanged: _filterOptions,
@@ -239,25 +257,26 @@ class _SearchableDropdownPopupState<T> extends State<_SearchableDropdownPopup<T>
                         prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                         filled: true,
                         fillColor: isDark
-                            ? AppTheme.darkBackground.withOpacity(0.5)
+                            ? AppTheme.darkBackground.withOpacity(0.6)
                             : Colors.grey.shade50,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(
-                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
+                            color: isDark ? Colors.white.withOpacity(0.12) : Colors.grey.shade200,
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(
-                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
+                            color: isDark ? Colors.white.withOpacity(0.12) : Colors.grey.shade200,
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
+                          borderSide: const BorderSide(
+                            color: AppTheme.primaryColor,
+                            width: 1.5,
                           ),
                         ),
                       ),
@@ -274,16 +293,16 @@ class _SearchableDropdownPopupState<T> extends State<_SearchableDropdownPopup<T>
                                 children: [
                                   Icon(
                                     Icons.search_off,
-                                    size: 40,
+                                    size: 36,
                                     color: isDark
                                         ? AppTheme.darkTextSecondary.withOpacity(0.5)
                                         : Colors.grey.shade400,
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 8),
                                   Text(
                                     'No results found',
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       color: isDark
                                           ? AppTheme.darkTextSecondary
                                           : AppTheme.textSecondary,
@@ -293,35 +312,38 @@ class _SearchableDropdownPopupState<T> extends State<_SearchableDropdownPopup<T>
                               ),
                             ),
                           )
-                        : ListView.builder(
-                            shrinkWrap: true,
-                            padding: const EdgeInsets.only(bottom: 8),
-                            itemCount: _filteredOptions.length,
-                            itemBuilder: (context, index) {
-                              final option = _filteredOptions[index];
-                              final isSelected = widget.selectedValue != null &&
-                                  _asString(option) == _asString(widget.selectedValue as T);
-                              return InkWell(
-                                onTap: () => Navigator.pop(context, option),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  color: isSelected
-                                      ? AppTheme.primaryColor.withOpacity(0.1)
-                                      : Colors.transparent,
-                                  child: Text(
-                                    _asString(option),
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: isDark
-                                          ? AppTheme.darkTextPrimary
-                                          : AppTheme.textPrimary,
-                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        : Scrollbar(
+                            thumbVisibility: _filteredOptions.length > 5,
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              itemCount: _filteredOptions.length,
+                              itemBuilder: (context, index) {
+                                final option = _filteredOptions[index];
+                                final isSelected = widget.selectedValue != null &&
+                                    _asString(option) == _asString(widget.selectedValue as T);
+                                return InkWell(
+                                  onTap: () => Navigator.pop(context, option),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                    color: isSelected
+                                        ? AppTheme.primaryColor.withOpacity(0.15)
+                                        : Colors.transparent,
+                                    child: Text(
+                                      _asString(option),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: isSelected
+                                            ? AppTheme.primaryColor
+                                            : (isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary),
+                                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
                   ),
                 ],

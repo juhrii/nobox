@@ -11,6 +11,7 @@ import '../../../core/providers/chat_settings_provider.dart';
 import '../../../core/app_config.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/media_service.dart';
+import '../../../core/utils/date_time_helper.dart';
 import '../../widgets/searchable_dropdown.dart';
 
 class UserProfilePage extends StatefulWidget {
@@ -136,9 +137,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
     });
   }
 
-  Future<void> _fetchUserProfile(int userId) async {
+  Future<void> _fetchUserProfile(int userId, {bool silent = false}) async {
     if (userId == 0) {
-      if (mounted) setState(() => _isLoadingProfile = false);
+      if (!silent && mounted) setState(() => _isLoadingProfile = false);
       return;
     }
     try {
@@ -152,17 +153,17 @@ class _UserProfilePageState extends State<UserProfilePage> {
           debugPrint(
             '>>> FETCHED PROFILE: FormatDate=${data['Entity']['FormatDate']}, FormatTime=${data['Entity']['FormatTime']}, FormatNumber=${data['Entity']['FormatNumber']}',
           );
-            if (mounted) {
-              setState(() {
-                _userProfile = data['Entity'];
-              });
-              
-              final dFormat = _userProfile?['FormatDate']?.toString() ?? 'DD/MM/YYYY';
-              final tFormat = _userProfile?['FormatTime']?.toString() ?? 'HH:mm';
-              context.read<ChatSettingsProvider>().setDateTimeFormat(dFormat, tFormat);
-              
+          if (mounted) {
+            setState(() {
+              _userProfile = data['Entity'];
+            });
+
+            final dFormat = _userProfile?['FormatDate']?.toString() ?? 'DD/MM/YYYY';
+            final tFormat = _userProfile?['FormatTime']?.toString() ?? 'HH:mm';
+            context.read<ChatSettingsProvider>().setDateTimeFormat(dFormat, tFormat);
+
             await _loadDependentAddressData();
-            if (mounted) setState(() => _isLoadingProfile = false);
+            if (!silent && mounted) setState(() => _isLoadingProfile = false);
           }
           return;
         }
@@ -170,7 +171,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     } catch (e) {
       debugPrint('Error fetching user profile: $e');
     }
-    if (mounted) setState(() => _isLoadingProfile = false);
+    if (!silent && mounted) setState(() => _isLoadingProfile = false);
   }
 
   Future<void> _loadDependentAddressData() async {
@@ -638,10 +639,17 @@ class _UserProfilePageState extends State<UserProfilePage> {
           final tFormat = entity['FormatTime']?.toString() ?? 'HH:mm';
           context.read<ChatSettingsProvider>().setDateTimeFormat(dFormat, tFormat);
           _showTopNotification('Profile saved successfully.', isError: false);
+          setState(() {
+            _userProfile = entity;
+            _isLoadingProfile = false;
+          });
         }
-        await _fetchUserProfile(
+        // Sinkronisasi data profile dari server di background tanpa menahan UI
+        _fetchUserProfile(
           int.tryParse(entity['EntityId'].toString()) ?? 0,
+          silent: true,
         );
+        return;
       } else {
         if (mounted) {
           _showTopNotification(
@@ -1468,9 +1476,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
 
     final isCustomDate = currentFormat == 'CustomDate';
-    final customDateVal = _userProfile?['CustomDate']?.toString() ?? currentFormat;
-    final previewFormat = isCustomDate ? customDateVal : currentFormat;
-    final preview = _formatDisplayDate(DateTime.now(), previewFormat);
+    final formatValue = isCustomDate
+        ? (_userProfile?['CustomDate']?.toString() ?? '')
+        : currentFormat;
+    final preview = _formatDisplayDate(
+      DateTime.now(),
+      formatValue.isEmpty ? currentFormat : formatValue,
+    );
 
     return Column(
       children: [
@@ -1495,22 +1507,21 @@ class _UserProfilePageState extends State<UserProfilePage> {
             }
           },
         ),
-        if (isCustomDate)
-          _buildTextField(
-            'Custom Date',
-            customDateVal,
-            cardColor,
-            textColor,
-            labelColor,
-            borderColor,
-            enabled: true,
-            onChanged: (val) {
-              setState(() {
-                _userProfile ??= {};
-                _userProfile!['CustomDate'] = val;
-              });
-            },
-          ),
+        _buildTextField(
+          'Format',
+          formatValue,
+          cardColor,
+          textColor,
+          labelColor,
+          borderColor,
+          enabled: isCustomDate,
+          onChanged: (val) {
+            setState(() {
+              _userProfile ??= {};
+              _userProfile!['CustomDate'] = val;
+            });
+          },
+        ),
         _buildTextField(
           'Preview',
           preview,
@@ -1617,9 +1628,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
 
     final isCustomTime = currentFormat == 'CustomTime';
-    final customTimeVal = _userProfile?['CustomTime']?.toString() ?? currentFormat;
-    final previewFormat = isCustomTime ? customTimeVal : currentFormat;
-    final preview = _formatDisplayTime(DateTime.now(), previewFormat);
+    final formatValue = isCustomTime
+        ? (_userProfile?['CustomTime']?.toString() ?? '')
+        : currentFormat;
+    final preview = _formatDisplayTime(
+      DateTime.now(),
+      formatValue.isEmpty ? currentFormat : formatValue,
+    );
 
     return Column(
       children: [
@@ -1644,22 +1659,21 @@ class _UserProfilePageState extends State<UserProfilePage> {
             }
           },
         ),
-        if (isCustomTime)
-          _buildTextField(
-            'Custom Time',
-            customTimeVal,
-            cardColor,
-            textColor,
-            labelColor,
-            borderColor,
-            enabled: true,
-            onChanged: (val) {
-              setState(() {
-                _userProfile ??= {};
-                _userProfile!['CustomTime'] = val;
-              });
-            },
-          ),
+        _buildTextField(
+          'Format',
+          formatValue,
+          cardColor,
+          textColor,
+          labelColor,
+          borderColor,
+          enabled: isCustomTime,
+          onChanged: (val) {
+            setState(() {
+              _userProfile ??= {};
+              _userProfile!['CustomTime'] = val;
+            });
+          },
+        ),
         _buildTextField(
           'Preview',
           preview,
@@ -2015,14 +2029,10 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       ),
                     ],
                     rows: history.map((item) {
-                      String dateStr = item['LoginDate']?.toString() ?? '';
-                      if (dateStr.isNotEmpty) {
-                        try {
-                          final parsedDate = DateTime.parse(dateStr);
-                          dateStr =
-                              "${parsedDate.day}-${parsedDate.month}-${parsedDate.year} ${parsedDate.hour}:${parsedDate.minute.toString().padLeft(2, '0')}";
-                        } catch (e) {}
-                      }
+                      final rawDate = item['LoginDate']?.toString() ?? '';
+                      final dateStr = rawDate.isNotEmpty
+                          ? DateTimeHelper.timeAgo(rawDate)
+                          : '-';
                       return DataRow(
                         cells: [
                           DataCell(
@@ -2056,9 +2066,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
                             ),
                           ),
                           DataCell(
-                            Text(
-                              dateStr,
-                              style: TextStyle(color: textColor, fontSize: 13),
+                            Tooltip(
+                              message: rawDate,
+                              child: Text(
+                                dateStr,
+                                style: TextStyle(color: textColor, fontSize: 13),
+                              ),
                             ),
                           ),
                         ],
