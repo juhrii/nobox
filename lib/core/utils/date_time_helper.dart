@@ -56,7 +56,7 @@ class DateTimeHelper {
       return '$dateStr $timeStr';
     }
     return fallback;
-  }
+  } 
 
   /// Format relative time (e.g. "a few seconds ago", "5 minutes ago", "2 hours ago", "1 day ago", "3 days ago")
   /// matching Moment.js / Serenity fromNow() on NoBox web.

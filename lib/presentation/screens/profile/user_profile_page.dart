@@ -45,6 +45,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
   List<Map<String, dynamic>> _cities = [];
   List<Map<String, dynamic>> _timezones = [];
 
+  // Notification Overlay
+  OverlayEntry? _currentNotificationEntry;
+
   @override
   void initState() {
     super.initState();
@@ -57,6 +60,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   @override
   void dispose() {
+    _currentNotificationEntry?.remove();
+    _currentNotificationEntry = null;
     _timePreviewTimer?.cancel();
     super.dispose();
   }
@@ -154,8 +159,60 @@ class _UserProfilePageState extends State<UserProfilePage> {
             '>>> FETCHED PROFILE: FormatDate=${data['Entity']['FormatDate']}, FormatTime=${data['Entity']['FormatTime']}, FormatNumber=${data['Entity']['FormatNumber']}',
           );
           if (mounted) {
+            final entity = Map<String, dynamic>.from(data['Entity']);
+
+            // Normalize Date Format if it's 'CustomDate' but matches a standard preset
+            final customDate = entity['CustomDate']?.toString() ?? '';
+            final formatDate = entity['FormatDate']?.toString() ?? '';
+            const presetDates = [
+              'DD/MM/YYYY',
+              'DD-MM-YYYY',
+              'DD/MMM/YYYY',
+              'DD-MMM-YYYY',
+              'dddd, MMMM D, YYYY',
+              'MMMM D, YYYY',
+              'D MMM, YYYY',
+              'D-MMM-YYYY',
+            ];
+            if (formatDate == 'CustomDate' && presetDates.contains(customDate)) {
+              entity['FormatDate'] = customDate;
+            } else if (formatDate.toLowerCase() == 'dd-mm-yyyy') {
+              entity['FormatDate'] = 'DD-MM-YYYY';
+            } else if (formatDate.toLowerCase() == 'dd/mm/yyyy') {
+              entity['FormatDate'] = 'DD/MM/YYYY';
+            }
+
+            // Normalize Time Format if it's 'CustomTime' but matches a standard preset
+            final customTime = entity['CustomTime']?.toString() ?? '';
+            final formatTime = entity['FormatTime']?.toString() ?? '';
+            const presetTimes = [
+              'HH:mm',
+              'hh:mm a',
+              'hh:mm A',
+              'HH:mm:ss',
+              'hh:mm:ss a',
+              'hh:mm:ss A',
+            ];
+            String normalizedTime = formatTime;
+            if (normalizedTime == 'HH:mm a') normalizedTime = 'hh:mm a';
+            if (normalizedTime == 'HH:mm A') normalizedTime = 'hh:mm A';
+            if (normalizedTime == 'HH:mm:ss a') normalizedTime = 'hh:mm:ss a';
+            if (normalizedTime == 'HH:mm:ss A') normalizedTime = 'hh:mm:ss A';
+
+            if (normalizedTime == 'CustomTime') {
+              String normalizedCustom = customTime;
+              if (normalizedCustom == 'HH:mm a') normalizedCustom = 'hh:mm a';
+              if (normalizedCustom == 'HH:mm A') normalizedCustom = 'hh:mm A';
+              if (normalizedCustom == 'HH:mm:ss a') normalizedCustom = 'hh:mm:ss a';
+              if (normalizedCustom == 'HH:mm:ss A') normalizedCustom = 'hh:mm:ss A';
+              if (presetTimes.contains(normalizedCustom)) {
+                normalizedTime = normalizedCustom;
+              }
+            }
+            entity['FormatTime'] = normalizedTime;
+
             setState(() {
-              _userProfile = data['Entity'];
+              _userProfile = entity;
             });
 
             final dFormat = _userProfile?['FormatDate']?.toString() ?? 'DD/MM/YYYY';
@@ -303,30 +360,38 @@ class _UserProfilePageState extends State<UserProfilePage> {
     String message, {
     GlobalKey? key,
     bool isError = true,
-    int durationSeconds = 3,
+    int durationSeconds = 2,
   }) {
-    final overlay = Overlay.of(context);
+    // Tutup notifikasi sebelumnya agar tidak terjadi penumpukan pop up
+    _currentNotificationEntry?.remove();
+    _currentNotificationEntry = null;
+
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
     bool isRemoved = false;
     late OverlayEntry entry;
 
     void removeEntry() {
       if (!isRemoved) {
         isRemoved = true;
+        if (_currentNotificationEntry == entry) {
+          _currentNotificationEntry = null;
+        }
         entry.remove();
       }
     }
 
     entry = OverlayEntry(
       builder: (context) => Positioned(
-        top: MediaQuery.of(context).padding.top + 20,
+        top: MediaQuery.of(context).padding.top + 16,
         left: 20,
         right: 20,
         child: Material(
           color: Colors.transparent,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: isError ? Colors.red.shade500 : Colors.green.shade500,
+              color: isError ? Colors.red.shade600 : Colors.green.shade600,
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
@@ -341,6 +406,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                 Icon(
                   isError ? Icons.error_outline : Icons.check_circle_outline,
                   color: Colors.white,
+                  size: 20,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -349,12 +415,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
+                      fontSize: 13,
                     ),
                   ),
                 ),
                 GestureDetector(
                   onTap: removeEntry,
-                  child: const Icon(Icons.close, color: Colors.white, size: 20),
+                  child: const Icon(Icons.close, color: Colors.white, size: 18),
                 ),
               ],
             ),
@@ -363,6 +430,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
       ),
     );
 
+    _currentNotificationEntry = entry;
     overlay.insert(entry);
     Future.delayed(Duration(seconds: durationSeconds), () {
       if (mounted) removeEntry();
@@ -540,14 +608,11 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       debugPrint('>>> SAVING PROFILE: FormatNumber=${entity['FormatNumber']}');
 
-      // Hapus field read-only & display-only bawaan Serenity agar tidak memicu error 400/503
+      // Hapus hanya field metadata internal Serenity
       entity.remove('UpdateDate');
       entity.remove('UpdateUserId');
       entity.remove('InsertDate');
       entity.remove('InsertUserId');
-      entity.remove('DisplayDate');
-      entity.remove('DisplayTime');
-      entity.remove('DisplayNumber');
 
       // Pastikan CustomDate dan CustomTime terisi dengan benar (sesuai FormatDate & FormatTime)
       if (entity['FormatDate'] != null) {
@@ -561,11 +626,32 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       if (entity['FormatTime'] != null) {
         if (entity['FormatTime'] != 'CustomTime') {
-          entity['CustomTime'] = entity['FormatTime'];
+          String ft = entity['FormatTime'].toString();
+          if (ft == 'HH:mm a') ft = 'hh:mm a';
+          if (ft == 'HH:mm A') ft = 'hh:mm A';
+          if (ft == 'HH:mm:ss a') ft = 'hh:mm:ss a';
+          if (ft == 'HH:mm:ss A') ft = 'hh:mm:ss A';
+          entity['FormatTime'] = ft;
+          entity['CustomTime'] = ft;
         }
       } else {
         entity['FormatTime'] = 'HH:mm';
         entity['CustomTime'] = 'HH:mm';
+      }
+
+      // Hitung dan kirim DisplayDate, DisplayTime & DisplayNumber persis seperti web NoBox
+      final now = DateTime.now();
+      final currentDateFormat = entity['FormatDate'] == 'CustomDate'
+          ? (entity['CustomDate']?.toString() ?? 'DD/MM/YYYY')
+          : (entity['FormatDate']?.toString() ?? 'DD/MM/YYYY');
+      final currentTimeFormat = entity['FormatTime'] == 'CustomTime'
+          ? (entity['CustomTime']?.toString() ?? 'hh:mm a')
+          : (entity['FormatTime']?.toString() ?? 'hh:mm a');
+
+      entity['DisplayDate'] = _formatDisplayDate(now, currentDateFormat);
+      entity['DisplayTime'] = _formatDisplayTime(now, currentTimeFormat);
+      if (entity['DisplayNumber'] == null || entity['DisplayNumber'].toString().isEmpty) {
+        entity['DisplayNumber'] = '017,081,945';
       }
 
       // Debugging formats before save
@@ -799,7 +885,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             OutlinedButton(
-                              onPressed: _saveProfile,
+                              onPressed: _isLoadingProfile ? null : _saveProfile,
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.blue.shade400,
                                 side: BorderSide(color: Colors.blue.shade400.withOpacity(0.5)),
@@ -1445,7 +1531,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
       'CustomDate',
     ];
 
-    String currentFormat = dateFormat.isEmpty ? 'DD/MM/YYYY' : dateFormat;
+    String currentFormat = dateFormat.isEmpty ? 'DD-MM-YYYY' : dateFormat;
+    if (currentFormat == 'CustomDate') {
+      final customDate = _userProfile?['CustomDate']?.toString() ?? '';
+      if (formats.contains(customDate) && customDate != 'CustomDate') {
+        currentFormat = customDate;
+      }
+    }
     if (!formats.contains(currentFormat) && currentFormat != 'CustomDate') {
       formats.insert(formats.length - 1, currentFormat);
     }
@@ -1587,20 +1679,31 @@ class _UserProfilePageState extends State<UserProfilePage> {
   ) {
     final List<String> formats = [
       'HH:mm',
-      'HH:mm a',
-      'HH:mm A',
+      'hh:mm a',
+      'hh:mm A',
       'HH:mm:ss',
-      'HH:mm:ss a',
-      'HH:mm:ss A',
+      'hh:mm:ss a',
+      'hh:mm:ss A',
       'CustomTime',
     ];
 
-    // Normalize lowercase hh to capital HH as expected by Serenity
+    // Normalize uppercase HH to lowercase hh for 12-hour AM/PM formats as expected by NoBox Web
     String currentFormat = timeFormat.isEmpty ? 'HH:mm' : timeFormat;
-    if (currentFormat == 'hh:mm a') currentFormat = 'HH:mm a';
-    if (currentFormat == 'hh:mm A') currentFormat = 'HH:mm A';
-    if (currentFormat == 'hh:mm:ss a') currentFormat = 'HH:mm:ss a';
-    if (currentFormat == 'hh:mm:ss A') currentFormat = 'HH:mm:ss A';
+    if (currentFormat == 'HH:mm a') currentFormat = 'hh:mm a';
+    if (currentFormat == 'HH:mm A') currentFormat = 'hh:mm A';
+    if (currentFormat == 'HH:mm:ss a') currentFormat = 'hh:mm:ss a';
+    if (currentFormat == 'HH:mm:ss A') currentFormat = 'hh:mm:ss A';
+
+    if (currentFormat == 'CustomTime') {
+      String customTime = _userProfile?['CustomTime']?.toString() ?? '';
+      if (customTime == 'HH:mm a') customTime = 'hh:mm a';
+      if (customTime == 'HH:mm A') customTime = 'hh:mm A';
+      if (customTime == 'HH:mm:ss a') customTime = 'hh:mm:ss a';
+      if (customTime == 'HH:mm:ss A') customTime = 'hh:mm:ss A';
+      if (formats.contains(customTime) && customTime != 'CustomTime') {
+        currentFormat = customTime;
+      }
+    }
 
     if (!formats.contains(currentFormat) && currentFormat != 'CustomTime') {
       formats.insert(formats.length - 1, currentFormat);
@@ -1610,14 +1713,18 @@ class _UserProfilePageState extends State<UserProfilePage> {
       switch (val) {
         case 'HH:mm':
           return '15:30';
+        case 'hh:mm a':
         case 'HH:mm a':
           return '03:30 pm';
+        case 'hh:mm A':
         case 'HH:mm A':
           return '03:30 PM';
         case 'HH:mm:ss':
           return '15:30:53';
+        case 'hh:mm:ss a':
         case 'HH:mm:ss a':
           return '03:30:53 pm';
+        case 'hh:mm:ss A':
         case 'HH:mm:ss A':
           return '03:30:53 PM';
         case 'CustomTime':

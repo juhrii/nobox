@@ -43,6 +43,8 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
   }
 
   void _showDropdown() async {
+    if (_isOpen) return;
+
     final renderBox = context.findRenderObject() as RenderBox;
     final offset = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
