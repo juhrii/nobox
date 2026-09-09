@@ -1604,9 +1604,15 @@ class ChatService {
         // Sehingga context balasan hanya bisa hidup di memori lokal saat ini untuk API Inbox/Send.
       }
 
+      final bool isGroupReq = request.groupId != null && request.groupId!.isNotEmpty && request.groupId != '0';
+      if (isGroupReq) {
+        payload['GroupId'] = int.tryParse(request.groupId!) ?? request.groupId;
+        payload['GrpId'] = int.tryParse(request.groupId!) ?? request.groupId;
+      }
+
       payload['ExtId'] = finalExtId;
-      // Fallback: jika ExtId kosong atau ada LinkId valid, tambahkan LinkId (pastikan BUKAN nomor telepon!)
-      if (request.contactId != null && request.contactId!.isNotEmpty && !isTelephoneNumber(request.contactId)) {
+      // Fallback: jika ExtId kosong atau ada LinkId valid, tambahkan LinkId (pastikan BUKAN nomor telepon dan BUKAN grup!)
+      if (!isGroupReq && request.contactId != null && request.contactId!.isNotEmpty && !isTelephoneNumber(request.contactId)) {
         final linkIdInt = int.tryParse(request.contactId!);
         if (linkIdInt != null && linkIdInt < 99999999) payload['LinkId'] = linkIdInt;
       }
@@ -1911,8 +1917,9 @@ class ChatService {
       "Ptt": bodyType == 2,
     };
     
-    final idLinkValue = (link != null && link.isNotEmpty) ? link : contactId;
-    debugPrint('ChatService: SignalR Media (All Channels) → idLink=$idLinkValue, idRoom=$conversationId, type=${bodyType.toString()}, File=$fileJsonObj');
+    final bool isGroupMedia = (groupId != null && groupId.isNotEmpty && groupId != '0');
+    final idLinkValue = isGroupMedia ? null : ((link != null && link.isNotEmpty) ? link : contactId);
+    debugPrint('ChatService: SignalR Media (All Channels) → idLink=$idLinkValue, idGroup=$groupId, idRoom=$conversationId, type=${bodyType.toString()}, File=$fileJsonObj');
 
     // FIX: Pesan Media untuk channel lain tetap lewat SignalR tanpa Teks Caption
     final signalRMsg = '';
@@ -1921,7 +1928,7 @@ class ChatService {
       idLink: idLinkValue,
       idAccount: safeAccountId,
       idRoom: conversationId,
-      idGroup: groupId,
+      idGroup: isGroupMedia ? groupId : null,
       type: bodyType.toString(),
       msg: '', 
       fileJson: jsonEncode(fileJsonObj),

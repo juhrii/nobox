@@ -271,7 +271,7 @@ class _ChatListPageState extends State<ChatListPage>
                       style: const TextStyle(color: Colors.white, fontSize: 16),
                       cursorColor: Colors.white,
                       decoration: InputDecoration(
-                        hintText: 'Cari chat...',
+                        hintText: 'Cari kontak...',
                         hintStyle: TextStyle(
                           color: Colors.white.withOpacity(0.7),
                         ),
@@ -554,10 +554,34 @@ class _ChatListPageState extends State<ChatListPage>
                   return const ChatListSkeleton();
                 }
 
+                final isSearching = chatProvider.searchQuery.isNotEmpty;
                 final chats = chatProvider.chats;
+                final serverContacts = isSearching
+                    ? chatProvider.searchServerContacts(chatProvider.searchQuery)
+                    : <Map<String, dynamic>>[];
 
-                if (chats.isEmpty) {
-                  final isSearching = chatProvider.searchQuery.isNotEmpty;
+                // Filter server contacts agar tidak menduplikasi obrolan aktif yang sudah tampil di atas
+                final activeChatNames = chats
+                    .map((c) => c.sender.trim().toLowerCase())
+                    .toSet();
+                final activeContactIds = chats
+                    .map((c) => c.contactId)
+                    .where((id) => id.isNotEmpty && id != '0')
+                    .toSet();
+                final otherContacts = serverContacts.where((contact) {
+                  final cName = (contact['Name'] ?? contact['Nm'] ?? '')
+                      .toString()
+                      .trim()
+                      .toLowerCase();
+                  final cId =
+                      (contact['Id'] ?? contact['id'] ?? '').toString();
+                  if (activeChatNames.contains(cName)) return false;
+                  if (cId.isNotEmpty && activeContactIds.contains(cId))
+                    return false;
+                  return true;
+                }).toList();
+
+                if (chats.isEmpty && (!isSearching || otherContacts.isEmpty)) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -593,12 +617,12 @@ class _ChatListPageState extends State<ChatListPage>
                         if (chatProvider.error != null) ...[
                           const SizedBox(height: 8),
                           Text(
-                            chatProvider.error!.contains('500') 
+                            chatProvider.error!.contains('500')
                                 ? 'Server NoBox sedang mengalami gangguan (Error 500). Silakan coba lagi nanti.'
                                 : chatProvider.error!.contains('SocketException')
                                     ? 'Tidak ada koneksi internet atau server tidak dapat dijangkau.'
-                                    : chatProvider.error!.length > 100 
-                                        ? 'Gagal memuat obrolan. Silakan coba lagi.' 
+                                    : chatProvider.error!.length > 100
+                                        ? 'Gagal memuat obrolan. Silakan coba lagi.'
                                         : chatProvider.error!,
                             style: const TextStyle(
                               color: Colors.red,
@@ -618,6 +642,78 @@ class _ChatListPageState extends State<ChatListPage>
                         ),
                       ],
                     ),
+                  );
+                }
+
+                if (isSearching) {
+                  // Mode Pencarian: Tampilkan Obrolan Aktif + Kontak dari Server (Buku Alamat)
+                  final List<Widget> searchItems = [];
+
+                  if (chats.isNotEmpty) {
+                    if (otherContacts.isNotEmpty) {
+                      searchItems.add(
+                        _buildSearchSectionHeader(
+                          title: 'Obrolan Aktif',
+                          count: chats.length,
+                          icon: Icons.chat_bubble_outline,
+                          isDark: isDark,
+                        ),
+                      );
+                    }
+                    for (final chat in chats) {
+                      searchItems.add(
+                        _buildChatTile(
+                          context,
+                          chat,
+                          chatProvider,
+                          isDark,
+                        ),
+                      );
+                    }
+                  }
+
+                  if (otherContacts.isNotEmpty) {
+                    searchItems.add(
+                      _buildSearchSectionHeader(
+                        title: 'Kontak dari Buku Alamat',
+                        count: otherContacts.length,
+                        icon: Icons.contacts_outlined,
+                        isDark: isDark,
+                      ),
+                    );
+                    for (final contact in otherContacts) {
+                      searchItems.add(
+                        _buildServerContactTile(
+                          context,
+                          contact,
+                          chatProvider,
+                          isDark,
+                        ),
+                      );
+                    }
+                  }
+
+                  searchItems.add(
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          'Tidak ada hasil lagi',
+                          style: TextStyle(
+                            color: isDark
+                                ? Colors.grey.shade500
+                                : Colors.grey.shade400,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+
+                  return ListView(
+                    controller: _scrollController,
+                    padding: EdgeInsets.zero,
+                    children: searchItems,
                   );
                 }
 
@@ -725,6 +821,217 @@ class _ChatListPageState extends State<ChatListPage>
     });
   }
 
+  // FITUR: Header Bagian Pencarian
+  // FUNGSI: Memberikan label pembatas visual antara Obrolan Aktif dan Kontak dari Buku Alamat NoBox
+  Widget _buildSearchSectionHeader({
+    required String title,
+    required int count,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: isDark ? const Color(0xFF192229) : Colors.grey.shade100,
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 15,
+            color: Colors.blue.shade600,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              count.toString(),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue.shade600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // FITUR: Tile Kontak Server (Buku Alamat)
+  // FUNGSI: Menampilkan baris kontak dari direktori server yang belum memiliki obrolan aktif di inbox
+  Widget _buildServerContactTile(
+    BuildContext context,
+    Map<String, dynamic> contact,
+    ChatProvider chatProvider,
+    bool isDark,
+  ) {
+    final name = (contact['Name'] ?? contact['Nm'] ?? 'Kontak').toString();
+    final phone = (contact['Phone'] ??
+            contact['Hp'] ??
+            contact['Mobile'] ??
+            contact['Telp'] ??
+            '')
+        .toString();
+    final photo = (contact['Photo'] ??
+            contact['Img'] ??
+            contact['AvatarUrl'] ??
+            contact['Picture'] ??
+            '')
+        .toString();
+    final contactId = (contact['Id'] ?? contact['id'] ?? '').toString();
+
+    return InkWell(
+      onTap: () {
+        // Cek apakah kontak ini sudah memiliki obrolan aktif
+        final allChats = chatProvider.allChats;
+        ChatModel? existingChat;
+        for (final c in allChats) {
+          final isSameId = contactId.isNotEmpty &&
+              (c.contactId == contactId || c.ctRealId == contactId);
+          final isSameName = name.trim().toLowerCase() ==
+              c.sender.trim().toLowerCase();
+          if (isSameId || isSameName) {
+            existingChat = c;
+            break;
+          }
+        }
+
+        if (existingChat != null) {
+          if (widget.onChatSelected != null) {
+            widget.onChatSelected!(existingChat);
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatDetailPage(chat: existingChat!),
+              ),
+            );
+          }
+        } else {
+          // Buka form percakapan baru dengan kontak yang otomatis terpilih
+          _showNewConversationDialog(
+            initialContactName: name,
+            initialContactId: contactId,
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1F2C34) : Colors.white,
+          border: Border(
+            bottom: BorderSide(
+              color: isDark
+                  ? Colors.white.withOpacity(0.06)
+                  : Colors.grey.shade200,
+              width: 0.5,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            AuthenticatedAvatar(
+              imageUrl: photo,
+              size: 44,
+              isGroup: false,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: isDark
+                          ? AppTheme.darkTextPrimary
+                          : Colors.black87,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.phone_outlined,
+                        size: 13,
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          phone.isNotEmpty ? phone : 'Kontak dari server',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    size: 14,
+                    color: Colors.blue.shade600,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Chat',
+                    style: TextStyle(
+                      color: Colors.blue.shade600,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // FITUR: Dialog Pencarian Bawaan (Cadangan)
   // FUNGSI: Menampilkan input text sederhana dalam sebuah dialog sebagai metode alternatif untuk mencari daftar obrolan aktif.
   void _showSearchDialog() {
@@ -766,9 +1073,61 @@ class _ChatListPageState extends State<ChatListPage>
     );
   }
 
+  // Helper untuk membuat daftar nama tampilan yang unik dari data API
+  List<String> _toUniqueNames(
+    List<Map<String, dynamic>> items,
+    List<String> keys,
+  ) {
+    final names = <String>[];
+    final seen = <String, int>{};
+    for (final item in items) {
+      String name = 'Unknown';
+      for (final key in keys) {
+        final val = item[key]?.toString();
+        if (val != null && val.isNotEmpty && val != 'null') {
+          name = val;
+          break;
+        }
+      }
+      if (name == 'Unknown' || name.isEmpty) {
+        for (final entry in item.entries) {
+          final k = entry.key.toLowerCase();
+          if (k != 'id' &&
+              k != 'tenantid' &&
+              k != 'chid' &&
+              k != 'type' &&
+              k != 'kt') {
+            final val = entry.value?.toString();
+            if (val != null &&
+                val.isNotEmpty &&
+                val != 'null' &&
+                val != '0' &&
+                val != '1' &&
+                !val.startsWith('{')) {
+              name = val;
+              break;
+            }
+          }
+        }
+      }
+      // Hilangkan duplikasi: tambahkan (2), (3), dst. untuk nama yang sama
+      if (seen.containsKey(name)) {
+        seen[name] = seen[name]! + 1;
+        names.add('$name (${seen[name]})');
+      } else {
+        seen[name] = 1;
+        names.add(name);
+      }
+    }
+    return names;
+  }
+
   // FITUR: Dialog Buat Percakapan Baru
   // FUNGSI: Menampilkan popup form (Channel, Akun, Kontak) untuk memulai obrolan baru dengan kontak tertentu atau manual.
-  void _showNewConversationDialog() {
+  void _showNewConversationDialog({
+    String? initialContactName,
+    String? initialContactId,
+  }) {
     String selectedChat = 'Private';
     String? selectedChannel;
     String? selectedAccount;
@@ -818,6 +1177,32 @@ class _ChatListPageState extends State<ChatListPage>
                     }
                     if (!contactResp.isError && contactResp.data != null) {
                       contacts = contactResp.data!;
+                      if (initialContactId != null ||
+                          initialContactName != null) {
+                        final cNames = _toUniqueNames(
+                          contacts,
+                          ['Name', 'Nm'],
+                        );
+                        for (int i = 0; i < contacts.length; i++) {
+                          final cId = contacts[i]['Id']?.toString();
+                          final cNm = (contacts[i]['Name'] ??
+                                  contacts[i]['Nm'])
+                              ?.toString() ??
+                              '';
+                          if ((initialContactId != null &&
+                                  cId == initialContactId) ||
+                              (initialContactName != null &&
+                                  cNm.trim().toLowerCase() ==
+                                      initialContactName
+                                          .trim()
+                                          .toLowerCase())) {
+                            if (i < cNames.length) {
+                              selectedContact = cNames[i];
+                            }
+                            break;
+                          }
+                        }
+                      }
                     }
                   });
                 } catch (e) {
@@ -827,55 +1212,6 @@ class _ChatListPageState extends State<ChatListPage>
                   });
                 }
               });
-            }
-
-            // Helper untuk membuat daftar nama tampilan yang unik dari data API
-            List<String> toUniqueNames(
-              List<Map<String, dynamic>> items,
-              List<String> keys,
-            ) {
-              final names = <String>[];
-              final seen = <String, int>{};
-              for (final item in items) {
-                String name = 'Unknown';
-                for (final key in keys) {
-                  final val = item[key]?.toString();
-                  if (val != null && val.isNotEmpty && val != 'null') {
-                    name = val;
-                    break;
-                  }
-                }
-                if (name == 'Unknown' || name.isEmpty) {
-                  for (final entry in item.entries) {
-                    final k = entry.key.toLowerCase();
-                    if (k != 'id' &&
-                        k != 'tenantid' &&
-                        k != 'chid' &&
-                        k != 'type' &&
-                        k != 'kt') {
-                      final val = entry.value?.toString();
-                      if (val != null &&
-                          val.isNotEmpty &&
-                          val != 'null' &&
-                          val != '0' &&
-                          val != '1' &&
-                          !val.startsWith('{')) {
-                        name = val;
-                        break;
-                      }
-                    }
-                  }
-                }
-                // Hilangkan duplikasi: tambahkan (2), (3), dst. untuk nama yang sama
-                if (seen.containsKey(name)) {
-                  seen[name] = seen[name]! + 1;
-                  names.add('$name (${seen[name]})');
-                } else {
-                  seen[name] = 1;
-                  names.add(name);
-                }
-              }
-              return names;
             }
 
             Widget buildDropdownRow(
@@ -925,7 +1261,7 @@ class _ChatListPageState extends State<ChatListPage>
             }
 
             // Ekstrak nama unik dari data API untuk menu dropdown (dengan fallback key lengkap agar akun Telegram/platform lain terbaca)
-            final channelNames = toUniqueNames(channels, [
+            final channelNames = _toUniqueNames(channels, [
               'Nm',
               'Name',
               'ChannelName',
@@ -945,7 +1281,7 @@ class _ChatListPageState extends State<ChatListPage>
               }
             }
 
-            final accountNames = toUniqueNames(filteredAccounts, [
+            final accountNames = _toUniqueNames(filteredAccounts, [
               'Name',
               'AccountName',
               'Nm',
@@ -957,7 +1293,7 @@ class _ChatListPageState extends State<ChatListPage>
               'Email',
               'Phone',
             ]);
-            final contactNames = toUniqueNames(contacts, [
+            final contactNames = _toUniqueNames(contacts, [
               'Name',
               'CtNm',
               'CtRealNm',

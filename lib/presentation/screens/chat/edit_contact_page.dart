@@ -255,13 +255,20 @@ class _EditContactPageState extends State<EditContactPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final initial = widget.chat.sender.isNotEmpty ? widget.chat.sender[0].toUpperCase() : '?';
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFF5F8FA),
-      appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.blue,
-        foregroundColor: Colors.white,
-        title: const Text('Edit Contact', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-        centerTitle: false,
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        _removeCategoryOverlay();
+        _removeLocationOverlay();
+      },
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFF5F8FA),
+        appBar: AppBar(
+          backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.blue,
+          foregroundColor: Colors.white,
+          title: const Text('Edit Contact', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          centerTitle: false,
         actions: [
           // [ACTION: EDIT_CONTACT_INFO] - Eksekusi penyimpanan data profil kontak
           TextButton.icon(
@@ -654,6 +661,7 @@ class _EditContactPageState extends State<EditContactPage> {
             ),
         ],
       ),
+    ),
     );
   }
 

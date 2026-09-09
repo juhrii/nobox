@@ -2575,12 +2575,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 ? chat.id
                 : (chat.ctRealId.isNotEmpty ? chat.ctRealId : chat.contactId),
             content: finalContent,
-            accountId: chat.accountId,
-            contactId: chat.contactId.isNotEmpty ? chat.contactId : chat.link,
+            accountId: _getResolvedAccountId(chatProvider),
+            contactId: chat.isGroup ? null : (chat.contactId.isNotEmpty ? chat.contactId : chat.link),
             extId: chat.sender.replaceAll(RegExp(r'[^0-9]'), '').length >= 9
                 ? chat.sender
                 : null,
             channelId: chat.chId,
+            groupId: chat.isGroup ? (chat.groupId.isNotEmpty && chat.groupId != '0' ? chat.groupId : chat.id) : null,
           ),
         );
         if (!resp.isError) {
@@ -2972,7 +2973,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         chat.channelType.toLowerCase().contains('telegram') ||
         chat.channelName.toLowerCase().contains('telegram');
 
-    if (isTelegram && chatProvider.cachedAccounts != null) {
+    if ((resolvedAccountId.isEmpty ||
+            resolvedAccountId == '0' ||
+            resolvedAccountId == 'null') &&
+        isTelegram &&
+        chatProvider.cachedAccounts != null) {
       try {
         final activeTelegramAcc = chatProvider.cachedAccounts!.firstWhere(
           (acc) =>
@@ -3669,66 +3674,96 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: _isSelectionMode
-          ? _buildSelectionAppBar(isDark)
-          : _buildAppBar(isDark),
-      body: Consumer<ChatSettingsProvider>(
-        builder: (context, settings, _) {
-          return Container(
-            decoration: BoxDecoration(
-              color: settings.backgroundImagePath == null
-                  ? (settings.backgroundColor ??
-                        (isDark
-                            ? const Color(0xFF0B141A)
-                            : const Color(0xFFF0F2F5)))
-                  : null,
-              image: settings.backgroundImagePath != null
-                  ? DecorationImage(
-                      image: FileImage(File(settings.backgroundImagePath!)),
-                      fit: BoxFit.cover,
-                      colorFilter: isDark
-                          ? ColorFilter.mode(
-                              Colors.black.withOpacity(0.4),
-                              BlendMode.darken,
-                            )
-                          : null,
-                    )
-                  : null,
-            ),
-            child: Column(
-              children: [
-                Expanded(child: _buildMessageList(isDark)),
-                SafeArea(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (chat.isArchived)
-                        _buildArchivedBanner(isDark)
-                      else if (!widget.isReadOnly) ...[
-                        if (chat.isBlocked ||
-                            chat.status.toLowerCase() == 'resolved')
-                          const SizedBox.shrink()
-                        else ...[
-                          // state `_isShowingQuickReply` akan aktif dan memunculkan *overlay list* berisi template yang sudah di-cache.
-                          if (_isShowingQuickReply &&
-                              _quickReplyTemplates.isNotEmpty)
-                            _buildQuickReplyList(isDark),
-                          if (_repliedMessage != null)
-                            _buildReplyPreview(isDark),
-                          _buildInputBar(isDark),
-                          if (_showAttachmentPanel)
-                            _buildAttachmentPanel(isDark),
-                          if (_showEmojiPicker) _buildEmojiPicker(isDark),
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        if (_showEmojiPicker || _showAttachmentPanel || _isShowingQuickReply) {
+          setState(() {
+            _showEmojiPicker = false;
+            _showAttachmentPanel = false;
+            _isShowingQuickReply = false;
+          });
+        }
+      },
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        appBar: _isSelectionMode
+            ? _buildSelectionAppBar(isDark)
+            : _buildAppBar(isDark),
+        body: Consumer<ChatSettingsProvider>(
+          builder: (context, settings, _) {
+            return Container(
+              decoration: BoxDecoration(
+                color: settings.backgroundImagePath == null
+                    ? (settings.backgroundColor ??
+                          (isDark
+                              ? const Color(0xFF0B141A)
+                              : const Color(0xFFF0F2F5)))
+                    : null,
+                image: settings.backgroundImagePath != null
+                    ? DecorationImage(
+                        image: FileImage(File(settings.backgroundImagePath!)),
+                        fit: BoxFit.cover,
+                        colorFilter: isDark
+                            ? ColorFilter.mode(
+                                Colors.black.withOpacity(0.4),
+                                BlendMode.darken,
+                              )
+                            : null,
+                      )
+                    : null,
+              ),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        FocusScope.of(context).unfocus();
+                        if (_showEmojiPicker ||
+                            _showAttachmentPanel ||
+                            _isShowingQuickReply) {
+                          setState(() {
+                            _showEmojiPicker = false;
+                            _showAttachmentPanel = false;
+                            _isShowingQuickReply = false;
+                          });
+                        }
+                      },
+                      behavior: HitTestBehavior.translucent,
+                      child: _buildMessageList(isDark),
+                    ),
+                  ),
+                  SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (chat.isArchived)
+                          _buildArchivedBanner(isDark)
+                        else if (!widget.isReadOnly) ...[
+                          if (chat.isBlocked ||
+                              chat.status.toLowerCase() == 'resolved')
+                            const SizedBox.shrink()
+                          else ...[
+                            // state `_isShowingQuickReply` akan aktif dan memunculkan *overlay list* berisi template yang sudah di-cache.
+                            if (_isShowingQuickReply &&
+                                _quickReplyTemplates.isNotEmpty)
+                              _buildQuickReplyList(isDark),
+                            if (_repliedMessage != null)
+                              _buildReplyPreview(isDark),
+                            _buildInputBar(isDark),
+                            if (_showAttachmentPanel)
+                              _buildAttachmentPanel(isDark),
+                            if (_showEmojiPicker) _buildEmojiPicker(isDark),
+                          ],
                         ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

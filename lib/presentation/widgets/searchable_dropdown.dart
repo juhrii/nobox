@@ -18,6 +18,8 @@ class SearchableDropdown<T> extends StatefulWidget {
   final ValueChanged<T?> onChanged;
   final String Function(T)? itemAsString;
 
+  final bool enabled;
+
   const SearchableDropdown({
     super.key,
     this.value,
@@ -25,6 +27,7 @@ class SearchableDropdown<T> extends StatefulWidget {
     required this.options,
     required this.onChanged,
     this.itemAsString,
+    this.enabled = true,
   });
 
   @override
@@ -83,16 +86,34 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
 
+    final bgColor = widget.enabled
+        ? (isDark ? AppTheme.darkSurface : Colors.white)
+        : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9));
+
+    final borderColor = widget.enabled
+        ? (_isOpen
+            ? AppTheme.primaryColor
+            : (isDark ? Colors.grey.shade700 : Colors.grey.shade300))
+        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0));
+
+    final textColor = widget.enabled
+        ? (widget.value == null
+            ? (isDark ? AppTheme.darkTextPrimary : Colors.black)
+            : (isDark ? Colors.white : Colors.black))
+        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569));
+
+    final iconColor = widget.enabled
+        ? (isDark ? AppTheme.darkTextPrimary : Colors.grey.shade600)
+        : (isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8));
+
     return GestureDetector(
-      onTap: _showDropdown,
+      onTap: widget.enabled ? _showDropdown : null,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkSurface : Colors.white,
+          color: bgColor,
           border: Border.all(
-            color: _isOpen
-                ? AppTheme.primaryColor
-                : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+            color: borderColor,
             width: _isOpen ? 2.0 : 1.0,
           ),
           borderRadius: BorderRadius.circular(8),
@@ -105,16 +126,14 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: widget.value == null
-                      ? (isDark ? AppTheme.darkTextPrimary : Colors.black)
-                      : (isDark ? Colors.white : Colors.black),
+                  color: textColor,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             Icon(
               Icons.keyboard_arrow_down_rounded,
-              color: isDark ? AppTheme.darkTextPrimary : Colors.grey.shade600,
+              color: iconColor,
             ),
           ],
         ),

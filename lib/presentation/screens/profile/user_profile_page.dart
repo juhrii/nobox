@@ -876,13 +876,16 @@ class _UserProfilePageState extends State<UserProfilePage> {
       } catch (e) {}
     }
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(
-          'User Profile',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: bgColor,
+        appBar: AppBar(
+          title: Text(
+            'User Profile',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
             fontSize: 18,
             color: isDark ? textColor : Colors.white,
           ),
@@ -1032,6 +1035,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                 ),
               ),
             ),
+      ),
     );
   }
 
@@ -2397,6 +2401,17 @@ class _UserProfilePageState extends State<UserProfilePage> {
     bool isRequired = false,
     ValueChanged<String>? onChanged,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fieldBgColor = enabled
+        ? (isDark ? cardColor : Colors.white)
+        : (isDark ? const Color(0xFF0F172A) : const Color(0xFFF4F6F9));
+    final fieldTextColor = enabled
+        ? textColor
+        : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569));
+    final fieldBorderColor = enabled
+        ? (isDark ? Colors.grey.shade700 : Colors.grey.shade300)
+        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0));
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -2420,26 +2435,34 @@ class _UserProfilePageState extends State<UserProfilePage> {
             initialValue: value,
             enabled: enabled,
             onChanged: onChanged,
-            style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: fieldTextColor,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
             decoration: InputDecoration(
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 12,
-                vertical: 10,
+                vertical: 12,
               ),
-              filled: !enabled,
-              fillColor: enabled ? cardColor : cardColor.withOpacity(0.5),
+              filled: true,
+              fillColor: fieldBgColor,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(color: borderColor),
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: fieldBorderColor),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(color: borderColor),
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: fieldBorderColor),
               ),
               disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: BorderSide(color: borderColor.withOpacity(0.5)),
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: fieldBorderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.blue.shade400, width: 1.5),
               ),
             ),
           ),
@@ -2457,6 +2480,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     Color labelColor,
     Color borderColor, {
     bool isRequired = false,
+    bool enabled = true,
     GlobalKey? fieldKey,
     String Function(String)? itemAsString,
     ValueChanged<String?>? onChanged,
@@ -2490,6 +2514,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
             hint: 'Select...',
             options: effectiveOptions.toSet().toList(),
             itemAsString: itemAsString,
+            enabled: enabled,
             onChanged: (val) {
               if (onChanged != null) onChanged(val);
             },

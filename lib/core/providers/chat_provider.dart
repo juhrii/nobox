@@ -209,7 +209,24 @@ class ChatProvider with ChangeNotifier {
 
   void setSearchQuery(String query) {
     _searchQuery = query;
+    if (_cachedContactsResponse == null && query.isNotEmpty) {
+      getContactsResponse().then((_) {
+        if (!_isDisposed) notifyListeners();
+      });
+    }
     notifyListeners();
+  }
+
+  /// Mencari kontak dari direktori server (buku alamat NoBox)
+  List<Map<String, dynamic>> searchServerContacts(String query) {
+    if (query.trim().isEmpty) return [];
+    final list = _cachedContactsResponse?.data ?? [];
+    final q = query.trim().toLowerCase();
+    return list.where((item) {
+      final name = (item['Name'] ?? item['Nm'] ?? '').toString().toLowerCase();
+      final hp = (item['Hp'] ?? item['Phone'] ?? item['Mobile'] ?? item['Telp'] ?? '').toString().toLowerCase();
+      return name.contains(q) || hp.contains(q);
+    }).toList();
   }
 
   void setActiveFilter(String filter) {
@@ -302,6 +319,7 @@ class ChatProvider with ChangeNotifier {
     _cachedTags = null;
     _cachedAgents = null;
     _cachedLinks = null;
+    _cachedContactsResponse = null;
     _currentSkip = 0;
     _hasMore = true;
     _error = null;
@@ -391,6 +409,7 @@ class ChatProvider with ChangeNotifier {
         getCachedAgents(),
         getCachedLinks(),
         getCachedAccounts(), // FIX: Fetch accounts untuk resolusi channel type (ChId → Code)
+        getContactsResponse(),
       ]);
 
       // Tentukan status mana yang akan diminta dari server
@@ -2340,17 +2359,13 @@ class ChatProvider with ChangeNotifier {
   List<ChatModel> get chats {
     var filtered = _chats.where((chat) => !chat.isArchived).toList();
 
-    // Apply Search
+    // Apply Search (Hanya mencari berdasarkan Nama Kontak / Pengirim)
     if (_searchQuery.isNotEmpty) {
       filtered = filtered
           .where(
-            (chat) =>
-                chat.sender.toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ) ||
-                chat.lastMessage.toLowerCase().contains(
-                  _searchQuery.toLowerCase(),
-                ),
+            (chat) => chat.sender.toLowerCase().contains(
+              _searchQuery.toLowerCase(),
+            ),
           )
           .toList();
     }
@@ -2631,15 +2646,14 @@ class ChatProvider with ChangeNotifier {
     String resolvedAccountId = chat.accountId;
 
     // --- SMART TELEGRAM & FALLBACK ACCOUNT ID ---
-    // Hanya override jika channel Telegram, ATAU jika AccountId memang kosong di data chat (jangan timpahi Account ID WhatsApp yang valid seperti WA HRTS!).
+    // Hanya fallback jika AccountId memang kosong di data chat
     final isTelegram =
         chat.chId == '2' ||
         chat.channelType.toLowerCase().contains('telegram') ||
         chat.channelName.toLowerCase().contains('telegram');
     if (resolvedAccountId.isEmpty ||
         resolvedAccountId == '0' ||
-        resolvedAccountId == 'null' ||
-        isTelegram) {
+        resolvedAccountId == 'null') {
       if (_cachedAccounts != null && _cachedAccounts!.isNotEmpty) {
         try {
           final activeAcc = _cachedAccounts!.firstWhere((acc) {
@@ -2658,14 +2672,10 @@ class ChatProvider with ChangeNotifier {
             }
             return false;
           }, orElse: () => _cachedAccounts!.first);
-          if (activeAcc['Id'] != null &&
-              (resolvedAccountId.isEmpty ||
-                  resolvedAccountId == '0' ||
-                  resolvedAccountId == 'null' ||
-                  isTelegram)) {
+          if (activeAcc['Id'] != null) {
             resolvedAccountId = activeAcc['Id'].toString();
             debugPrint(
-              'Smart Fallback: Overriding AccId ${chat.accountId} -> $resolvedAccountId',
+              'Smart Fallback: Resolved AccId from cached accounts -> $resolvedAccountId',
             );
           }
         } catch (e) {
@@ -2675,40 +2685,62 @@ class ChatProvider with ChangeNotifier {
     }
     // --------------------------------
 
-    // Pilih ID Link yang dipastikan berupa angka integer valid (sesuai spesifikasi dan implementasi di folder Aplikasi)
-    String idLinkValue = chat.contactId;
-    if (idLinkValue.isEmpty ||
-        idLinkValue == '0' ||
-        idLinkValue == 'null' ||
-        int.tryParse(idLinkValue.replaceAll(RegExp(r'[^0-9]'), '')) == null) {
-      if (chat.link.isNotEmpty &&
-          chat.link != '0' &&
-          chat.link != 'null' &&
-          int.tryParse(chat.link.replaceAll(RegExp(r'[^0-9]'), '')) != null) {
+    final bool isGroupChat = chat.isGroup ||
+        (chat.groupId.isNotEmpty && chat.groupId != '0' && chat.groupId != 'null');
+
+    String? resolvedGroupId;
+    String? idLinkValue;
+
+    if (isGroupChat) {
+      // GROUP CHAT: IdGroup harus diisi, dan IdLink harus NULL agar backend NoBox tidak memvalidasi IdLink ke kontak individu
+      if (chat.groupId.isNotEmpty && chat.groupId != '0' && chat.groupId != 'null') {
+        resolvedGroupId = chat.groupId;
+      } else if (chat.link.isNotEmpty && chat.link != '0' && chat.link != 'null') {
+        resolvedGroupId = chat.link;
+      } else if (chat.contactId.isNotEmpty && chat.contactId != '0' && chat.contactId != 'null') {
+        resolvedGroupId = chat.contactId;
+      } else {
+        resolvedGroupId = chat.id
+            .replaceAll(RegExp(r'^[0-9]+_'), '')
+            .replaceAll(RegExp(r'[^0-9]'), '');
+      }
+      idLinkValue = null; // IMPORTANT: For group chat, IdLink MUST be null!
+    } else {
+      // PRIVATE CHAT (1-to-1): IdLink diisi dengan ID kontak (integer), IdGroup adalah NULL
+      idLinkValue = chat.contactId;
+      if (idLinkValue.isEmpty ||
+          idLinkValue == '0' ||
+          idLinkValue == 'null' ||
+          int.tryParse(idLinkValue.replaceAll(RegExp(r'[^0-9]'), '')) == null) {
+        if (chat.link.isNotEmpty &&
+            chat.link != '0' &&
+            chat.link != 'null' &&
+            int.tryParse(chat.link.replaceAll(RegExp(r'[^0-9]'), '')) != null) {
+          idLinkValue = chat.link;
+        }
+      }
+      if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
         idLinkValue = chat.link;
       }
-    }
-    if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
-      idLinkValue = chat.link;
-    }
-    if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
-      idLinkValue = chat.ctRealId;
-    }
-    if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
-      idLinkValue = chat.sender.replaceAll(RegExp(r'[^0-9]'), '');
-    }
-    if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
-      idLinkValue = chat.id
-          .replaceAll(RegExp(r'^[0-9]+_'), '')
-          .replaceAll(RegExp(r'[^0-9]'), '');
+      if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
+        idLinkValue = chat.ctRealId;
+      }
+      if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
+        idLinkValue = chat.sender.replaceAll(RegExp(r'[^0-9]'), '');
+      }
+      if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
+        idLinkValue = chat.id
+            .replaceAll(RegExp(r'^[0-9]+_'), '')
+            .replaceAll(RegExp(r'[^0-9]'), '');
+      }
+      resolvedGroupId = null;
     }
 
     final error = await SignalRService().invokeKirimPesan(
-      idLink:
-          idLinkValue, // Harus contactId (CtId) karena backend menuntut INTEGER!
+      idLink: idLinkValue, // Null untuk group, contactId integer untuk private
       idAccount: resolvedAccountId,
       idRoom: chat.id,
-      idGroup: chat.groupId, // Pass groupId if it is a group
+      idGroup: resolvedGroupId, // Null untuk private, groupId integer untuk group
       type: type,
       msg: msg,
       fileJson: fileJson,

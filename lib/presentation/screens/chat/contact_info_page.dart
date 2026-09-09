@@ -1599,17 +1599,20 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final chat = widget.chat;
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
-        foregroundColor: isDark ? Colors.white : Colors.black87,
-        elevation: 0.5,
-        title: const Text(
-          'Contact Detail',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Scaffold(
+        backgroundColor: isDark ? const Color(0xFF0B141A) : const Color(0xFFF5F5F5),
+        appBar: AppBar(
+          backgroundColor: isDark ? const Color(0xFF1F2C34) : Colors.white,
+          foregroundColor: isDark ? Colors.white : Colors.black87,
+          elevation: 0.5,
+          title: const Text(
+            'Contact Detail',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+          ),
         ),
-      ),
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -2274,6 +2277,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
           ],
         ),
       ),
+    ),
     );
   }
 

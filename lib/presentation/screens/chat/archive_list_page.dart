@@ -202,8 +202,7 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
                   
                   if (_searchQuery.isNotEmpty) {
                     chats = chats.where((chat) => 
-                      chat.sender.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                      chat.lastMessage.toLowerCase().contains(_searchQuery.toLowerCase())
+                      chat.sender.toLowerCase().contains(_searchQuery.toLowerCase())
                     ).toList();
                   }
                   

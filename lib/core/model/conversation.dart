@@ -199,8 +199,13 @@ class Conversation {
         if (strFlag == '0' || strFlag == 'false') return false;
       }
 
-      final grpId = getValue(['GrpId', 'grp_id', 'GroupId', 'groupId']);
+      final grpId = getValue(['GrpId', 'grp_id', 'GroupId', 'groupId', 'IdGroup', 'idGroup']);
       if (grpId != null && grpId.toString().isNotEmpty && grpId.toString() != '0' && grpId.toString() != 'null') {
+        return true;
+      }
+
+      final grpName = getValue(['Grp', 'GroupNm', 'GroupName', 'group_name']);
+      if (grpName != null && grpName.toString().trim().isNotEmpty && grpName.toString() != 'null') {
         return true;
       }
 
@@ -217,7 +222,6 @@ class Conversation {
       // 3. ATURAN TELEGRAM: Di Telegram, Grup selalu ber-ID negatif (awalan tanda minus '-').
       if (chNm.contains('telegram') || chNm.contains('tg') || combined.contains('telegram')) {
         if (idStr.startsWith('-') || contactStr.startsWith('-')) return true;
-        return false;
       }
 
       // 4. ATURAN PRIVATE CHAT WHATSAPP
@@ -276,7 +280,11 @@ class Conversation {
       campaign: getValue(['CmpNm', 'CampaignNm', 'CampaignName', 'campaign_name', 'Campaign'])?.toString() ?? '',
       deal: getValue(['DealNm', 'DealName', 'deal_name', 'Deal'])?.toString() ?? '',
       groupName: getValue(['Grp', 'GroupNm', 'GroupName', 'group_name'])?.toString() ?? '',
-      groupId: getValue(['GrpId', 'group_id'])?.toString() ?? '',
+      groupId: () {
+        final g = getValue(['GrpId', 'grp_id', 'GroupId', 'groupId', 'IdGroup', 'idGroup']);
+        if (g == null || g.toString() == '0' || g.toString() == 'null') return '';
+        return g.toString();
+      }(),
     );
 
     // DEBUG: Accumulate raw API values for analysis
