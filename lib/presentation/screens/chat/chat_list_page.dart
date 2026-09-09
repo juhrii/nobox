@@ -25,8 +25,11 @@ import '../profile/user_profile_page.dart' as user_profile;
 import '../about/about_page.dart' as about;
 import '../../widgets/chat_list_skeleton.dart';
 import '../../widgets/connection_status_banner.dart';
-import '../../widgets/channel_icon.dart';
 import '../../widgets/authenticated_avatar.dart';
+import '../../widgets/channel_icon.dart';
+import '../../../core/utils/date_time_helper.dart';
+import '../../../core/utils/string_helper.dart';
+import '../../../core/providers/chat_settings_provider.dart';
 
 // =====================================================================
 // FITUR: Halaman Utama Daftar Chat (Inbox)
@@ -1979,6 +1982,7 @@ class _ChatListPageState extends State<ChatListPage>
     ChatProvider chatProvider,
     bool isDark,
   ) {
+    final chatSettings = context.watch<ChatSettingsProvider>();
     final isMultiSelected = _selectedChats.contains(chat.id);
     final isActiveMaster = widget.selectedChatId == chat.id;
 
@@ -2113,7 +2117,7 @@ class _ChatListPageState extends State<ChatListPage>
                             Builder(
                               builder: (context) {
                                 final validTags = chat.tags
-                                    .map((t) => t.trim())
+                                    .map((t) => StringHelper.cleanApostrophe(t.trim()))
                                     .where((t) => t.isNotEmpty)
                                     .toList();
                                 final hasFunnel = chat.funnel.trim().isNotEmpty;
@@ -2228,7 +2232,11 @@ class _ChatListPageState extends State<ChatListPage>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    _formatTime(chat.time),
+                                    _formatTime(
+                                      chat.time,
+                                      dateFormat: chatSettings.dateFormat,
+                                      timeFormat: chatSettings.timeFormat,
+                                    ),
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey.shade500,
@@ -2931,37 +2939,15 @@ class _ChatListPageState extends State<ChatListPage>
     );
   }
 
-  // FITUR: Format Waktu Relatif
-  // FUNGSI: Mengonversi waktu standar UTC dari server menjadi format string yang ramah pembaca untuk menampilkan jam atau tanggal obrolan terakhir.
-  String _formatTime(String rawTime) {
+  // FITUR: Format Waktu Relatif / Format Sesuai Preferensi User
+  // FUNGSI: Mengonversi waktu standar UTC dari server menjadi format string yang ramah pembaca sesuai preferensi User (DateFormat & TimeFormat).
+  String _formatTime(String rawTime, {String? dateFormat, String? timeFormat}) {
     if (rawTime.isEmpty) return '';
-    try {
-      String timeString = rawTime;
-      if (!timeString.endsWith('Z') &&
-          !timeString.contains('+') &&
-          timeString.length >= 19) {
-        timeString += 'Z';
-      }
-      final dt = DateTime.parse(timeString).toLocal();
-      final months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ];
-      return '${dt.day} ${months[dt.month - 1]}, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    } catch (_) {
-      // If not parseable, return as-is (legacy format)
-      return rawTime;
-    }
+    return DateTimeHelper.formatChatTimestamp(
+      rawTime,
+      dateFormat: dateFormat,
+      timeFormat: timeFormat,
+    );
   }
 
   // FITUR: Dialog Filter Lanjutan (Advanced Filter)

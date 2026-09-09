@@ -95,13 +95,21 @@ class Conversation {
     // Parse tags dari JSON - Menangani tipe dinamis dengan aman (int, String, List)
     List<String> parsedTags = [];
     dynamic tagsData = json['Tags'] ?? json['tags'] ?? json['TagsNm'];
+    String cleanTag(String s) => s
+        .replaceAll(r"\'", "'")
+        .replaceAll(r'\"', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&apos;', "'")
+        .replaceAll('&quot;', '"')
+        .replaceAll('&amp;', '&');
+
     if (tagsData != null) {
       if (tagsData is List) {
-        parsedTags = tagsData.map((e) => e.toString()).toList();
+        parsedTags = tagsData.map((e) => cleanTag(e.toString().trim())).where((e) => e.isNotEmpty).toList();
       } else if (tagsData is String && tagsData.isNotEmpty) {
-        parsedTags = tagsData.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        parsedTags = tagsData.split(',').map((e) => cleanTag(e.trim())).where((e) => e.isNotEmpty).toList();
       } else if (tagsData is int || tagsData is double) {
-        parsedTags = [tagsData.toString()];
+        parsedTags = [cleanTag(tagsData.toString())];
       }
     }
     // Kita secara eksplisit menghindari fallback ke TagsIds karena hanya berisi angka ID mentah, bukan nama.
@@ -356,7 +364,10 @@ class Conversation {
       json['Photo'],      // Field utama untuk avatar contact (dari DetailRoom/API)
       json['photo'],
       json['CtImg'],      // Prioritas 2: Info Contact yang diupdate
-      json['LinkImg'],    // Prioritas 3: Link Image bawaan channel (sering dipakai backend)
+      json['LinkImg'],    // Prioritas 3: Link Image bawaan channel / grup (sering dipakai backend)
+      json['GrpImg'],     // Foto profil grup khusus
+      json['GroupImg'],
+      json['GroupPhoto'],
       json['Img'],
       json['AvatarUrl'],
       json['avatar_url'],

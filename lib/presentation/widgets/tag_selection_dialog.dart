@@ -58,7 +58,14 @@ class _TagSelectionDialogState extends State<TagSelectionDialog> {
   }
 
   String _getTagName(Map<String, dynamic> tag) {
-    return tag['Nm']?.toString() ?? tag['Name']?.toString() ?? tag['name']?.toString() ?? 'Unknown';
+    final raw = tag['Nm']?.toString() ?? tag['Name']?.toString() ?? tag['name']?.toString() ?? 'Unknown';
+    return raw
+        .replaceAll(r"\'", "'")
+        .replaceAll(r'\"', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&apos;', "'")
+        .replaceAll('&quot;', '"')
+        .replaceAll('&amp;', '&');
   }
 
   Future<void> _fetchTags() async {

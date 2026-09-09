@@ -58,6 +58,50 @@ class DateTimeHelper {
     return fallback;
   } 
 
+  /// Format chat timestamp with support for custom date & time formats
+  static String formatChatTimestamp(
+    String rawTime, {
+    String? dateFormat,
+    String? timeFormat,
+    String fallback = '',
+  }) {
+    if (rawTime.isEmpty) return fallback;
+    try {
+      String iso = rawTime.trim();
+      if (!iso.contains('T') && iso.contains(' ')) {
+        iso = iso.replaceFirst(' ', 'T');
+      }
+      if (!iso.endsWith('Z') && !iso.contains('+')) {
+        iso += 'Z';
+      }
+      final dt = DateTime.parse(iso).toLocal();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final msgDate = DateTime(dt.year, dt.month, dt.day);
+
+      final dFormat = dateFormat ?? 'DD/MM/YYYY';
+      final tFormat = timeFormat ?? 'HH:mm';
+
+      if (msgDate == today) {
+        return formatTime(rawTime, tFormat, fallback: fallback);
+      } else if (today.difference(msgDate).inDays == 1) {
+        final timeString = formatTime(rawTime, tFormat, fallback: '');
+        return timeString.isNotEmpty ? 'Yesterday, $timeString' : 'Yesterday';
+      } else {
+        final dateString = formatDate(rawTime, dFormat, fallback: '');
+        final timeString = formatTime(rawTime, tFormat, fallback: '');
+        if (dateString.isNotEmpty && timeString.isNotEmpty) {
+          return '$dateString, $timeString';
+        } else if (dateString.isNotEmpty) {
+          return dateString;
+        }
+        return fallback;
+      }
+    } catch (_) {
+      return fallback.isNotEmpty ? fallback : rawTime;
+    }
+  } 
+
   /// Format relative time (e.g. "a few seconds ago", "5 minutes ago", "2 hours ago", "1 day ago", "3 days ago")
   /// matching Moment.js / Serenity fromNow() on NoBox web.
   static String timeAgo(String rawTime, {String fallback = ''}) {

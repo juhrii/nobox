@@ -124,9 +124,17 @@ class TagItem extends FilterDataItem {
   TagItem({required super.id, required super.name});
   
   factory TagItem.fromJson(Map<String, dynamic> json) {
+    final rawName = json['Name']?.toString() ?? json['Nm']?.toString() ?? '';
     return TagItem(
       id: json['Id']?.toString() ?? '',
-      name: json['Name']?.toString() ?? json['Nm']?.toString() ?? '',
+      name: rawName
+          .replaceAll(r"\'", "'")
+          .replaceAll(r'\"', '"')
+          .replaceAll('&#39;', "'")
+          .replaceAll('&apos;', "'")
+          .replaceAll('&quot;', '"')
+          .replaceAll('&amp;', '&'),
     );
   }
 }
+
