@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -84,20 +83,22 @@ class _AuthenticatedAvatarState extends State<AuthenticatedAvatar> {
 
   @override
   Widget build(BuildContext context) {
+    final isGroup = widget.isGroup;
     final iconWidget = Icon(
-      widget.isGroup ? Icons.groups : Icons.person,
-      color: Colors.grey.shade600,
-      size: widget.size * 0.58,
+      isGroup ? Icons.groups_rounded : Icons.person_rounded,
+      color: isGroup ? const Color(0xFF0284C7) : Colors.grey.shade600,
+      size: widget.size * (isGroup ? 0.62 : 0.58),
     );
 
-    final emptyAvatar = SizedBox(
+    final emptyAvatar = Container(
       width: widget.size,
       height: widget.size,
-      child: CircleAvatar(
-        radius: widget.size / 2,
-        backgroundColor: Colors.grey.shade300,
-        child: iconWidget,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isGroup ? const Color(0xFFE0F2FE) : Colors.grey.shade300,
       ),
+      alignment: Alignment.center,
+      child: iconWidget,
     );
 
     if (_isLoading || _cacheManager == null) return emptyAvatar;
@@ -113,7 +114,8 @@ class _AuthenticatedAvatarState extends State<AuthenticatedAvatar> {
         placeholder: (context, url) => Container(
           width: widget.size,
           height: widget.size,
-          color: Colors.grey.shade300,
+          color: isGroup ? const Color(0xFFE0F2FE) : Colors.grey.shade300,
+          alignment: Alignment.center,
           child: iconWidget,
         ),
         errorWidget: (context, url, error) {
@@ -121,7 +123,8 @@ class _AuthenticatedAvatarState extends State<AuthenticatedAvatar> {
           return Container(
             width: widget.size,
             height: widget.size,
-            color: Colors.grey.shade300,
+            color: isGroup ? const Color(0xFFE0F2FE) : Colors.grey.shade300,
+            alignment: Alignment.center,
             child: iconWidget,
           );
         },

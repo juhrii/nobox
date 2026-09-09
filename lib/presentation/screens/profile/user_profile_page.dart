@@ -1917,24 +1917,34 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       String dec = formatNum['aDec']?.toString() ?? ',';
       String sep = formatNum['aSep']?.toString() ?? '.';
-      // sep is used as-is in preview (e.g. `\` for apostrophe separator)
       int mDec = int.tryParse(formatNum['mDec']?.toString() ?? '0') ?? 0;
       String group = formatNum['dGroup']?.toString() ?? '3';
 
-      // Mock formatting 17081945.123
-      String whole = '17081945';
-      if (group == '3')
-        whole = '17${sep}081${sep}945';
-      else if (group == '2')
-        whole = '1${sep}70${sep}81${sep}94${sep}5'; // rough mock for dGroup=2
-      else if (group == '4')
-        whole = '1708${sep}1945'; // mock for dGroup=4
+      // Replicate autoNumeric regex algorithm (matching NoBox Web Serenity) on sample 17081945
+      String u = '17081945';
+      if (sep.isNotEmpty) {
+        final RegExp regExp;
+        if (group == '2') {
+          regExp = RegExp(r'(\d)((\d)(\d{2})+)$');
+        } else if (group == '4') {
+          regExp = RegExp(r'(\d)((\d{4})+)$');
+        } else {
+          regExp = RegExp(r'(\d)((\d{3})+)$');
+        }
+
+        while (regExp.hasMatch(u)) {
+          u = u.replaceFirstMapped(
+            regExp,
+            (match) => '${match.group(1)}$sep${match.group(2)}',
+          );
+        }
+      }
 
       if (mDec > 0) {
         String fraction = '123456789'.substring(0, mDec > 9 ? 9 : mDec);
-        return '$whole$dec$fraction';
+        return '$u$dec$fraction';
       }
-      return whole;
+      return u;
     }
 
     String _extractSep(String val) {
