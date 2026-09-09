@@ -769,15 +769,17 @@ class ChatProvider with ChangeNotifier {
         }).toList();
 
         // FIX: Registrasikan server-pinned chats ke local _pinnedIds
-        // agar posisinya stabil/terkunci dan tidak bergerak saat pesan baru masuk.
-        bool newPinsAdded = false;
-        for (var c in _chats) {
-          if (c.isPinned && !_pinnedIds.contains(c.id)) {
-            _pinnedIds.add(c.id);
-            newPinsAdded = true;
+        // dan sinkronisasikan urutannya dengan urutan resmi dari server NoBox (Telegram lalu WA).
+        final serverPinnedIds = _chats.where((c) => c.isPinned).map((c) => c.id).toList();
+        if (serverPinnedIds.isNotEmpty) {
+          final updatedPinned = <String>[];
+          for (final id in _pinnedIds) {
+            if (!serverPinnedIds.contains(id)) {
+              updatedPinned.add(id);
+            }
           }
-        }
-        if (newPinsAdded) {
+          updatedPinned.addAll(serverPinnedIds);
+          _pinnedIds = updatedPinned.toSet();
           _savePinnedState();
         }
 
@@ -2501,17 +2503,16 @@ class ChatProvider with ChangeNotifier {
         final indexA = pinnedList.indexOf(a.id);
         final indexB = pinnedList.indexOf(b.id);
         if (indexA != -1 && indexB != -1) {
-          return indexB.compareTo(
-            indexA,
-          ); // Pin terbaru berada di urutan paling atas
+          return indexA.compareTo(
+            indexB,
+          ); // Urutan pin pertama / atas tetap di atas
         } else if (indexA != -1) {
           return -1;
         } else if (indexB != -1) {
           return 1;
         } else {
-          return b.time.compareTo(
-            a.time,
-          ); // Fallback jika disematkan langsung dari server
+          return _chats.indexWhere((c) => c.id == a.id)
+              .compareTo(_chats.indexWhere((c) => c.id == b.id));
         }
       });
 
@@ -2547,14 +2548,16 @@ class ChatProvider with ChangeNotifier {
   }
 
   Future<void> togglePin(String chatId) async {
-    final index = _chats.indexWhere((chat) => chat.id == chatId);
+    final index = _chats.indexWhere((c) => c.id == chatId);
     if (index != -1) {
       final newPinned = !_chats[index].isPinned;
 
       // Optimistic visual update
       _chats[index] = _chats[index].copyWith(isPinned: newPinned);
       if (newPinned) {
-        _pinnedIds.add(chatId);
+        // Ketika user menyematkan chat baru, letakkan di urutan teratas pinned list
+        _pinnedIds.remove(chatId);
+        _pinnedIds = {chatId, ..._pinnedIds};
       } else {
         _pinnedIds.remove(chatId);
       }
@@ -2568,7 +2571,8 @@ class ChatProvider with ChangeNotifier {
         // Revert on error
         _chats[index] = _chats[index].copyWith(isPinned: !newPinned);
         if (!newPinned) {
-          _pinnedIds.add(chatId);
+          _pinnedIds.remove(chatId);
+          _pinnedIds = {chatId, ..._pinnedIds};
         } else {
           _pinnedIds.remove(chatId);
         }

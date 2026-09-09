@@ -52,6 +52,11 @@ class _UserProfilePageState extends State<UserProfilePage> {
   // Notification Overlay
   OverlayEntry? _currentNotificationEntry;
 
+  // Login History Search
+  final TextEditingController _loginHistorySearchController =
+      TextEditingController();
+  String _loginHistorySearchQuery = '';
+
   @override
   void initState() {
     super.initState();
@@ -76,6 +81,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   @override
   void dispose() {
+    _loginHistorySearchController.dispose();
     _currentNotificationEntry?.remove();
     _currentNotificationEntry = null;
     _timePreviewTimer?.cancel();
@@ -2043,13 +2049,60 @@ class _UserProfilePageState extends State<UserProfilePage> {
     );
   }
 
+  IconData _getDeviceIcon(String device, String deviceType) {
+    final d = device.toLowerCase();
+    final dt = deviceType.toLowerCase();
+    if (dt.contains('mobile') ||
+        d.contains('android') ||
+        d.contains('iphone') ||
+        d.contains('ios') ||
+        d.contains('phone')) {
+      return Icons.smartphone_rounded;
+    }
+    if (dt.contains('tablet') || d.contains('ipad')) {
+      return Icons.tablet_mac_rounded;
+    }
+    if (dt.contains('desktop') ||
+        d.contains('windows') ||
+        d.contains('mac') ||
+        d.contains('linux') ||
+        d.contains('pc')) {
+      return Icons.laptop_mac_rounded;
+    }
+    return Icons.devices_rounded;
+  }
+
   Widget _buildLoginHistoryTable(
     Color cardColor,
     Color textColor,
     Color labelColor,
     Color borderColor,
   ) {
-    final List<dynamic> history = _userProfile?['LoginHistory'] ?? [];
+    final List<dynamic> allHistory = _userProfile?['LoginHistory'] ?? [];
+    final List<dynamic> history = _loginHistorySearchQuery.trim().isEmpty
+        ? allHistory
+        : allHistory.where((item) {
+            final q = _loginHistorySearchQuery.trim().toLowerCase();
+            final ip = (item['IpAddress'] ?? '').toString().toLowerCase();
+            final device = (item['Device'] ?? '').toString().toLowerCase();
+            final deviceType =
+                (item['DeviceType'] ?? '').toString().toLowerCase();
+            final browser = (item['Browser'] ?? '').toString().toLowerCase();
+            final id = (item['Id'] ?? '').toString().toLowerCase();
+            final date = (item['LoginDate'] ?? '').toString().toLowerCase();
+            final timeAgo = item['LoginDate'] != null
+                ? DateTimeHelper.timeAgo(
+                    item['LoginDate'].toString(),
+                  ).toLowerCase()
+                : '';
+            return ip.contains(q) ||
+                device.contains(q) ||
+                deviceType.contains(q) ||
+                browser.contains(q) ||
+                id.contains(q) ||
+                date.contains(q) ||
+                timeAgo.contains(q);
+          }).toList();
 
     return Container(
       width: double.infinity,
@@ -2065,10 +2118,27 @@ class _UserProfilePageState extends State<UserProfilePage> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
+              controller: _loginHistorySearchController,
+              onChanged: (val) {
+                setState(() {
+                  _loginHistorySearchQuery = val;
+                });
+              },
               decoration: InputDecoration(
-                hintText: 'search...',
-                hintStyle: TextStyle(color: labelColor, fontSize: 14),
+                hintText: 'Search login history...',
+                hintStyle: TextStyle(color: labelColor, fontSize: 13),
                 prefixIcon: Icon(Icons.search, color: labelColor, size: 18),
+                suffixIcon: _loginHistorySearchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, color: labelColor, size: 16),
+                        onPressed: () {
+                          _loginHistorySearchController.clear();
+                          setState(() {
+                            _loginHistorySearchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(
                   vertical: 8,
@@ -2082,135 +2152,224 @@ class _UserProfilePageState extends State<UserProfilePage> {
                   borderRadius: BorderRadius.circular(6),
                   borderSide: BorderSide(color: borderColor),
                 ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  borderSide: BorderSide(color: Colors.blue.shade400),
+                ),
               ),
-              style: TextStyle(color: textColor, fontSize: 14),
+              style: TextStyle(color: textColor, fontSize: 13),
             ),
           ),
 
-          // Table header
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: history.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      'No Login History found',
-                      style: TextStyle(color: labelColor),
+          Divider(height: 1, thickness: 1, color: borderColor),
+
+          // Session list (No horizontal scrolling required, clearly labeled)
+          if (history.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.history_toggle_off_rounded,
+                      size: 36,
+                      color: labelColor.withValues(alpha: 0.5),
                     ),
-                  )
-                : DataTable(
-                    headingRowHeight: 40,
-                    dataRowMinHeight: 40,
-                    dataRowMaxHeight: 40,
-                    headingRowColor: MaterialStateProperty.all(
-                      borderColor.withOpacity(0.3),
+                    const SizedBox(height: 8),
+                    Text(
+                      _loginHistorySearchQuery.isNotEmpty
+                          ? 'No matching login history found'
+                          : 'No Login History found',
+                      style: TextStyle(color: labelColor, fontSize: 13),
                     ),
-                    columns: [
-                      DataColumn(
-                        label: Text(
-                          'ID',
-                          style: TextStyle(
-                            color: Colors.blue.shade300,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      DataColumn(
-                        label: Text(
-                          'IpAddress',
-                          style: TextStyle(
-                            color: Colors.blue.shade300,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      DataColumn(
-                        label: Text(
-                          'Device',
-                          style: TextStyle(
-                            color: Colors.blue.shade300,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      DataColumn(
-                        label: Text(
-                          'Device Type',
-                          style: TextStyle(
-                            color: Colors.blue.shade300,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      DataColumn(
-                        label: Text(
-                          'Browser',
-                          style: TextStyle(
-                            color: Colors.blue.shade300,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      DataColumn(
-                        label: Text(
-                          'Login Date',
-                          style: TextStyle(
-                            color: Colors.blue.shade300,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                    rows: history.map((item) {
-                      final rawDate = item['LoginDate']?.toString() ?? '';
-                      final dateStr = rawDate.isNotEmpty
-                          ? DateTimeHelper.timeAgo(rawDate)
-                          : '-';
-                      return DataRow(
-                        cells: [
-                          DataCell(
-                            Text(
-                              item['Id']?.toString() ?? '-',
-                              style: TextStyle(color: textColor, fontSize: 13),
+                  ],
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(12),
+              itemCount: history.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final item = history[index];
+                final id = item['Id']?.toString() ?? '-';
+                final ipAddress = item['IpAddress']?.toString() ?? '-';
+                final device = item['Device']?.toString() ?? '-';
+                final deviceType = item['DeviceType']?.toString() ?? '-';
+                final browser = item['Browser']?.toString() ?? '-';
+                final rawDate = item['LoginDate']?.toString() ?? '';
+                final timeAgo = rawDate.isNotEmpty
+                    ? DateTimeHelper.timeAgo(rawDate)
+                    : '-';
+
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: borderColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: borderColor.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header: Device & Time
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(
+                              _getDeviceIcon(device, deviceType),
+                              size: 18,
+                              color: Colors.blue.shade400,
                             ),
                           ),
-                          DataCell(
-                            Text(
-                              item['IpAddress']?.toString() ?? '-',
-                              style: TextStyle(color: textColor, fontSize: 13),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  device.isNotEmpty && device != '-'
+                                      ? device
+                                      : 'Perangkat',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if (deviceType.isNotEmpty && deviceType != '-')
+                                  Text(
+                                    'Tipe: $deviceType',
+                                    style: TextStyle(
+                                      color: labelColor,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                          DataCell(
-                            Text(
-                              item['Device']?.toString() ?? '-',
-                              style: TextStyle(color: textColor, fontSize: 13),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
                             ),
-                          ),
-                          DataCell(
-                            Text(
-                              item['DeviceType']?.toString() ?? '-',
-                              style: TextStyle(color: textColor, fontSize: 13),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.blue.withValues(alpha: 0.25),
+                                width: 0.8,
+                              ),
                             ),
-                          ),
-                          DataCell(
-                            Text(
-                              item['Browser']?.toString() ?? '-',
-                              style: TextStyle(color: textColor, fontSize: 13),
-                            ),
-                          ),
-                          DataCell(
-                            Tooltip(
-                              message: rawDate,
-                              child: Text(
-                                dateStr,
-                                style: TextStyle(color: textColor, fontSize: 13),
+                            child: Text(
+                              timeAgo,
+                              style: TextStyle(
+                                color: Colors.blue.shade300,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
                         ],
-                      );
-                    }).toList(),
+                      ),
+                      const SizedBox(height: 10),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: borderColor.withValues(alpha: 0.4),
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Clear labeled rows
+                      _buildHistoryDetailRow(
+                        icon: Icons.public_outlined,
+                        label: 'Browser',
+                        value: browser,
+                        textColor: textColor,
+                        labelColor: labelColor,
+                      ),
+                      _buildHistoryDetailRow(
+                        icon: Icons.language_rounded,
+                        label: 'IP Address',
+                        value: ipAddress,
+                        textColor: textColor,
+                        labelColor: labelColor,
+                      ),
+                      _buildHistoryDetailRow(
+                        icon: Icons.access_time_rounded,
+                        label: 'Login Date',
+                        value: rawDate.isNotEmpty
+                            ? '$timeAgo ($rawDate)'
+                            : '-',
+                        textColor: textColor,
+                        labelColor: labelColor,
+                      ),
+                      _buildHistoryDetailRow(
+                        icon: Icons.tag_rounded,
+                        label: 'ID Sesi',
+                        value: id.isNotEmpty && id != '-' ? '#$id' : '-',
+                        textColor: textColor,
+                        labelColor: labelColor,
+                      ),
+                    ],
                   ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color textColor,
+    required Color labelColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: labelColor),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 85,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: labelColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Text(
+            ': ',
+            style: TextStyle(color: labelColor, fontSize: 12),
+          ),
+          Expanded(
+            child: Text(
+              value.isNotEmpty ? value : '-',
+              style: TextStyle(
+                color: textColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),
