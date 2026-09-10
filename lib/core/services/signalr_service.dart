@@ -34,6 +34,7 @@ class SignalRService {
   // ── NoBox Server Event Names ──
   static const String eventTerimaPesan = 'TerimaPesan';
   static const String eventTerimaSubSpv = 'TerimaSubSpv';
+  static const String eventTerimaSubAgent = 'TerimaSubAgent';
   static const String eventUcChanged = 'UcChanged';
   static const String eventTerimaExpired = 'TerimaExpired';
   static const String eventTerimaBlockUnblock = 'TerimaBlockUnblock';
@@ -166,6 +167,13 @@ class SignalRService {
       _hubConnection!.on(eventTerimaSubSpv, (args) {
         debugPrint(
           'SignalR: 🔥 RAW TerimaSubSpv RECEIVED! args.length=${args?.length}',
+        );
+        _handleTerimaSubSpv(args);
+      });
+
+      _hubConnection!.on(eventTerimaSubAgent, (args) {
+        debugPrint(
+          'SignalR: 🔥 RAW TerimaSubAgent RECEIVED! args.length=${args?.length}',
         );
         _handleTerimaSubSpv(args);
       });
@@ -749,12 +757,17 @@ class SignalRService {
     String? replyFiles,
   }) async {
     try {
+      // FIX: parseIntSafe sekarang mendukung angka negatif (untuk Telegram group ID)
+      // dan tidak lagi mengembalikan null untuk value 0 (0 = valid ID di beberapa konteks)
       int? parseIntSafe(dynamic val) {
         if (val == null) return null;
-        final str = val.toString().replaceAll(RegExp(r'[^0-9]'), '');
+        final rawStr = val.toString().trim();
+        if (rawStr.isEmpty || rawStr == 'null') return null;
+        // Pertahankan tanda minus untuk Telegram group ID negatif
+        final str = rawStr.replaceAll(RegExp(r'[^0-9\-]'), '');
         if (str.isEmpty) return null;
         final valInt = int.tryParse(str);
-        if (valInt == 0) return null;
+        // Hanya return null jika benar-benar bukan angka, BUKAN untuk 0
         return valInt;
       }
 
@@ -765,6 +778,8 @@ class SignalRService {
         return int.tryParse(str) ?? str;
       }
 
+      // FIX: Type harus dikirim dalam format aslinya (biasanya string "1")
+      // Jangan di-parse ke integer karena backend mungkin melakukan strict deserialization
       final msgMap = <String, dynamic>{
         "Msg": (msg == null || msg.isEmpty) ? null : msg,
         "Type": type,
@@ -782,12 +797,34 @@ class SignalRService {
         msgMap["ReplyFiles"] = replyFiles;
       }
 
+      // Parse room ID: strip prefix jika formatnya "tenantId_roomId"
+      final rawRoomStr = idRoom?.toString() ?? '';
+      final roomParts = rawRoomStr.split('_');
+      final roomNumericPart = roomParts.length > 1 ? roomParts.last : rawRoomStr;
+      final parsedIdRoom = parseIntSafe(roomNumericPart);
+      final parsedIdLink = parseIntSafe(idLink);
+      final parsedIdGroup = parseIntSafe(idGroup);
+      final parsedIdAccount = parseIntSafe(idAccount);
+
+      // DEBUG: Log setiap field yang sudah di-parse untuk diagnosis
+      debugPrint('SignalR: ┌── KirimPesan PAYLOAD DEBUG ──');
+      debugPrint('SignalR: │ Raw idRoom=$idRoom → parsed=$parsedIdRoom');
+      debugPrint('SignalR: │ Raw idLink=$idLink → parsed=$parsedIdLink');
+      debugPrint('SignalR: │ Raw idGroup=$idGroup → parsed=$parsedIdGroup');
+      debugPrint('SignalR: │ Raw idAccount=$idAccount → parsed=$parsedIdAccount');
+      debugPrint('SignalR: │ msg=${(msg ?? "").length > 50 ? msg!.substring(0, 50) : msg}');
+      debugPrint('SignalR: │ type=$type → parsed=${int.tryParse(type) ?? 1}');
+      debugPrint('SignalR: │ fileJson=${fileJson != null ? "present" : "null"}');
+      debugPrint('SignalR: │ Connection state: ${_hubConnection?.state}');
+      debugPrint('SignalR: │ isConnected=$_isConnected');
+      debugPrint('SignalR: └──────────────────────────────');
+
       final payload = {
         "Room": {
-          "IdRoom": parseIntSafe(idRoom?.toString().split('_').last),
-          "IdLink": parseIntSafe(idLink),
-          "IdGroup": parseIntSafe(idGroup),
-          "IdAccount": parseIntSafe(idAccount),
+          "IdRoom": parsedIdRoom,
+          "IdLink": parsedIdLink,
+          "IdGroup": parsedIdGroup,
+          "IdAccount": parsedIdAccount,
         },
         "Msg": msgMap,
       };
@@ -795,9 +832,11 @@ class SignalRService {
       // Payload must be sent as a single JSON string argument according to the network log
       final jsonPayload = jsonEncode(payload);
 
-      debugPrint('SignalR: ✉️ Invoking JoinConversation for Room $idRoom');
+      // FIX: JoinConversation menggunakan numeric room ID, bukan raw composite ID
+      final joinRoomId = parsedIdRoom?.toString() ?? rawRoomStr;
+      debugPrint('SignalR: ✉️ Invoking JoinConversation for Room $joinRoomId');
       try {
-        await invoke('JoinConversation', args: [idRoom.toString(), ""]);
+        await invoke('JoinConversation', args: [joinRoomId, ""]);
         // Beri jeda sedikit agar server sempat memproses Join
         await Future.delayed(const Duration(milliseconds: 200));
       } catch (e) {

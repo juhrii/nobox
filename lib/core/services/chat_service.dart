@@ -783,32 +783,45 @@ class ChatService {
               if (tId != null && tId.isNotEmpty) {
                 currentTenantId = tId;
               }
+
+              final status = acc['Status']?.toString();
+              final condition = acc['Condition']?.toString();
+              final note = (acc['NoteCondition']?.toString() ?? '').toLowerCase();
+              final bool isConnected = (status == '1' || status == 'true') &&
+                  (condition == '1' || condition == 'true' || note.contains('connect'));
               
               if (name.isNotEmpty) {
-                _singleAccountName = name;
+                if (isConnected || _singleAccountName == null) {
+                  _singleAccountName = name;
+                }
                 if (id.isNotEmpty) {
-                   _accountById[id] = name;
-                   _singleAccountId = id; // Store last ID or single ID
+                  _accountById[id] = name;
+                  if (isConnected || _singleAccountId == null) {
+                    _singleAccountId = id;
+                  }
                 }
                 
+                void setChannelAccount(int chNum) {
+                  final existingId = accountIdByChannel[chNum];
+                  // Only set or overwrite if connected or if this channel doesn't have an entry yet
+                  if (existingId == null || isConnected) {
+                    accountByChannel[chNum] = name;
+                    if (id.isNotEmpty) accountIdByChannel[chNum] = id;
+                  }
+                }
+
                 // Handle Channel as both number and string
                 if (channel is int) {
-                  accountByChannel[channel] = name;
-                  if (id.isNotEmpty) accountIdByChannel[channel] = id;
+                  setChannelAccount(channel);
                 } else if (channel is String) {
                   final channelNum = int.tryParse(channel);
                   if (channelNum != null) {
-                    accountByChannel[channelNum] = name;
-                    if (id.isNotEmpty) accountIdByChannel[channelNum] = id;
+                    setChannelAccount(channelNum);
                   } else {
-                    // String like "WhatsApp" → map to number  
                     if (channel.toLowerCase().contains('whatsapp')) {
-                      accountByChannel[1] = name;
-                      if (id.isNotEmpty) accountIdByChannel[1] = id;
-                    }
-                    else if (channel.toLowerCase().contains('telegram')) {
-                      accountByChannel[2] = name;
-                      if (id.isNotEmpty) accountIdByChannel[2] = id;
+                      setChannelAccount(1);
+                    } else if (channel.toLowerCase().contains('telegram')) {
+                      setChannelAccount(2);
                     }
                   }
                 }
@@ -824,19 +837,21 @@ class ChatService {
                 final json = dataList[i];
                 if (json is Map<String, dynamic>) {
                   final chId = json['ChId'];
-                  final accId = json['AccId']?.toString();
+                  final rawAccId = json['ChAccId']?.toString() ??
+                      json['AccId']?.toString() ??
+                      (conversations[i].accountId.isNotEmpty ? conversations[i].accountId : null);
                   
-                  // Try matching by AccId first, then ChId, then fallback to single account
                   String? resolvedName;
-                  String? resolvedAccountId = accId;
-                  if (accId != null && _accountById.containsKey(accId)) {
-                    resolvedName = _accountById[accId];
+                  String? resolvedAccountId = (rawAccId != null && rawAccId.isNotEmpty && rawAccId != '0' && rawAccId != 'null') ? rawAccId : null;
+
+                  if (resolvedAccountId != null && _accountById.containsKey(resolvedAccountId)) {
+                    resolvedName = _accountById[resolvedAccountId];
                   } else if (chId != null && chId is int && accountByChannel.containsKey(chId)) {
                     resolvedName = accountByChannel[chId];
-                    resolvedAccountId = accountIdByChannel[chId];
+                    resolvedAccountId ??= accountIdByChannel[chId];
                   } else if (accounts.length == 1 && _singleAccountName != null) {
                     resolvedName = _singleAccountName;
-                    resolvedAccountId = _singleAccountId;
+                    resolvedAccountId ??= _singleAccountId;
                   }
                   
                   if (resolvedName != null || (resolvedAccountId != null && resolvedAccountId.isNotEmpty)) {
@@ -933,26 +948,35 @@ class ChatService {
             for (final acc in accounts) {
               final name = _extractAccountName(acc);
               final channel = acc['Channel'];
-              
               final id = acc['Id']?.toString() ?? '';
+
+              final status = acc['Status']?.toString();
+              final condition = acc['Condition']?.toString();
+              final note = (acc['NoteCondition']?.toString() ?? '').toLowerCase();
+              final bool isConnected = (status == '1' || status == 'true') &&
+                  (condition == '1' || condition == 'true' || note.contains('connect'));
               
               if (name.isNotEmpty) {
+                void setChannelAccount(int chNum) {
+                  final existingId = accountIdByChannel[chNum];
+                  if (existingId == null || isConnected) {
+                    accountByChannel[chNum] = name;
+                    if (id.isNotEmpty) accountIdByChannel[chNum] = id;
+                  }
+                }
+
                 if (channel is int) {
-                  accountByChannel[channel] = name;
-                  if (id.isNotEmpty) accountIdByChannel[channel] = id;
+                  setChannelAccount(channel);
                 } else if (channel is String) {
                   final channelNum = int.tryParse(channel);
                   if (channelNum != null) {
-                    accountByChannel[channelNum] = name;
-                    if (id.isNotEmpty) accountIdByChannel[channelNum] = id;
+                    setChannelAccount(channelNum);
                   } else {
                     if (channel.toLowerCase().contains('whatsapp')) {
-                      accountByChannel[1] = name;
-                      if (id.isNotEmpty) accountIdByChannel[1] = id;
+                      setChannelAccount(1);
                     }
                     else if (channel.toLowerCase().contains('telegram')) {
-                      accountByChannel[2] = name;
-                      if (id.isNotEmpty) accountIdByChannel[2] = id;
+                      setChannelAccount(2);
                     }
                   }
                 }
@@ -964,18 +988,21 @@ class ChatService {
                 final json = dataList[i];
                 if (json is Map<String, dynamic>) {
                   final chId = json['ChId'];
-                  final accId = json['AccId']?.toString();
+                  final rawAccId = json['ChAccId']?.toString() ??
+                      json['AccId']?.toString() ??
+                      (conversations[i].accountId.isNotEmpty ? conversations[i].accountId : null);
                   
                   String? resolvedName;
-                  String? resolvedAccountId = accId;
-                  if (accId != null && _accountById.containsKey(accId)) {
-                    resolvedName = _accountById[accId];
+                  String? resolvedAccountId = (rawAccId != null && rawAccId.isNotEmpty && rawAccId != '0' && rawAccId != 'null') ? rawAccId : null;
+
+                  if (resolvedAccountId != null && _accountById.containsKey(resolvedAccountId)) {
+                    resolvedName = _accountById[resolvedAccountId];
                   } else if (chId != null && chId is int && accountByChannel.containsKey(chId)) {
                     resolvedName = accountByChannel[chId];
-                    resolvedAccountId = accountIdByChannel[chId];
+                    resolvedAccountId ??= accountIdByChannel[chId];
                   } else if (accounts.length == 1 && _singleAccountName != null) {
                     resolvedName = _singleAccountName;
-                    resolvedAccountId = _singleAccountId;
+                    resolvedAccountId ??= _singleAccountId;
                   }
                   
                   if (resolvedName != null || (resolvedAccountId != null && resolvedAccountId.isNotEmpty)) {
@@ -1571,8 +1598,14 @@ class ChatService {
       // Helper untuk mendeteksi apakah suatu ID sebenarnya adalah nomor telepon (ExtId) dan bukan database LinkId/CtId
       bool isTelephoneNumber(String? str) {
         if (str == null || str.isEmpty) return false;
-        final clean = str.trim().replaceAll(RegExp(r'[^0-9]'), '');
-        return clean.length >= 9 || str.trim().startsWith('08') || str.trim().startsWith('628') || str.trim().startsWith('+62');
+        final trimmed = str.trim();
+        if (trimmed.startsWith('+') || trimmed.startsWith('08') || trimmed.startsWith('628')) {
+          return true;
+        }
+        final clean = trimmed.replaceAll(RegExp(r'[^0-9]'), '');
+        // NoBox 15-digit snowflake database IDs start with 8 (e.g. 819322506002437)
+        if (clean.length >= 15) return false;
+        return clean.length >= 9 && clean.length <= 14;
       }
 
       if (extId.isEmpty && request.extId != null && request.extId!.isNotEmpty) {
@@ -1589,7 +1622,9 @@ class ChatService {
       // HACK: Tapi untuk Telegram, C# backend mem-parsing ExtId sebagai objek JSON (extra.ExtId).
       String finalExtId = extId;
       if (extId.isNotEmpty && channelId == 2) {
-        finalExtId = jsonEncode({"ExtId": extId});
+        if (!finalExtId.startsWith('{')) {
+          finalExtId = jsonEncode({"ExtId": extId});
+        }
       }
 
       final Map<String, dynamic> payload = {
@@ -1611,10 +1646,12 @@ class ChatService {
       }
 
       payload['ExtId'] = finalExtId;
-      // Fallback: jika ExtId kosong atau ada LinkId valid, tambahkan LinkId (pastikan BUKAN nomor telepon dan BUKAN grup!)
-      if (!isGroupReq && request.contactId != null && request.contactId!.isNotEmpty && !isTelephoneNumber(request.contactId)) {
+      // Fallback: sertakan LinkId (database primary key) jika ada
+      if (!isGroupReq && request.contactId != null && request.contactId!.isNotEmpty) {
         final linkIdInt = int.tryParse(request.contactId!);
-        if (linkIdInt != null && linkIdInt < 99999999) payload['LinkId'] = linkIdInt;
+        if (linkIdInt != null && linkIdInt > 0) {
+          payload['LinkId'] = linkIdInt;
+        }
       }
 
       debugPrint('ChatService: ┌── sendMessage PAYLOAD FINAL ──');
@@ -1891,8 +1928,10 @@ class ChatService {
 
     // Mentor instruction: AccountIds must be a single string (comma-separated if multiple), NOT an array.
     String safeAccountId = '';
-    if (accountId != null && accountId.isNotEmpty) {
+    if (accountId != null && accountId.isNotEmpty && accountId != '0' && accountId != 'null') {
       safeAccountId = accountId;
+    } else if (channelId != null && _accountIdByChannel.containsKey(channelId)) {
+      safeAccountId = _accountIdByChannel[channelId]!;
     } else if (_singleAccountId != null && _singleAccountId!.isNotEmpty) {
       safeAccountId = _singleAccountId!;
     }

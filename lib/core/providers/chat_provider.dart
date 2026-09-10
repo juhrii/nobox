@@ -142,6 +142,40 @@ class ChatProvider with ChangeNotifier {
   // Ini krusial ketika agen membalas pesan dari aplikasi native (seperti Telegram) langsung.
   Map<String, bool> _recentIsMeFlags = {};
 
+  // Track pesan yang baru saja dikirim oleh aplikasi ini (roomId -> Map<cleanContent, DateTime>)
+  // Mencegah echo SignalR atau refresh API menganggap pesan agen sebagai pesan masuk (isLastMessageFromMe = false)
+  final Map<String, Map<String, DateTime>> _recentSentMessages = {};
+
+  void recordRecentSentMessage(String roomId, String text) {
+    if (roomId.isEmpty || text.isEmpty) return;
+    final clean = text.trim().toLowerCase();
+    _recentSentMessages.putIfAbsent(roomId, () => {})[clean] = DateTime.now();
+    _recentIsMeFlags[roomId] = true;
+    
+    // Auto-cleanup pesan lebih dari 3 menit
+    _recentSentMessages[roomId]!.removeWhere(
+      (_, time) => DateTime.now().difference(time).inMinutes >= 3,
+    );
+  }
+
+  bool isRecentMessageFromMe(String roomId, String text) {
+    if (roomId.isEmpty) return false;
+    final sentMap = _recentSentMessages[roomId];
+    if (sentMap != null && sentMap.isNotEmpty) {
+      final clean = text.trim().toLowerCase();
+      for (final entry in sentMap.entries) {
+        if (DateTime.now().difference(entry.value).inMinutes < 3) {
+          if (clean == entry.key ||
+              (clean.isNotEmpty && entry.key.contains(clean)) ||
+              (entry.key.isNotEmpty && clean.contains(entry.key))) {
+            return true;
+          }
+        }
+      }
+    }
+    return _recentIsMeFlags[roomId] == true;
+  }
+
   bool _isTimeIgnored(String roomId, String serverTimeStr) {
     if (serverTimeStr.isEmpty) return false;
     final ignoredTimes = _ignoredServerTimes[roomId];
@@ -461,10 +495,20 @@ class ChatProvider with ChangeNotifier {
           int forcedUnread = 0;
 
           if (oldChat != null) {
-            // FIX: Pewarisan isLastMessageFromMe dari cache lokal
-            // Karena backend NoBox sering tidak menyertakan IsMe=true untuk balasan kita di endpoint List.
-            // Jika pesan teksnya mirip/sama (atau media), kita wariskan statusnya agar tidak memicu unread palsu.
-            if (!chat.isLastMessageFromMe && oldChat.isLastMessageFromMe) {
+            // FIX: Cek apakah pesan terakhir adalah pesan yang baru kita kirim dari aplikasi ini
+            final bool isSentByMeRecently = isRecentMessageFromMe(chat.id, chat.lastMessage);
+
+            if (isSentByMeRecently) {
+              chat = chat.copyWith(
+                isLastMessageFromMe: true,
+                needReply: false,
+                unreadCount: 0,
+                sdrMsg: 'me',
+              );
+            } else if (!chat.isLastMessageFromMe && oldChat.isLastMessageFromMe) {
+              // FIX: Pewarisan isLastMessageFromMe dari cache lokal
+              // Karena backend NoBox sering tidak menyertakan IsMe=true untuk balasan kita di endpoint List.
+              // Jika pesan teksnya mirip/sama (atau media), kita wariskan statusnya agar tidak memicu unread palsu.
               final newLower = chat.lastMessage.toLowerCase().trim();
               final oldLower = oldChat.lastMessage.toLowerCase().trim();
               final isMediaJSON =
@@ -485,12 +529,22 @@ class ChatProvider with ChangeNotifier {
               ].any((lbl) => oldLower.contains(lbl));
               final isTextMatch = oldLower.isNotEmpty && newLower.isNotEmpty && newLower == oldLower; 
               if (isTextMatch || (isMediaJSON && oldHasMediaLabel)) {
-                chat = chat.copyWith(isLastMessageFromMe: true);
+                chat = chat.copyWith(
+                  isLastMessageFromMe: true,
+                  needReply: false,
+                  unreadCount: 0,
+                  sdrMsg: 'me',
+                );
               }
             }
 
-            if (_recentIsMeFlags.containsKey(chat.id)) {
-              chat = chat.copyWith(isLastMessageFromMe: _recentIsMeFlags[chat.id]);
+            if (_recentIsMeFlags.containsKey(chat.id) && _recentIsMeFlags[chat.id] == true) {
+              chat = chat.copyWith(
+                isLastMessageFromMe: true,
+                needReply: false,
+                unreadCount: 0,
+                sdrMsg: 'me',
+              );
             }
 
             // Jika chat sudah ada sebelumnya, kita cek apakah waktu pesannya berubah (lebih baru)
@@ -574,13 +628,24 @@ class ChatProvider with ChangeNotifier {
                 _localOverrides.remove(chat.id);
                 _overrideTimestamps.remove(chat.id);
                 _saveLocalOverrides();
+                if (isRecentMessageFromMe(chat.id, chat.lastMessage)) {
+                  chat = chat.copyWith(
+                    isLastMessageFromMe: true,
+                    needReply: false,
+                    unreadCount: 0,
+                    sdrMsg: 'me',
+                  );
+                }
               } else {
                 // Override masih berlaku!
                 chat = chat.copyWith(
                   lastMessage: localOverride.lastMessage,
                   lastMessageType: localOverride.lastMessageType,
                   isLastMessageFromMe: localOverride.isLastMessageFromMe,
+                  needReply: localOverride.isLastMessageFromMe ? false : chat.needReply,
+                  unreadCount: localOverride.isLastMessageFromMe ? 0 : chat.unreadCount,
                   time: localOverride.time,
+                  sdrMsg: localOverride.isLastMessageFromMe ? 'me' : (localOverride.sdrMsg.isNotEmpty ? localOverride.sdrMsg : chat.sdrMsg),
                 );
               }
             }
@@ -1132,7 +1197,10 @@ class ChatProvider with ChangeNotifier {
       final bool isNewMedia =
           lastMsg.trim().startsWith('{') || lastMsg.trim().startsWith('[');
 
+      final bool isSentByMeRecently = isRecentMessageFromMe(roomId, lastMsg);
+
       bool isSmartMeFallback =
+          isSentByMeRecently ||
           (sdrMsg.toLowerCase() == 'me') ||
           (existing.channelName.isNotEmpty &&
               sdrMsg.toLowerCase() == existing.channelName.toLowerCase()) ||
@@ -1220,11 +1288,22 @@ class ChatProvider with ChangeNotifier {
       if (isNewerOrDifferentForState) {
         isFromAgentForState =
             isRecentMe ||
+            isSentByMeRecently ||
             sdrMsg.toLowerCase() == 'me' ||
             (sdrMsg.toLowerCase() == 'system' && !existing.isGroup) ||
             isSmartMeFallback;
       } else {
-        isFromAgentForState = existing.isLastMessageFromMe;
+        isFromAgentForState = existing.isLastMessageFromMe || isSentByMeRecently;
+      }
+
+      final bool finalNeedReply = isFromAgentForState ? false : isNeedReply;
+      final String resolvedSdrMsg;
+      if (isFromAgentForState) {
+        resolvedSdrMsg = 'me';
+      } else if (sdrMsg.isNotEmpty) {
+        resolvedSdrMsg = sdrMsg;
+      } else {
+        resolvedSdrMsg = existing.sdrMsg;
       }
 
       _chats[index] = existing.copyWith(
@@ -1236,9 +1315,10 @@ class ChatProvider with ChangeNotifier {
             ? 0
             : (_localUnreadOverrides[roomId] ?? uc),
         time: timeMsg,
-        needReply: isNeedReply,
+        needReply: finalNeedReply,
         isLastMessageFromMe: isFromAgentForState,
         isBlocked: resolvedIsBlocked,
+        sdrMsg: resolvedSdrMsg,
       );
 
       debugPrint(
@@ -1263,15 +1343,17 @@ class ChatProvider with ChangeNotifier {
   }) {
     if (roomId.isEmpty) return;
 
+    final bool resolvedIsMe = isMe || isRecentMessageFromMe(roomId, msgText);
+
     // Simpan isMe yang akurat sementara waktu agar bisa ditangkap oleh updateRoomFromSignalR
     // (yang biasanya dipanggil berdekatan oleh TerimaSubSpv)
-    _recentIsMeFlags[roomId] = isMe;
-    Future.delayed(const Duration(seconds: 5), () {
+    _recentIsMeFlags[roomId] = resolvedIsMe;
+    Future.delayed(const Duration(seconds: 30), () {
       _recentIsMeFlags.remove(roomId);
     });
 
     // Jika kita yang membalas, kita reset unread count dan batalkan perlindungan unread.
-    if (isMe) {
+    if (resolvedIsMe) {
       _localUnreadOverrides.remove(roomId);
       if (!_readIds.contains(roomId)) _readIds.add(roomId);
       _saveReadState();
@@ -1288,11 +1370,11 @@ class ChatProvider with ChangeNotifier {
       );
       refreshFirstPage();
     } else {
-      if (PushNotificationService.currentRoomId != roomId && !isMe) {
+      if (PushNotificationService.currentRoomId != roomId && !resolvedIsMe) {
         // Sesuai arahan Mas Erik: Kita tidak lagi menaikkan Uc secara manual menggunakan delay 5.5s.
         // Kita murni menunggu TerimaSubSpv yang datang sesaat lagi untuk membawa angka Uc yang akurat.
         debugPrint('ChatProvider: Waiting for TerimaSubSpv to update Unread Count for room $roomId');
-      } else if (isMe) {
+      } else if (resolvedIsMe) {
         _localUnreadOverrides.remove(roomId);
         if (!_readIds.contains(roomId)) _readIds.add(roomId);
         _chats[index] = _chats[index].copyWith(unreadCount: 0);
@@ -1311,9 +1393,11 @@ class ChatProvider with ChangeNotifier {
               .toUtc()
               .toIso8601String(), // Set time to now to prevent older server time from triggering double-increment
           unreadCount:
-              _localUnreadOverrides[roomId] ?? _chats[index].unreadCount,
+              resolvedIsMe ? 0 : (_localUnreadOverrides[roomId] ?? _chats[index].unreadCount),
           isLastMessageFromMe:
-              isMe, // FIX: Sangat krusial agar isSmartMeFallback di TerimaSubSpv tidak false-positive!
+              resolvedIsMe, // FIX: Sangat krusial agar isSmartMeFallback di TerimaSubSpv tidak false-positive!
+          needReply: resolvedIsMe ? false : _chats[index].needReply,
+          sdrMsg: resolvedIsMe ? 'me' : 'you',
         );
         _chats.sort(
           (a, b) =>
@@ -1431,6 +1515,16 @@ class ChatProvider with ChangeNotifier {
     if (lastMessage.contains('[-{=||=}-]')) {
       lastMessage = '📍 Location';
     }
+
+    if (isFromMe) {
+      recordRecentSentMessage(roomId, lastMessage);
+      _localUnreadOverrides.remove(roomId);
+      if (!_readIds.contains(roomId)) {
+        _readIds.add(roomId);
+        _saveReadState();
+      }
+    }
+
     final index = _chats.indexWhere((c) => c.id == roomId);
     if (index >= 0) {
       final newTime =
@@ -1440,7 +1534,10 @@ class ChatProvider with ChangeNotifier {
         lastMessage: lastMessage,
         lastMessageType: lastMessageType ?? '1',
         isLastMessageFromMe: isFromMe,
+        needReply: isFromMe ? false : _chats[index].needReply,
+        unreadCount: isFromMe ? 0 : _chats[index].unreadCount,
         time: newTime,
+        sdrMsg: isFromMe ? 'me' : _chats[index].sdrMsg,
       );
 
       // Simpan sebagai override agar tidak tertimpa Inbox/GetList yang usang
@@ -1683,8 +1780,18 @@ class ChatProvider with ChangeNotifier {
               }
             }
 
-            // FIX: Pewarisan isLastMessageFromMe dari cache lokal
-            if (!chat.isLastMessageFromMe && oldChat.isLastMessageFromMe) {
+            // FIX: Cek apakah pesan terakhir adalah pesan yang baru kita kirim dari aplikasi ini
+            final bool isSentByMeRecently = isRecentMessageFromMe(chat.id, chat.lastMessage);
+
+            if (isSentByMeRecently) {
+              chat = chat.copyWith(
+                isLastMessageFromMe: true,
+                needReply: false,
+                unreadCount: 0,
+                sdrMsg: 'me',
+              );
+            } else if (!chat.isLastMessageFromMe && oldChat.isLastMessageFromMe) {
+              // FIX: Pewarisan isLastMessageFromMe dari cache lokal
               final newLower = chat.lastMessage.toLowerCase().trim();
               final oldLower = oldChat.lastMessage.toLowerCase().trim();
               final isMediaJSON =
@@ -1705,8 +1812,22 @@ class ChatProvider with ChangeNotifier {
               ].any((lbl) => oldLower.contains(lbl));
               final isTextMatch = oldLower.isNotEmpty && newLower.isNotEmpty && newLower == oldLower; 
               if (isTextMatch || (isMediaJSON && oldHasMediaLabel)) {
-                chat = chat.copyWith(isLastMessageFromMe: true);
+                chat = chat.copyWith(
+                  isLastMessageFromMe: true,
+                  needReply: false,
+                  unreadCount: 0,
+                  sdrMsg: 'me',
+                );
               }
+            }
+
+            if (_recentIsMeFlags.containsKey(chat.id) && _recentIsMeFlags[chat.id] == true) {
+              chat = chat.copyWith(
+                isLastMessageFromMe: true,
+                needReply: false,
+                unreadCount: 0,
+                sdrMsg: 'me',
+              );
             }
 
             // FIX UNREAD COUNT DI API LIST:
@@ -2302,6 +2423,8 @@ class ChatProvider with ChangeNotifier {
             lastMessageType: val['lastMessageType']?.toString(),
             time: val['time']?.toString() ?? '',
             isLastMessageFromMe: val['isLastMessageFromMe'] == true,
+            needReply: val['isLastMessageFromMe'] == true ? false : (val['needReply'] == true),
+            unreadCount: val['isLastMessageFromMe'] == true ? 0 : (val['unreadCount'] is int ? val['unreadCount'] : 0),
           );
         }
       }
@@ -2330,6 +2453,8 @@ class ChatProvider with ChangeNotifier {
             'lastMessage': v.lastMessage,
             'lastMessageType': v.lastMessageType,
             'isLastMessageFromMe': v.isLastMessageFromMe,
+            'needReply': v.needReply,
+            'unreadCount': v.unreadCount,
             'time': v.time,
             'sender': v.sender,
             'contactId': v.contactId,
@@ -2646,19 +2771,44 @@ class ChatProvider with ChangeNotifier {
     String resolvedAccountId = chat.accountId;
 
     // --- SMART TELEGRAM & FALLBACK ACCOUNT ID ---
-    // Hanya fallback jika AccountId memang kosong di data chat
     final isTelegram =
         chat.chId == '2' ||
         chat.channelType.toLowerCase().contains('telegram') ||
         chat.channelName.toLowerCase().contains('telegram');
+
+    bool isAccConnected(Map<String, dynamic> acc) {
+      final status = acc['Status']?.toString();
+      final condition = acc['Condition']?.toString();
+      final note = (acc['NoteCondition']?.toString() ?? '').toLowerCase();
+      return (status == '1' || status == 'true') &&
+          (condition == '1' || condition == 'true' || note.contains('connect'));
+    }
+
+    bool isCurrentAccActive = true;
+    if (_cachedAccounts != null && _cachedAccounts!.isNotEmpty && resolvedAccountId.isNotEmpty) {
+      final existing = _cachedAccounts!.where((a) => a['Id']?.toString() == resolvedAccountId).firstOrNull;
+      if (existing != null) {
+        isCurrentAccActive = isAccConnected(existing);
+      }
+    }
+
     if (resolvedAccountId.isEmpty ||
         resolvedAccountId == '0' ||
-        resolvedAccountId == 'null') {
+        resolvedAccountId == 'null' ||
+        !isCurrentAccActive) {
+      if (_cachedAccounts == null || _cachedAccounts!.isEmpty) {
+        try {
+          await getAccountsResponse();
+        } catch (_) {}
+      }
       if (_cachedAccounts != null && _cachedAccounts!.isNotEmpty) {
         try {
-          final activeAcc = _cachedAccounts!.firstWhere((acc) {
+          final activeAcc = _cachedAccounts!.where((acc) {
             final ch = acc['Channel']?.toString() ?? '';
             final code = (acc['Code']?.toString() ?? '').toLowerCase();
+            final connected = isAccConnected(acc);
+            if (!connected) return false;
+
             if (isTelegram) {
               return ch == '2' || code.contains('telegram');
             }
@@ -2671,12 +2821,18 @@ class ChatProvider with ChangeNotifier {
               return ch == '1' || code.contains('whatsapp') || code == 'wa';
             }
             return false;
-          }, orElse: () => _cachedAccounts!.first);
-          if (activeAcc['Id'] != null) {
+          }).firstOrNull;
+
+          if (activeAcc != null && activeAcc['Id'] != null) {
             resolvedAccountId = activeAcc['Id'].toString();
             debugPrint(
-              'Smart Fallback: Resolved AccId from cached accounts -> $resolvedAccountId',
+              'Smart Fallback: Resolved AccId from active cached accounts -> $resolvedAccountId (${activeAcc['Name']})',
             );
+          } else {
+            final anyConnected = _cachedAccounts!.where(isAccConnected).firstOrNull;
+            if (anyConnected != null && anyConnected['Id'] != null) {
+              resolvedAccountId = anyConnected['Id'].toString();
+            }
           }
         } catch (e) {
           debugPrint('Smart Fallback Failed: $e');
@@ -2706,34 +2862,64 @@ class ChatProvider with ChangeNotifier {
       }
       idLinkValue = null; // IMPORTANT: For group chat, IdLink MUST be null!
     } else {
-      // PRIVATE CHAT (1-to-1): IdLink diisi dengan ID kontak (integer), IdGroup adalah NULL
-      idLinkValue = chat.contactId;
-      if (idLinkValue.isEmpty ||
-          idLinkValue == '0' ||
-          idLinkValue == 'null' ||
-          int.tryParse(idLinkValue.replaceAll(RegExp(r'[^0-9]'), '')) == null) {
-        if (chat.link.isNotEmpty &&
-            chat.link != '0' &&
-            chat.link != 'null' &&
-            int.tryParse(chat.link.replaceAll(RegExp(r'[^0-9]'), '')) != null) {
-          idLinkValue = chat.link;
-        }
+      // PRIVATE CHAT (1-to-1): IdLink diisi dengan ID kontak (database ID)
+      
+      // Helper: validasi bahwa string adalah ID yang valid
+      bool isValidDbId(String s) {
+        if (s.isEmpty || s == '0' || s == 'null') return false;
+        final clean = s.replaceAll(RegExp(r'[^0-9]'), '');
+        final num = int.tryParse(clean);
+        return num != null && num > 0;
       }
-      if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
-        idLinkValue = chat.link;
-      }
-      if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
+      
+      // Prioritas: contactId (CtId/IdLink) → ctRealId → link → strip dari chat.id
+      if (isValidDbId(chat.contactId)) {
+        idLinkValue = chat.contactId;
+      } else if (isValidDbId(chat.ctRealId)) {
         idLinkValue = chat.ctRealId;
-      }
-      if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
-        idLinkValue = chat.sender.replaceAll(RegExp(r'[^0-9]'), '');
-      }
-      if (idLinkValue.isEmpty || idLinkValue == '0' || idLinkValue == 'null') {
-        idLinkValue = chat.id
+      } else if (isValidDbId(chat.link)) {
+        idLinkValue = chat.link;
+      } else {
+        // Fallback terakhir: extract numeric part dari chat.id (format "tenantId_roomId")
+        final extracted = chat.id
             .replaceAll(RegExp(r'^[0-9]+_'), '')
             .replaceAll(RegExp(r'[^0-9]'), '');
+        if (extracted.isNotEmpty && isValidDbId(extracted)) {
+          idLinkValue = extracted;
+        } else {
+          idLinkValue = chat.contactId.isNotEmpty ? chat.contactId : chat.link;
+        }
       }
+      
       resolvedGroupId = null;
+    }
+
+
+    // DEBUG: Dump semua field yang di-resolve untuk diagnosis pengiriman pesan
+    debugPrint('ChatProvider: ┌── sendMessageViaSignalR DEBUG ──');
+    debugPrint('ChatProvider: │ chat.id=${chat.id}');
+    debugPrint('ChatProvider: │ chat.contactId=${chat.contactId}');
+    debugPrint('ChatProvider: │ chat.link=${chat.link}');
+    debugPrint('ChatProvider: │ chat.ctRealId=${chat.ctRealId}');
+    debugPrint('ChatProvider: │ chat.groupId=${chat.groupId}');
+    debugPrint('ChatProvider: │ chat.groupName=${chat.groupName}');
+    debugPrint('ChatProvider: │ chat.accountId=${chat.accountId}');
+    debugPrint('ChatProvider: │ chat.chId=${chat.chId}');
+    debugPrint('ChatProvider: │ chat.channelType=${chat.channelType}');
+    debugPrint('ChatProvider: │ chat.channelName=${chat.channelName}');
+    debugPrint('ChatProvider: │ chat.sender=${chat.sender}');
+    debugPrint('ChatProvider: │ chat.isGroup=${chat.isGroup}');
+    debugPrint('ChatProvider: │ ─── Resolved Values ───');
+    debugPrint('ChatProvider: │ resolvedAccountId=$resolvedAccountId');
+    debugPrint('ChatProvider: │ isGroupChat=$isGroupChat');
+    debugPrint('ChatProvider: │ resolvedGroupId=$resolvedGroupId');
+    debugPrint('ChatProvider: │ idLinkValue=$idLinkValue');
+    debugPrint('ChatProvider: │ type=$type, msg=${(msg ?? "").length > 30 ? msg!.substring(0, 30) + "..." : msg}');
+    debugPrint('ChatProvider: └──────────────────────────────');
+
+    final cleanMsg = (msg ?? '').trim();
+    if (cleanMsg.isNotEmpty) {
+      recordRecentSentMessage(chat.id, cleanMsg);
     }
 
     final error = await SignalRService().invokeKirimPesan(
@@ -2750,7 +2936,20 @@ class ChatProvider with ChangeNotifier {
       replyType: replyType,
       replyFiles: replyFiles,
     );
+    
+    if (error != null) {
+      debugPrint('ChatProvider: ❌ sendMessageViaSignalR FAILED: $error');
+    } else {
+      debugPrint('ChatProvider: ✅ sendMessageViaSignalR SUCCESS');
+      updateLocalLastMessage(
+        chat.id,
+        cleanMsg.isNotEmpty ? cleanMsg : (type == '3' ? '📷 Photo' : 'Pesan terkirim'),
+        isFromMe: true,
+      );
+    }
+    
     return error;
+
   }
 
   /// Update block status from incoming SignalR TerimaBlockUnblock event.

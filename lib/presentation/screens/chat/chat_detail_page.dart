@@ -1323,6 +1323,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               ).updateLocalLastMessage(
                 chat.id,
                 newContent,
+                isFromMe: lastMsg.isMe,
                 updateTimeAndPosition:
                     false, // JANGAN pindahkan obrolan ke atas hanya karena sinkronisasi ikon!
               );
@@ -2300,6 +2301,29 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       _statusProvider = Provider.of<ChatStatusProvider>(context, listen: false);
       _loadInitialMessages();
       _subscribeToSignalR();
+
+      // Background refresh detail room agar AccountId, LinkId, dan ExtId selalu yang terbaru dari database
+      _chatService.getDetailRoom(chat.id).then((resp) {
+        if (!mounted || resp.isError || resp.data == null) return;
+        final d = resp.data!;
+        final chAccId = d['ChAccId']?.toString();
+        final chAccNm = d['ChAcc']?.toString();
+        final linkId = d['CtId']?.toString() ?? d['LinkId']?.toString();
+        final extId = d['CtIdExt']?.toString() ?? d['ExtId']?.toString();
+
+        setState(() {
+          chat = chat.copyWith(
+            accountId: (chAccId != null && chAccId.isNotEmpty && chAccId != '0') ? chAccId : chat.accountId,
+            channelName: (chAccNm != null && chAccNm.isNotEmpty && chAccNm != 'Not Found') ? chAccNm : chat.channelName,
+            contactId: (linkId != null && linkId.isNotEmpty && linkId != '0') ? linkId : chat.contactId,
+            link: (linkId != null && linkId.isNotEmpty && linkId != '0') ? linkId : chat.link,
+            extId: (extId != null && extId.isNotEmpty) ? extId : chat.extId,
+          );
+        });
+        debugPrint('ChatDetail: ✅ Refreshed room details: ChAccId=$chAccId, LinkId=$linkId, ExtId=$extId');
+      }).catchError((e) {
+        debugPrint('ChatDetail: ⚠️ Background getDetailRoom error: $e');
+      });
       // Polling dimulai setelah _loadInitialMessages selesai (di dalam fungsinya)
       // _fetchQuickReplies hanya dipanggil saat user mengetik '/' (lazy)
     });
@@ -2508,7 +2532,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     // FIX: Optimistic update for Chat List preview so it appears instantly when returning to list
-    chatProvider.updateLocalLastMessage(chat.id, content);
+    chatProvider.updateLocalLastMessage(chat.id, content, isFromMe: true);
 
     final messageIndex = _messages.indexOf(newMessage);
 
@@ -2577,9 +2601,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             content: finalContent,
             accountId: _getResolvedAccountId(chatProvider),
             contactId: chat.isGroup ? null : (chat.contactId.isNotEmpty ? chat.contactId : chat.link),
-            extId: chat.sender.replaceAll(RegExp(r'[^0-9]'), '').length >= 9
-                ? chat.sender
-                : null,
+            extId: chat.extId.isNotEmpty
+                ? chat.extId
+                : (chat.sender.replaceAll(RegExp(r'[^0-9]'), '').length >= 9
+                    ? chat.sender
+                    : null),
             channelId: chat.chId,
             groupId: chat.isGroup ? (chat.groupId.isNotEmpty && chat.groupId != '0' ? chat.groupId : chat.id) : null,
           ),
@@ -2627,6 +2653,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       debugPrint(
         'LocalCache: Pesan (Sukses) disimpan ke cache walau user pindah halaman. Total cache[${chat.id}]: ${_localSentCache[chat.id]!.length}',
       );
+      chatProvider.recordRecentSentMessage(chat.id, content);
+      chatProvider.updateLocalLastMessage(chat.id, content, isFromMe: true);
     }
 
     if (mounted && currentIndex != -1) {
@@ -2642,7 +2670,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         Provider.of<ChatProvider>(
           context,
           listen: false,
-        ).updateLocalLastMessage(chat.id, content);
+        ).updateLocalLastMessage(chat.id, content, isFromMe: true);
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) _startChatSyncPolling();
         });
@@ -2729,7 +2757,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
 
     _scrollToBottom();
-    chatProvider.updateLocalLastMessage(chat.id, '📷 Photo');
+    chatProvider.updateLocalLastMessage(chat.id, '📷 Photo', isFromMe: true);
 
     final messageIndex = _messages.indexOf(newMessage);
 
@@ -2849,7 +2877,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
 
     _scrollToBottom();
-    chatProvider.updateLocalLastMessage(chat.id, displayContent, lastMessageType: isStickerFile ? '16' : '4');
+    chatProvider.updateLocalLastMessage(chat.id, displayContent, lastMessageType: isStickerFile ? '16' : '4', isFromMe: true);
 
     final messageIndex = _messages.indexOf(newMessage);
 
@@ -2918,7 +2946,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
 
     _scrollToBottom();
-    chatProvider.updateLocalLastMessage(chat.id, '📷 Photo');
+    chatProvider.updateLocalLastMessage(chat.id, '📷 Photo', isFromMe: true);
 
     final messageIndex = _messages.indexOf(newMessage);
 
@@ -2965,7 +2993,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // ─────────────────────────────────────────────
 
   // FITUR: Get Resolved AccountId
-  // FUNGSI: Mengambil AccountId yang benar untuk Telegram karena chat.accountId bisa saja menunjuk ke bot lama.
+  // FUNGSI: Mengambil AccountId yang benar untuk Telegram/WhatsApp karena chat.accountId bisa saja kosong atau menunjuk ke bot lama yang tidak aktif.
   String _getResolvedAccountId(ChatProvider chatProvider) {
     String resolvedAccountId = chat.accountId;
     final isTelegram =
@@ -2973,21 +3001,44 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         chat.channelType.toLowerCase().contains('telegram') ||
         chat.channelName.toLowerCase().contains('telegram');
 
+    final accounts = chatProvider.cachedAccounts;
+    bool isAccountActive(String id) {
+      if (accounts == null || accounts.isEmpty) return true;
+      final acc = accounts.where((a) => a['Id']?.toString() == id).firstOrNull;
+      if (acc == null) return true;
+      final status = acc['Status']?.toString();
+      final condition = acc['Condition']?.toString();
+      final note = (acc['NoteCondition']?.toString() ?? '').toLowerCase();
+      return (status == '1' || status == 'true') &&
+          (condition == '1' || condition == 'true' || note.contains('connect'));
+    }
+
     if ((resolvedAccountId.isEmpty ||
             resolvedAccountId == '0' ||
-            resolvedAccountId == 'null') &&
-        isTelegram &&
-        chatProvider.cachedAccounts != null) {
+            resolvedAccountId == 'null' ||
+            !isAccountActive(resolvedAccountId)) &&
+        accounts != null &&
+        accounts.isNotEmpty) {
       try {
-        final activeTelegramAcc = chatProvider.cachedAccounts!.firstWhere(
-          (acc) =>
-              acc['Channel']?.toString() == '2' ||
-              (acc['Code']?.toString() ?? '').toLowerCase().contains(
-                'telegram',
-              ),
-        );
-        if (activeTelegramAcc != null && activeTelegramAcc['Id'] != null) {
-          resolvedAccountId = activeTelegramAcc['Id'].toString();
+        final activeAcc = accounts.where(
+          (acc) {
+            final status = acc['Status']?.toString();
+            final condition = acc['Condition']?.toString();
+            final note = (acc['NoteCondition']?.toString() ?? '').toLowerCase();
+            final isConnected = (status == '1' || status == 'true') &&
+                (condition == '1' || condition == 'true' || note.contains('connect'));
+            if (!isConnected) return false;
+
+            final ch = acc['Channel']?.toString();
+            final code = (acc['Code']?.toString() ?? '').toLowerCase();
+            if (isTelegram) {
+              return ch == '2' || code.contains('telegram');
+            }
+            return ch == '1' || code.contains('whatsapp');
+          },
+        ).firstOrNull;
+        if (activeAcc != null && activeAcc['Id'] != null) {
+          resolvedAccountId = activeAcc['Id'].toString();
         }
       } catch (e) {}
     }
@@ -3062,7 +3113,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       });
 
       _scrollToBottom();
-      chatProvider.updateLocalLastMessage(chat.id, '📄 ${file.name}');
+      chatProvider.updateLocalLastMessage(chat.id, '📄 ${file.name}', isFromMe: true);
 
       final messageIndex = _messages.indexOf(newMessage);
 
@@ -3205,7 +3256,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         Provider.of<ChatProvider>(
           context,
           listen: false,
-        ).updateLocalLastMessage(chat.id, '📍 Lokasi saya\n$mapsUrl');
+        ).updateLocalLastMessage(chat.id, '📍 Lokasi saya\n$mapsUrl', isFromMe: true);
       }
     } else if (mounted && messageIndex < _messages.length) {
       setState(() {
@@ -3308,7 +3359,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         Provider.of<ChatProvider>(
           context,
           listen: false,
-        ).updateLocalLastMessage(chat.id, '📷 Photo');
+        ).updateLocalLastMessage(chat.id, '📷 Photo', isFromMe: true);
 
         Timer(const Duration(seconds: 2), () {
           if (mounted && messageIndex < _messages.length) {
@@ -3451,7 +3502,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       // FIX: Langsung beritahu daftar chat bahwa kita mengirim Voice Note sebelum proses upload dimulai
       // Sehingga kalau user langsung pencet tombol Back (keluar dari ruang obrolan), tulisan 'Voice Note' tetap muncul!
-      chatProvider.updateLocalLastMessage(chat.id, '🎤 Pesan Suara');
+      chatProvider.updateLocalLastMessage(chat.id, '🎤 Pesan Suara', isFromMe: true);
 
       final messageIndex = _messages.indexOf(voiceMessage);
 

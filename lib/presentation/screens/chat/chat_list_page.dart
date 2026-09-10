@@ -2658,9 +2658,12 @@ class _ChatListPageState extends State<ChatListPage>
     // Jika unreadCount > 0 -> Ada pesan masuk baru yang belum dibaca -> Merah
     // Jika tidak -> Hitam/Warna Tema
     final bool hasUnread = chat.unreadCount > 0;
-    // Sesuai arahan Mas Erik: Teks jadi merah HANYA JIKA SdrMsg=="you" dan IsNeedReply==1
-    // chat.needReply dan chat.isLastMessageFromMe (yang sekarang di-set jadi SdrMsg=="me") 
-    final bool isRedText = !chat.isLastMessageFromMe && chat.needReply;
+    // Aturan Resmi Backend NoBox:
+    // 1. Teks pesan terakhir MERAH: SdrMsg == "you" dan IsNeedReply == 1
+    // 2. Balasan dari Agen (termasuk Telegram/Web/App): SdrMsg == "me" -> Teks normal (bukan merah)
+    final bool isFromAgent = chat.sdrMsg.toLowerCase() == 'me' || chat.isLastMessageFromMe;
+    final bool isCustomer = chat.sdrMsg.toLowerCase() == 'you' || (!isFromAgent && chat.sdrMsg.isEmpty);
+    final bool isRedText = !isFromAgent && isCustomer && chat.needReply;
 
     final Color messageColor = isRedText
         ? Colors.red

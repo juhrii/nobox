@@ -166,6 +166,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       final msgText = message['Msg']?.toString() ?? '';
       final senderName = sender?['Name']?.toString() ?? 'Pesan Baru';
 
+      final chatProvider = context.read<ChatProvider>();
+      final isRecentSent = chatProvider.isRecentMessageFromMe(roomId, msgText);
+
       // FIX: Cek isMe secara komprehensif dari payload agar pesan keluar (outbound) tidak dianggap sebagai pesan masuk
       final agentId = message['agent_id'] ?? message['AgentId'] ?? message['agentId'];
       final isNobox = message['is_nobox'] ?? message['IsNobox'];
@@ -176,12 +179,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       final extChAccId = message['ChAccId']?.toString() ?? '';
       final extSenderId = message['SenderId']?.toString() ?? '';
       
-      bool isMe = (agentId != null && agentId != 0 && agentId.toString() != '0') ||
+      bool isMe = isRecentSent ||
+          (agentId != null && agentId != 0 && agentId.toString() != '0') ||
           (isNobox == 1 || isNobox == '1' || isNobox == true) ||
           (dirStr == '1' || dirStr == '2' || dirStr == 'out' || dirStr == 'outbound' || dirStr == 'true') ||
           (isOutbound == true || isOutbound == 'true' || isOutbound == 1);
 
-      isMe = isMe || message['IsMe'] == true || senderName.toLowerCase() == 'you';
+      isMe = isMe || message['IsMe'] == true;
 
       // Cek fallback berdasarkan ChAccId vs From
       if (!isMe && extChAccId.isNotEmpty && extFrom.isNotEmpty) {
@@ -196,7 +200,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       
       // FIX: Panggil sinkronisasi fallback jika backend lupa mengirim TerimaSubSpv (Sering terjadi pada Grup)
       try {
-        final chatProvider = context.read<ChatProvider>();
         chatProvider.handleTerimaPesanSync(roomId, isMe: isMe, msgText: msgText);
       } catch (e) {
         debugPrint('Main: Could not sync from TerimaPesan: $e');

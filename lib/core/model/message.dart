@@ -39,6 +39,8 @@ class ChatModel {
   final String deal;
   final String groupName;
   final String groupId;
+  final String sdrMsg; // "me" (agent), "you" (customer)
+  final String extId; // CtIdExt / ExtId - Telegram user ID or phone number
 
   ChatModel({
     required this.id,
@@ -72,6 +74,8 @@ class ChatModel {
     this.deal = '',
     this.groupName = '',
     this.groupId = '',
+    this.sdrMsg = '',
+    this.extId = '',
   });
 
   // FITUR: Copy With (ChatModel)
@@ -108,6 +112,8 @@ class ChatModel {
     String? deal,
     String? groupName,
     String? groupId,
+    String? sdrMsg,
+    String? extId,
   }) {
     return ChatModel(
       id: id ?? this.id,
@@ -141,6 +147,8 @@ class ChatModel {
       deal: deal ?? this.deal,
       groupName: groupName ?? this.groupName,
       groupId: groupId ?? this.groupId,
+      sdrMsg: sdrMsg ?? this.sdrMsg,
+      extId: extId ?? this.extId,
     );
   }
 }

@@ -56,6 +56,8 @@ class Conversation {
   final String deal;
   final String groupName;
   final String groupId;
+  final String sdrMsg; // "me" (agent), "you" (customer)
+  final String extId; // CtIdExt / ExtId - Telegram user ID or phone number
 
   Conversation({
     required this.id,
@@ -87,6 +89,8 @@ class Conversation {
     this.deal = '',
     this.groupName = '',
     this.groupId = '',
+    this.sdrMsg = '',
+    this.extId = '',
   });
 
   // FITUR: Parse dari JSON
@@ -200,13 +204,9 @@ class Conversation {
       }
 
       final grpId = getValue(['GrpId', 'grp_id', 'GroupId', 'groupId', 'IdGroup', 'idGroup']);
-      if (grpId != null && grpId.toString().isNotEmpty && grpId.toString() != '0' && grpId.toString() != 'null') {
-        return true;
-      }
-
-      final grpName = getValue(['Grp', 'GroupNm', 'GroupName', 'group_name']);
-      if (grpName != null && grpName.toString().trim().isNotEmpty && grpName.toString() != 'null') {
-        return true;
+      if (grpId != null) {
+        final gInt = int.tryParse(grpId.toString().trim());
+        if (gInt != null && gInt > 0) return true;
       }
 
       final chNm = (getValue(['ChNm', 'ChannelName', 'chnm', 'ChId', 'ch_id', 'Channel'])?.toString() ?? '').trim().toLowerCase();
@@ -248,7 +248,9 @@ class Conversation {
 
     final conv = Conversation(
       id: getValue(['Id', 'id', 'RoomId', 'room_id'])?.toString() ?? '',
-      contactId: getValue(['CtId', 'IdLink', 'LinkId', 'IdContact', 'ContactId', 'CtIdExt', 'ExtId', 'IdAlias'])?.toString() ?? '',
+      // FIX: contactId harus HANYA berisi database ID (CtId, IdLink, LinkId), BUKAN phone number (ExtId) atau JID (IdAlias)
+      // ExtId dan IdAlias adalah identitas di channel eksternal (WA/Telegram), bukan IdLink internal database
+      contactId: getValue(['CtId', 'IdLink', 'LinkId', 'IdContact', 'ContactId'])?.toString() ?? '',
       participantEmail: getValue(['CtRealNm', 'CtNm', 'Nm', 'nm', 'Ct', 'Name', 'pushName', 'Title', 'participant_email', 'GroupNm', 'GroupName', 'group_name', 'Grp'])?.toString() ?? 'Unknown',
       lastMessage: finalLastMessage,
       lastMessageTime: getValue(['TimeMsg', 'In', 'last_message_time']) ?? '',
@@ -269,12 +271,14 @@ class Conversation {
       isGroup: resolveIsGroup(),
       isBlocked: json['CtIsBlock'] == 1 || json['CtIsBlock'] == true,
       isLastMessageFromMe: isLastFromMe,
-      needReply: json['NeedReply'] == 1 || 
-          json['NeedReply'] == true || 
-          json['IsNeedReply'] == 1 || 
-          json['IsNeedReply'] == true ||
-          json['isNeedReply'] == 1 ||
-          json['isNeedReply'] == true,
+      needReply: isLastFromMe
+          ? false
+          : (json['NeedReply'] == 1 || 
+              json['NeedReply'] == true || 
+              json['IsNeedReply'] == 1 || 
+              json['IsNeedReply'] == true ||
+              json['isNeedReply'] == 1 ||
+              json['isNeedReply'] == true),
       ctRealId: getValue(['CtRealId', 'ct_real_id'])?.toString() ?? '',
       link: getValue(['IdLink', 'LinkId', 'CtId', 'IdContact', 'CtIdExt', 'ExtId', 'IdAlias', 'LinkTmp', 'LinkNm', 'LinkName', 'link_name', 'Link'])?.toString() ?? '',
       campaign: getValue(['CmpNm', 'CampaignNm', 'CampaignName', 'campaign_name', 'Campaign'])?.toString() ?? '',
@@ -283,8 +287,12 @@ class Conversation {
       groupId: () {
         final g = getValue(['GrpId', 'grp_id', 'GroupId', 'groupId', 'IdGroup', 'idGroup']);
         if (g == null || g.toString() == '0' || g.toString() == 'null') return '';
-        return g.toString();
+        final gInt = int.tryParse(g.toString().trim());
+        if (gInt != null && gInt > 0) return gInt.toString();
+        return '';
       }(),
+      sdrMsg: getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().trim() ?? '',
+      extId: getValue(['CtIdExt', 'ExtId', 'IdExt', 'ct_id_ext', 'ctIdExt'])?.toString().trim() ?? '',
     );
 
     // DEBUG: Accumulate raw API values for analysis
@@ -330,6 +338,12 @@ class Conversation {
     String? accountId,
     String? ctRealId,
     String? groupId,
+    String? sdrMsg,
+    String? link,
+    String? campaign,
+    String? deal,
+    String? groupName,
+    String? extId,
   }) {
     return Conversation(
       id: id ?? this.id,
@@ -358,6 +372,12 @@ class Conversation {
       accountId: accountId ?? this.accountId,
       ctRealId: ctRealId ?? this.ctRealId,
       groupId: groupId ?? this.groupId,
+      sdrMsg: sdrMsg ?? this.sdrMsg,
+      link: link ?? this.link,
+      campaign: campaign ?? this.campaign,
+      deal: deal ?? this.deal,
+      groupName: groupName ?? this.groupName,
+      extId: extId ?? this.extId,
     );
   }
 
@@ -464,6 +484,8 @@ class Conversation {
       deal: deal,
       groupName: groupName,
       groupId: groupId,
+      sdrMsg: sdrMsg,
+      extId: extId,
       isArchived: status.toLowerCase() == 'archived' || status == '4',
     );
   }
