@@ -682,9 +682,63 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       entity['DisplayDate'] = _formatDisplayDate(now, currentDateFormat);
       entity['DisplayTime'] = _formatDisplayTime(now, currentTimeFormat);
-      if (entity['DisplayNumber'] == null || entity['DisplayNumber'].toString().isEmpty) {
-        entity['DisplayNumber'] = '017,081,945';
+
+      // Sinkronkan FormatNumber dan flat format properties agar 100% identik dengan payload NoBox Web Serenity
+      Map<String, dynamic> formatNum = {};
+      if (entity['FormatNumber'] != null) {
+        try {
+          formatNum = jsonDecode(entity['FormatNumber']);
+        } catch (e) {}
       }
+      final aDec = entity['aDec']?.toString() ?? formatNum['aDec']?.toString() ?? ',';
+      final aSep = entity['aSep']?.toString() ?? formatNum['aSep']?.toString() ?? '.';
+      final mDec = int.tryParse(entity['mDec']?.toString() ?? '') ??
+          (formatNum['mDec'] is int
+              ? formatNum['mDec']
+              : int.tryParse(formatNum['mDec']?.toString() ?? '0') ?? 0);
+      final dGroup = int.tryParse(entity['dGroup']?.toString() ?? '') ??
+          (formatNum['dGroup'] is int
+              ? formatNum['dGroup']
+              : int.tryParse(formatNum['dGroup']?.toString() ?? '3') ?? 3);
+      final lZero = entity['lZero']?.toString() ?? formatNum['lZero']?.toString() ?? 'allow';
+
+      formatNum['aDec'] = aDec;
+      formatNum['aSep'] = aSep;
+      formatNum['mDec'] = mDec;
+      formatNum['dGroup'] = dGroup;
+      formatNum['lZero'] = lZero;
+
+      entity['aDec'] = aDec;
+      entity['aSep'] = aSep;
+      entity['mDec'] = mDec;
+      entity['dGroup'] = dGroup.toString();
+      entity['lZero'] = lZero;
+      entity['FormatNumber'] = jsonEncode(formatNum);
+
+      // Hitung DisplayNumber secara dinamis sesuai separator & grouping
+      String u = lZero.toLowerCase() == 'keep' ? '017081945' : '17081945';
+      if (aSep.isNotEmpty) {
+        final RegExp regExp;
+        if (dGroup == 2) {
+          regExp = RegExp(r'(\d)((\d)(\d{2})+)$');
+        } else if (dGroup == 4) {
+          regExp = RegExp(r'(\d)((\d{4})+)$');
+        } else {
+          regExp = RegExp(r'(\d)((\d{3})+)$');
+        }
+
+        while (regExp.hasMatch(u)) {
+          u = u.replaceFirstMapped(
+            regExp,
+            (match) => '${match.group(1)}$aSep${match.group(2)}',
+          );
+        }
+      }
+      if (mDec > 0) {
+        String fraction = '123456789'.substring(0, mDec > 9 ? 9 : mDec);
+        u = '$u$aDec$fraction';
+      }
+      entity['DisplayNumber'] = u;
 
       // Debugging formats before save
       debugPrint(
@@ -865,15 +919,21 @@ class _UserProfilePageState extends State<UserProfilePage> {
     if (_userProfile?['FormatNumber'] != null) {
       try {
         final formatNum = jsonDecode(_userProfile!['FormatNumber']);
-        decimalSeparator = formatNum['aDec']?.toString() ?? ',';
-        thousandSeparator = formatNum['aSep']?.toString() ?? '.';
-        decimalPlaces = formatNum['mDec']?.toString() ?? '0';
-        thousandGrouping = formatNum['dGroup']?.toString() ?? '3';
-        leadingZero = formatNum['lZero']?.toString() ?? 'allow';
+        decimalSeparator = formatNum['aDec']?.toString() ?? _userProfile?['aDec']?.toString() ?? ',';
+        thousandSeparator = formatNum['aSep']?.toString() ?? _userProfile?['aSep']?.toString() ?? '.';
+        decimalPlaces = formatNum['mDec']?.toString() ?? _userProfile?['mDec']?.toString() ?? '0';
+        thousandGrouping = formatNum['dGroup']?.toString() ?? _userProfile?['dGroup']?.toString() ?? '3';
+        leadingZero = formatNum['lZero']?.toString() ?? _userProfile?['lZero']?.toString() ?? 'allow';
         debugPrint(
           '>>> PARSED RAW SEPARATORS: dec="$decimalSeparator", thou="$thousandSeparator"',
         );
       } catch (e) {}
+    } else {
+      decimalSeparator = _userProfile?['aDec']?.toString() ?? ',';
+      thousandSeparator = _userProfile?['aSep']?.toString() ?? '.';
+      decimalPlaces = _userProfile?['mDec']?.toString() ?? '0';
+      thousandGrouping = _userProfile?['dGroup']?.toString() ?? '3';
+      leadingZero = _userProfile?['lZero']?.toString() ?? 'allow';
     }
 
     return GestureDetector(
@@ -1919,13 +1979,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
         } catch (e) {}
       }
 
-      String dec = formatNum['aDec']?.toString() ?? ',';
-      String sep = formatNum['aSep']?.toString() ?? '.';
-      int mDec = int.tryParse(formatNum['mDec']?.toString() ?? '0') ?? 0;
-      String group = formatNum['dGroup']?.toString() ?? '3';
+      String dec = formatNum['aDec']?.toString() ?? _userProfile?['aDec']?.toString() ?? ',';
+      String sep = formatNum['aSep']?.toString() ?? _userProfile?['aSep']?.toString() ?? '.';
+      int mDec = int.tryParse(formatNum['mDec']?.toString() ?? _userProfile?['mDec']?.toString() ?? '0') ?? 0;
+      String group = formatNum['dGroup']?.toString() ?? _userProfile?['dGroup']?.toString() ?? '3';
+      String lZero = formatNum['lZero']?.toString() ?? _userProfile?['lZero']?.toString() ?? 'allow';
 
       // Replicate autoNumeric regex algorithm (matching NoBox Web Serenity) on sample 17081945
-      String u = '17081945';
+      String u = lZero.toLowerCase() == 'keep' ? '017081945' : '17081945';
       if (sep.isNotEmpty) {
         final RegExp regExp;
         if (group == '2') {
@@ -1952,9 +2013,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
 
     String _extractSep(String val) {
-      if (val.contains('Space')) return ' ';
       if (val.contains('None')) return '';
-      if (val.contains('Apostrophe')) return r'\'; // Replicate Web payload behavior (escaping)
+      if (val.contains('Space')) return ' ';
+      if (val.contains('Apostrophe') || val == "'" || val == r"\'") return "'";
       if (val.contains('Period') || val.contains('.')) return '.';
       if (val.contains('Comma') || val.contains(',')) return ',';
       return '.';
@@ -1971,10 +2032,10 @@ class _UserProfilePageState extends State<UserProfilePage> {
       if (val.isEmpty || val == "None ''" || val == 'None') return "None ''";
       if (val == '.' || val == "Period '.'") return "Period '.'";
       if (val == ',' || val == "Comma ','") return "Comma ','";
-      // val can be: `\` (backslash), `"` (double-quote from JSON), `'` (apostrophe), or old label
-      if (val == r'\' || val == '\\' || val == '"' || val == "'" ||
-          val.startsWith('Apostrophe')) return 'Apostrophe "\\"';
       if (val == ' ' || val.startsWith('Space')) return "Space ' '";
+      if (val == "'" || val == r"\'" || val == r"\" || val == r"\\" || val.contains('Apostrophe')) {
+        return r"Apostrophe '\''";
+      }
       return "Period '.'";
     }
 
@@ -2014,7 +2075,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
         _buildDropdownField(
           'Thousand Separator',
           mapThouSepToDropdown(thouSep),
-          ["Period '.'", "Comma ','", 'Apostrophe "\\"', "Space ' '", "None ''"],
+          ["Period '.'", "Comma ','", r"Apostrophe '\''", "Space ' '", "None ''"],
           cardColor,
           textColor,
           labelColor,
