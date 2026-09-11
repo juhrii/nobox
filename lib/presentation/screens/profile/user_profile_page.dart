@@ -2034,7 +2034,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
       if (val == ',' || val == "Comma ','") return "Comma ','";
       if (val == ' ' || val.startsWith('Space')) return "Space ' '";
       if (val == "'" || val == r"\'" || val == r"\" || val == r"\\" || val.contains('Apostrophe')) {
-        return r"Apostrophe '\''";
+        return "Apostrophe '''";
       }
       return "Period '.'";
     }
@@ -2075,7 +2075,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
         _buildDropdownField(
           'Thousand Separator',
           mapThouSepToDropdown(thouSep),
-          ["Period '.'", "Comma ','", r"Apostrophe '\''", "Space ' '", "None ''"],
+          ["Period '.'", "Comma ','", "Apostrophe '''", "Space ' '", "None ''"],
           cardColor,
           textColor,
           labelColor,
