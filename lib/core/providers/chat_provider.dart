@@ -1243,34 +1243,35 @@ class ChatProvider with ChangeNotifier {
                 serverTimeParsed.isAfter(existingTimeParsed) ||
                 lastMsg.trim() != existing.lastMessage.trim());
 
-        if (isNewerOrDifferent) {
-          // Sesuai arahan Mas Erik: SdrMsg == "me" artinya pesan dari agen
-          final isFromAgent =
-              isRecentMe ||
-              sdrMsg.toLowerCase() == 'me' ||
-              (sdrMsg.toLowerCase() == 'system' && !existing.isGroup) ||
-              isSmartMeFallback;
+        final isFromAgent =
+            isRecentMe ||
+            sdrMsg.toLowerCase() == 'me' ||
+            (sdrMsg.toLowerCase() == 'system' && !existing.isGroup) ||
+            isSmartMeFallback;
 
-          if (isFromAgent) {
-            _localUnreadOverrides.remove(roomId);
-            if (!_readIds.contains(roomId)) _readIds.add(roomId);
-            _saveReadState();
-            debugPrint('ChatProvider: 🧹 Cleared Unread (via TerimaSubSpv - Agent Reply) for room $roomId');
-          } else {
-            // FIX: Mengatasi Race Condition Backend
-            // Jika ada 2 pesan masuk nyaris bersamaan, backend NoBox sering mengirimkan Uc=1 untuk keduanya.
-            // Kita atasi dengan cara: jika Uc dari server <= unreadCount lokal, kita asumsikan itu race condition
-            // dan kita increment manual. Jika Uc dari server lebih besar (misal karena offline lama), kita pakai server.
-            int finalUc = uc;
-            if (uc > 0 && uc <= existing.unreadCount) {
+        if (isFromAgent) {
+          _localUnreadOverrides.remove(roomId);
+          if (!_readIds.contains(roomId)) _readIds.add(roomId);
+          _saveReadState();
+          debugPrint('ChatProvider: 🧹 Cleared Unread (via TerimaSubSpv - Agent Reply) for room $roomId');
+        } else {
+          // Pesan dari pelanggan (Customer)!
+          int finalUc;
+          if (uc > 0) {
+            if (uc <= existing.unreadCount) {
               finalUc = existing.unreadCount + 1;
+            } else {
+              finalUc = uc;
             }
-            
-            _localUnreadOverrides[roomId] = finalUc;
-            _readIds.remove(roomId);
-            _saveReadState();
-            debugPrint('ChatProvider: 📈 Using SignalR Uc ($finalUc) [Raw Server: $uc, Existing: ${existing.unreadCount}] for room $roomId');
+          } else {
+            final currentOver = _localUnreadOverrides[roomId] ?? existing.unreadCount;
+            finalUc = currentOver > 0 ? currentOver : 1;
           }
+          
+          _localUnreadOverrides[roomId] = finalUc;
+          _readIds.remove(roomId);
+          _saveReadState();
+          debugPrint('ChatProvider: 📈 Using SignalR Uc ($finalUc) [Raw Server: $uc, Existing: ${existing.unreadCount}] for room $roomId');
         }
       } else if (isSmartMeFallback ||
           PushNotificationService.currentRoomId == roomId) {
@@ -1279,13 +1280,18 @@ class ChatProvider with ChangeNotifier {
         _saveReadState();
       }
 
+      final bool isExplicitCustomer = sdrMsg.toLowerCase() == 'you' ||
+          (!isRecentMe && sdrMsg.toLowerCase() != 'me' && !isSmartMeFallback);
+
       final bool isNewerOrDifferentForState = serverTimeParsed != null &&
             (existingTimeParsed == null ||
                 serverTimeParsed.isAfter(existingTimeParsed) ||
                 lastMsg.trim() != existing.lastMessage.trim());
 
       final bool isFromAgentForState;
-      if (isNewerOrDifferentForState) {
+      if (isExplicitCustomer) {
+        isFromAgentForState = false;
+      } else if (isNewerOrDifferentForState) {
         isFromAgentForState =
             isRecentMe ||
             isSentByMeRecently ||
@@ -1296,14 +1302,21 @@ class ChatProvider with ChangeNotifier {
         isFromAgentForState = existing.isLastMessageFromMe || isSentByMeRecently;
       }
 
-      final bool finalNeedReply = isFromAgentForState ? false : isNeedReply;
+      final bool finalNeedReply = isFromAgentForState
+          ? false
+          : (roomData.containsKey('IsNeedReply')
+              ? (roomData['IsNeedReply'] == 1 || roomData['IsNeedReply'] == true)
+              : (isExplicitCustomer ? true : existing.needReply));
+
       final String resolvedSdrMsg;
       if (isFromAgentForState) {
         resolvedSdrMsg = 'me';
       } else if (sdrMsg.isNotEmpty) {
         resolvedSdrMsg = sdrMsg;
+      } else if (isExplicitCustomer) {
+        resolvedSdrMsg = 'you';
       } else {
-        resolvedSdrMsg = existing.sdrMsg;
+        resolvedSdrMsg = existing.sdrMsg.isNotEmpty ? existing.sdrMsg : 'you';
       }
 
       _chats[index] = existing.copyWith(
@@ -1313,7 +1326,8 @@ class ChatProvider with ChangeNotifier {
             (isFromAgentForState ||
                 PushNotificationService.currentRoomId == roomId)
             ? 0
-            : (_localUnreadOverrides[roomId] ?? uc),
+            : (_localUnreadOverrides[roomId] ??
+                (uc > 0 ? uc : (existing.unreadCount > 0 ? existing.unreadCount : (isExplicitCustomer ? 1 : 0)))),
         time: timeMsg,
         needReply: finalNeedReply,
         isLastMessageFromMe: isFromAgentForState,
@@ -1371,9 +1385,12 @@ class ChatProvider with ChangeNotifier {
       refreshFirstPage();
     } else {
       if (PushNotificationService.currentRoomId != roomId && !resolvedIsMe) {
-        // Sesuai arahan Mas Erik: Kita tidak lagi menaikkan Uc secara manual menggunakan delay 5.5s.
-        // Kita murni menunggu TerimaSubSpv yang datang sesaat lagi untuk membawa angka Uc yang akurat.
-        debugPrint('ChatProvider: Waiting for TerimaSubSpv to update Unread Count for room $roomId');
+        final currentUc = _localUnreadOverrides[roomId] ?? _chats[index].unreadCount;
+        final newUc = currentUc > 0 ? currentUc + 1 : 1;
+        _localUnreadOverrides[roomId] = newUc;
+        _readIds.remove(roomId);
+        _saveReadState();
+        debugPrint('ChatProvider: 📈 Incremented Unread (via handleTerimaPesanSync) for room $roomId. New Uc: $newUc');
       } else if (resolvedIsMe) {
         _localUnreadOverrides.remove(roomId);
         if (!_readIds.contains(roomId)) _readIds.add(roomId);
@@ -1382,21 +1399,18 @@ class ChatProvider with ChangeNotifier {
       }
 
       // Update pesan terakhir secara instan agar UI (termasuk preview pesan) langsung terupdate.
-      // Ini juga otomatis mencegah TerimaSubSpv melakukan double-increment karena pesan sudah terupdate.
       if (msgText.isNotEmpty) {
         if (msgText.contains('[-{=||=}-]')) {
           msgText = '📍 Location';
         }
         _chats[index] = _chats[index].copyWith(
           lastMessage: msgText,
-          time: DateTime.now()
-              .toUtc()
-              .toIso8601String(), // Set time to now to prevent older server time from triggering double-increment
-          unreadCount:
-              resolvedIsMe ? 0 : (_localUnreadOverrides[roomId] ?? _chats[index].unreadCount),
-          isLastMessageFromMe:
-              resolvedIsMe, // FIX: Sangat krusial agar isSmartMeFallback di TerimaSubSpv tidak false-positive!
-          needReply: resolvedIsMe ? false : _chats[index].needReply,
+          time: DateTime.now().toUtc().toIso8601String(),
+          unreadCount: resolvedIsMe
+              ? 0
+              : (_localUnreadOverrides[roomId] ?? (_chats[index].unreadCount > 0 ? _chats[index].unreadCount : 1)),
+          isLastMessageFromMe: resolvedIsMe,
+          needReply: resolvedIsMe ? false : true,
           sdrMsg: resolvedIsMe ? 'me' : 'you',
         );
         _chats.sort(
@@ -1615,15 +1629,19 @@ class ChatProvider with ChangeNotifier {
             _localUnreadOverrides.remove(chat.id);
             if (!_readIds.contains(chat.id)) _readIds.add(chat.id);
             chat = chat.copyWith(unreadCount: 0);
+          } else if (chat.unreadCount > 0 || chat.needReply) {
+            _readIds.remove(chat.id);
           }
 
           // Apply persisted local state
           chat = chat.copyWith(
             isPinned: chat.isPinned || _pinnedIds.contains(chat.id),
             isArchived: _archivedIds.contains(chat.id),
-            unreadCount: _readIds.contains(chat.id)
+            unreadCount: (chat.isLastMessageFromMe || PushNotificationService.currentRoomId == chat.id)
                 ? 0
-                : (_localUnreadOverrides[chat.id] ?? chat.unreadCount),
+                : (_readIds.contains(chat.id)
+                    ? 0
+                    : (_localUnreadOverrides[chat.id] ?? chat.unreadCount)),
           );
 
           final idx = _chats.indexWhere((c) => c.id == chat.id);
