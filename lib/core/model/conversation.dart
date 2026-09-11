@@ -159,14 +159,50 @@ class Conversation {
     final rawFnId = getValue(['FnId', 'fn_id', 'fnId', 'FunnelId'])?.toString() ?? '';
     final rawFnName = getValue(['FnNm', 'fn_nm', 'Fn', 'fn'])?.toString() ?? '';
 
-    // FIX: Prioritaskan payload JSON (yang biasanya ada di Category atau LastMsg) 
-    // agar media (Voice Note, Photo) tidak berubah menjadi sekadar "Document" saat refresh
+    // FIX: Prioritaskan LastMsg jika berisi teks pesan yang nyata (bukan placeholder media generik).
+    // Category HANYA boleh digunakan jika LastMsg berupa placeholder kosong/generik
+    // (misal: "document(empty)", "document", "voice note", "photo", "file", atau kosong),
+    // sehingga media seperti Voice Note/Photo tidak berubah menjadi sekadar "Document" saat refresh,
+    // DAN pesan teks baru dari bot/pengguna (seperti Muadzin Bot) TIDAK tertimpa oleh JSON media lama di Category!
     String resolveLastMessage(dynamic lastMsgData, dynamic categoryData) {
-      final str1 = lastMsgData?.toString() ?? '';
-      final str2 = categoryData?.toString() ?? '';
+      final str1 = (lastMsgData?.toString() ?? '').trim();
+      final str2 = (categoryData?.toString() ?? '').trim();
+
+      // Jika str1 sendiri sudah berupa JSON (payload media terbaru), gunakan str1
       if (str1.startsWith('{') || str1.startsWith('[')) return str1;
-      if (str2.startsWith('{') || str2.startsWith('[')) return str2;
-      return str1.isNotEmpty ? str1 : str2;
+
+      final lower1 = str1.toLowerCase();
+      final isGenericPlaceholder = lower1.isEmpty ||
+          lower1 == 'null' ||
+          lower1 == 'document(empty)' ||
+          lower1 == 'voice(empty)' ||
+          lower1 == 'image(empty)' ||
+          lower1 == 'video(empty)' ||
+          lower1 == 'audio(empty)' ||
+          lower1 == 'document' ||
+          lower1 == 'file' ||
+          lower1 == 'voice note' ||
+          lower1 == 'voice' ||
+          lower1 == 'audio' ||
+          lower1 == 'photo' ||
+          lower1 == 'foto' ||
+          lower1 == 'image' ||
+          lower1 == 'video' ||
+          lower1 == 'attachment' ||
+          lower1 == 'lampiran';
+
+      // Jika str1 adalah placeholder generik dan str2 memiliki payload JSON media, pakai str2
+      if (isGenericPlaceholder && (str2.startsWith('{') || str2.startsWith('['))) {
+        return str2;
+      }
+
+      // Jika str1 berisi teks nyata (seperti siaran Muadzin Bot atau obrolan pengguna),
+      // SELALU prioritaskan str1! Jangan timpa dengan Category lama!
+      if (str1.isNotEmpty && lower1 != 'null') {
+        return str1;
+      }
+
+      return str2;
     }
 
     String finalLastMessage = resolveLastMessage(

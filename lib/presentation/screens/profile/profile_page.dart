@@ -193,7 +193,7 @@ class ProfilePage extends StatelessWidget {
                               }
                             },
                             icon: const Icon(Icons.menu_book, size: 18),
-                            label: const Text('Baca Dokumentasi Resmi'),
+                            label: const Text('Baca Selengkapnya'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: isDark
                                   ? Colors.blue.shade300

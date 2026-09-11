@@ -773,15 +773,34 @@ class ChatProvider with ChangeNotifier {
             final oldMsg = shieldReference.lastMessage.trim();
 
             final isGeneric =
-                lowerNew.contains('file') ||
-                lowerNew.contains('document') ||
-                lowerNew.contains('voice note') ||
-                lowerNew.contains('photo') ||
-                lowerNew.contains('video') ||
-                lowerNew.contains('audio') ||
-                lowerNew.contains('image') ||
-                lowerNew.contains('attachment') ||
-                lowerNew.contains('pesan suara') ||
+                lowerNew.isEmpty ||
+                lowerNew == 'null' ||
+                const [
+                  'file',
+                  'document',
+                  'document(empty)',
+                  'voice',
+                  'voice(empty)',
+                  'voice note',
+                  'photo',
+                  'foto',
+                  'image',
+                  'image(empty)',
+                  'video',
+                  'video(empty)',
+                  'audio',
+                  'audio(empty)',
+                  'attachment',
+                  'lampiran',
+                  'pesan suara',
+                  'sticker',
+                  'stiker',
+                ].contains(lowerNew) ||
+                (lowerNew.length <= 20 &&
+                    (lowerNew.startsWith('document(') ||
+                        lowerNew.startsWith('voice(') ||
+                        lowerNew.startsWith('image(') ||
+                        lowerNew.startsWith('video('))) ||
                 RegExp(r'^[\d\.:]+$').hasMatch(lowerNew);
 
             final oldIsLocalLabel = [
@@ -828,16 +847,15 @@ class ChatProvider with ChangeNotifier {
                   lastMessageType: shieldReference.lastMessageType,
                 );
               }
-            } else if (oldIsLocalLabel ||
-                oldMsg.startsWith('{') ||
-                oldMsg.startsWith('[')) {
-              if (lowerNew.isNotEmpty &&
-                  oldMsg.toLowerCase().contains(lowerNew)) {
-                chat = chat.copyWith(
-                  lastMessage: shieldReference.lastMessage,
-                  lastMessageType: shieldReference.lastMessageType,
-                );
-              }
+            } else if ((oldIsLocalLabel ||
+                    oldMsg.startsWith('{') ||
+                    oldMsg.startsWith('[')) &&
+                lowerNew.length <= 15 &&
+                oldMsg.toLowerCase().contains(lowerNew)) {
+              chat = chat.copyWith(
+                lastMessage: shieldReference.lastMessage,
+                lastMessageType: shieldReference.lastMessageType,
+              );
             }
           }
 
@@ -1051,15 +1069,32 @@ class ChatProvider with ChangeNotifier {
       final isGeneric =
           lowerNew.isEmpty ||
           lowerNew == 'null' ||
-          lowerNew.contains('file') ||
-          lowerNew.contains('document') ||
-          lowerNew.contains('voice note') ||
-          lowerNew.contains('photo') ||
-          lowerNew.contains('video') ||
-          lowerNew.contains('audio') ||
-          lowerNew.contains('image') ||
-          lowerNew.contains('attachment') ||
-          lowerNew.contains('pesan suara') ||
+          const [
+            'file',
+            'document',
+            'document(empty)',
+            'voice',
+            'voice(empty)',
+            'voice note',
+            'photo',
+            'foto',
+            'image',
+            'image(empty)',
+            'video',
+            'video(empty)',
+            'audio',
+            'audio(empty)',
+            'attachment',
+            'lampiran',
+            'pesan suara',
+            'sticker',
+            'stiker',
+          ].contains(lowerNew) ||
+          (lowerNew.length <= 20 &&
+              (lowerNew.startsWith('document(') ||
+                  lowerNew.startsWith('voice(') ||
+                  lowerNew.startsWith('image(') ||
+                  lowerNew.startsWith('video('))) ||
           RegExp(r'^[\d\.:]+$').hasMatch(lowerNew);
 
       final oldIsLocalLabel = [
@@ -1101,15 +1136,12 @@ class ChatProvider with ChangeNotifier {
         if ((oldIsAudioJson || oldIsAudioLabel) && !newIsAudioJson) {
           lastMsg = existing.lastMessage;
         }
-      } else if (oldIsLocalLabel ||
-          oldMsg.startsWith('{') ||
-          oldMsg.startsWith('[')) {
-        // Jika pesan baru bukan JSON dan bukan generic, MUNGKIN itu adalah caption yang di-strip oleh server.
-        // Jika teks baru tersebut sudah ada di dalam pesan lama kita (misal: "📷 Photo Hello" mengandung "Hello"),
-        // maka pertahankan pesan lama yang lebih kaya (punya icon/JSON).
-        if (lowerNew.isNotEmpty && oldMsg.toLowerCase().contains(lowerNew)) {
-          lastMsg = existing.lastMessage;
-        }
+      } else if ((oldIsLocalLabel ||
+              oldMsg.startsWith('{') ||
+              oldMsg.startsWith('[')) &&
+          lowerNew.length <= 15 &&
+          oldMsg.toLowerCase().contains(lowerNew)) {
+        lastMsg = existing.lastMessage;
       }
 
       final uc =
@@ -1728,15 +1760,35 @@ class ChatProvider with ChangeNotifier {
             final oldMsg = oldChat.lastMessage.trim();
 
             final isGeneric =
-                lowerNew.contains('file') ||
-                lowerNew.contains('document') ||
-                lowerNew.contains('voice note') ||
-                lowerNew.contains('photo') ||
-                lowerNew.contains('video') ||
-                lowerNew.contains('audio') ||
-                lowerNew.contains('image') ||
-                lowerNew.contains('attachment') ||
-                lowerNew.contains('pesan suara');
+                lowerNew.isEmpty ||
+                lowerNew == 'null' ||
+                const [
+                  'file',
+                  'document',
+                  'document(empty)',
+                  'voice',
+                  'voice(empty)',
+                  'voice note',
+                  'photo',
+                  'foto',
+                  'image',
+                  'image(empty)',
+                  'video',
+                  'video(empty)',
+                  'audio',
+                  'audio(empty)',
+                  'attachment',
+                  'lampiran',
+                  'pesan suara',
+                  'sticker',
+                  'stiker',
+                ].contains(lowerNew) ||
+                (lowerNew.length <= 20 &&
+                    (lowerNew.startsWith('document(') ||
+                        lowerNew.startsWith('voice(') ||
+                        lowerNew.startsWith('image(') ||
+                        lowerNew.startsWith('video('))) ||
+                RegExp(r'^[\d\.:]+$').hasMatch(lowerNew);
 
             final oldIsLocalLabel = [
               'voice note',
@@ -1783,19 +1835,15 @@ class ChatProvider with ChangeNotifier {
                   lastMessageType: oldChat.lastMessageType,
                 );
               }
-            } else if (oldIsLocalLabel ||
-                oldMsg.startsWith('{') ||
-                oldMsg.startsWith('[')) {
-              // Jika pesan baru bukan JSON dan bukan generic, MUNGKIN itu adalah caption yang di-strip oleh server.
-              // Jika teks baru tersebut sudah ada di dalam pesan lama kita (misal: "📷 Photo Hello" mengandung "Hello"),
-              // maka pertahankan pesan lama yang lebih kaya (punya icon/JSON).
-              if (lowerNew.isNotEmpty &&
-                  oldMsg.toLowerCase().contains(lowerNew)) {
-                chat = chat.copyWith(
-                  lastMessage: oldChat.lastMessage,
-                  lastMessageType: oldChat.lastMessageType,
-                );
-              }
+            } else if ((oldIsLocalLabel ||
+                    oldMsg.startsWith('{') ||
+                    oldMsg.startsWith('[')) &&
+                lowerNew.length <= 15 &&
+                oldMsg.toLowerCase().contains(lowerNew)) {
+              chat = chat.copyWith(
+                lastMessage: oldChat.lastMessage,
+                lastMessageType: oldChat.lastMessageType,
+              );
             }
 
             // FIX: Cek apakah pesan terakhir adalah pesan yang baru kita kirim dari aplikasi ini

@@ -3004,20 +3004,35 @@ class _ChatListPageState extends State<ChatListPage>
             } // Close the `else` block from line 1495
             parsedAsMedia = true;
           } else {
-            // Bukan media/file yang dikenal, coba ekstrak teks mentah (misal balasan Telegram yang dibungkus JSON)
-            final rawText =
-                targetMap['Msg']?.toString() ??
-                targetMap['Body']?.toString() ??
-                targetMap['Message']?.toString() ??
+            // Bukan media/file yang dikenal, coba ekstrak teks mentah (misal balasan Telegram/Bot yang dibungkus JSON)
+            String rawText =
+                targetMap['caption']?.toString() ??
+                targetMap['Caption']?.toString() ??
                 targetMap['text']?.toString() ??
                 targetMap['Text']?.toString() ??
+                targetMap['Msg']?.toString() ??
+                targetMap['msg']?.toString() ??
+                targetMap['Body']?.toString() ??
+                targetMap['body']?.toString() ??
+                targetMap['Message']?.toString() ??
                 targetMap['Content']?.toString() ??
+                targetMap['content']?.toString() ??
                 '';
+
+            // Cek jika dibungkus dalam objek nested "message"
+            if (rawText.isEmpty && targetMap['message'] is Map) {
+              final nested = targetMap['message'] as Map;
+              rawText = nested['text']?.toString() ??
+                  nested['caption']?.toString() ??
+                  nested['Msg']?.toString() ??
+                  '';
+            }
+
             if (rawText.isNotEmpty &&
                 !rawText.startsWith('{') &&
                 !rawText.startsWith('[')) {
               displayMessage = rawText;
-              parsedAsMedia = true;
+              parsedAsMedia = false; // Ini adalah teks biasa dari bot/user, bukan media!
             }
           }
         }
@@ -3086,16 +3101,7 @@ class _ChatListPageState extends State<ChatListPage>
             displayMessage.contains('📄')) {
           // sudah ada emoji
         } else if (displayMessage.isEmpty) {
-          final isTelegram =
-              chat.chId == '2' ||
-              chat.channelType.toLowerCase().contains('telegram') ||
-              chat.channelName.toLowerCase().contains('telegram');
-          if (isTelegram) {
-            displayMessage =
-                '🎤 Pesan Suara'; // HACK: Asumsi server NoBox untuk file .ogg Telegram tanpa caption
-          } else {
-            displayMessage = '📎 Lampiran';
-          }
+          displayMessage = '📎 Lampiran';
         } else {
           final preview = trimmedMsg.length > 35
               ? '${trimmedMsg.substring(0, 35)}...'
@@ -3140,16 +3146,7 @@ class _ChatListPageState extends State<ChatListPage>
 
     // 3. Fallback jika string kosong dan bukan media
     if (!parsedAsMedia && displayMessage.isEmpty && !isDeletedMessage) {
-      final isTelegram =
-          chat.chId == '2' ||
-          chat.channelType.toLowerCase().contains('telegram') ||
-          chat.channelName.toLowerCase().contains('telegram');
-      if (isTelegram) {
-        displayMessage =
-            '🎤 Pesan Suara'; // ULTIMATE HACK: Any empty unrecognized message from Telegram is a Voice Note
-      } else {
-        displayMessage = '📎 Lampiran';
-      }
+      displayMessage = '📎 Lampiran';
     }
 
     if (!parsedAsMedia &&

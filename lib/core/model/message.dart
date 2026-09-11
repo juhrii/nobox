@@ -280,12 +280,48 @@ class Message {
     if (rawMsg is String) {
       content = rawMsg;
     } else if (rawMsg is Map) {
-      content = rawMsg['msg']?.toString() ?? rawMsg.toString();
+      content = rawMsg['msg']?.toString() ??
+          rawMsg['Msg']?.toString() ??
+          rawMsg['text']?.toString() ??
+          rawMsg['Text']?.toString() ??
+          rawMsg['caption']?.toString() ??
+          rawMsg['Caption']?.toString() ??
+          rawMsg.toString();
     }
     
     // Jika content masih kosong atau hanya berupa string object/array kosong, coba ambil dari field lain
     if (content.isEmpty || content.trim() == '{}' || content.trim() == '[]' || content == 'null') {
-      content = json['Body']?.toString() ?? json['Message']?.toString() ?? json['message']?.toString() ?? json['Content']?.toString() ?? '';
+      content = json['caption']?.toString() ??
+          json['Caption']?.toString() ??
+          json['text']?.toString() ??
+          json['Text']?.toString() ??
+          json['Body']?.toString() ??
+          json['body']?.toString() ??
+          json['Message']?.toString() ??
+          json['message']?.toString() ??
+          json['Content']?.toString() ??
+          json['content']?.toString() ??
+          '';
+    }
+
+    // Jika content adalah string JSON (misal bot response dari Telegram/WhatsApp), ekstrak teks aslinya
+    if (content.startsWith('{') && !content.contains('"File"') && !content.contains('"Filename"')) {
+      try {
+        final decoded = jsonDecode(content);
+        if (decoded is Map) {
+          final extracted = decoded['text']?.toString() ??
+              decoded['Text']?.toString() ??
+              decoded['caption']?.toString() ??
+              decoded['Caption']?.toString() ??
+              decoded['msg']?.toString() ??
+              decoded['Msg']?.toString() ??
+              decoded['body']?.toString() ??
+              decoded['message']?.toString();
+          if (extracted != null && extracted.isNotEmpty && !extracted.startsWith('{')) {
+            content = extracted;
+          }
+        }
+      } catch (_) {}
     }
 
     final isSystem = json['IsSystemMessage'] == true || 
