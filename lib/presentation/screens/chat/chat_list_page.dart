@@ -722,6 +722,8 @@ class _ChatListPageState extends State<ChatListPage>
                   child: ListView.builder(
                     controller: _scrollController,
                     padding: EdgeInsets.zero,
+                    addRepaintBoundaries: true,
+                    cacheExtent: 500,
                     // +1 for the bottom indicator (loading skeleton or end-of-list)
                     itemCount: chats.length + 1,
                     itemBuilder: (context, index) {

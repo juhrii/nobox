@@ -4922,7 +4922,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       child: ListView.builder(
         controller: _scrollController,
         reverse: true,
-        shrinkWrap: true,
+        shrinkWrap: displayMessages.length < 15,
+        addRepaintBoundaries: true,
+        cacheExtent: 500,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         itemCount: totalItems,
         itemBuilder: (context, index) {

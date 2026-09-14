@@ -1012,9 +1012,13 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                         );
                       }
                       
+                      final pixelRatio = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2.0;
+                      final memW = (maxW * pixelRatio).round().clamp(100, 800);
                       return CachedNetworkImage(
                         imageUrl: imageUrl ?? '',
                         fit: BoxFit.cover,
+                        memCacheWidth: memW,
+                        maxWidthDiskCache: 800,
                         placeholder: (context, url) => SizedBox(
                           width: maxW * 0.6,
                           height: maxH * 0.6,

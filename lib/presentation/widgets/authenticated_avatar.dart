@@ -34,8 +34,18 @@ class AuthFileService extends FileService {
 /// Custom CacheManager yang menggunakan AuthFileService.
 class AuthenticatedCacheManager extends CacheManager with ImageCacheManager {
   static const key = 'authenticatedCache';
+  static AuthenticatedCacheManager? _instance;
+  static String? _currentToken;
 
-  AuthenticatedCacheManager(String token)
+  factory AuthenticatedCacheManager.forToken(String token) {
+    if (_instance == null || _currentToken != token) {
+      _currentToken = token;
+      _instance = AuthenticatedCacheManager._internal(token);
+    }
+    return _instance!;
+  }
+
+  AuthenticatedCacheManager._internal(String token)
       : super(Config(
           key,
           fileService: AuthFileService(token),
@@ -62,20 +72,28 @@ class AuthenticatedAvatar extends StatefulWidget {
 
 class _AuthenticatedAvatarState extends State<AuthenticatedAvatar> {
   static const _storage = FlutterSecureStorage();
-  AuthenticatedCacheManager? _cacheManager;
-  bool _isLoading = true;
+  static String? _cachedToken;
+  static AuthenticatedCacheManager? _sharedCacheManager;
+  bool _isLoading = _sharedCacheManager == null;
 
   @override
   void initState() {
     super.initState();
-    _initCacheManager();
+    if (_sharedCacheManager == null) {
+      _initCacheManager();
+    }
   }
 
   Future<void> _initCacheManager() async {
+    if (_sharedCacheManager != null) {
+      if (mounted && _isLoading) setState(() => _isLoading = false);
+      return;
+    }
     final token = await _storage.read(key: 'auth_token') ?? '';
+    _cachedToken = token;
+    _sharedCacheManager = AuthenticatedCacheManager.forToken(token);
     if (mounted) {
       setState(() {
-        _cacheManager = AuthenticatedCacheManager(token);
         _isLoading = false;
       });
     }
@@ -101,15 +119,22 @@ class _AuthenticatedAvatarState extends State<AuthenticatedAvatar> {
       child: iconWidget,
     );
 
-    if (_isLoading || _cacheManager == null) return emptyAvatar;
+    if (_isLoading || _sharedCacheManager == null) return emptyAvatar;
     if (widget.imageUrl == null || widget.imageUrl!.isEmpty) return emptyAvatar;
+
+    final pixelRatio = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 2.0;
+    final memDimension = (widget.size * pixelRatio).round().clamp(48, 200);
 
     return ClipOval(
       child: CachedNetworkImage(
         imageUrl: widget.imageUrl!,
-        cacheManager: _cacheManager,
+        cacheManager: _sharedCacheManager,
         width: widget.size,
         height: widget.size,
+        memCacheWidth: memDimension,
+        memCacheHeight: memDimension,
+        maxWidthDiskCache: 200,
+        maxHeightDiskCache: 200,
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
           width: widget.size,
@@ -119,7 +144,6 @@ class _AuthenticatedAvatarState extends State<AuthenticatedAvatar> {
           child: iconWidget,
         ),
         errorWidget: (context, url, error) {
-          debugPrint('AuthenticatedAvatar Error for $url: $error');
           return Container(
             width: widget.size,
             height: widget.size,
