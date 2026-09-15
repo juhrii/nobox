@@ -422,6 +422,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   @override
   void dispose() {
+    _syncLastMessageToProvider();
     // Reset notification suppression when leaving chat
     if (_isInit) {
       PushNotificationService.setCurrentRoom(null);
@@ -1272,67 +1273,96 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               if (mounted) setState(() {});
             });
 
-            // HACK/FIX: Sinkronisasi ikon media ke ChatProvider agar list obrolan memunculkan icon media
-            // yang benar dan tidak hilang saat polling (/Chatrooms/List). Saring pesan sistem agar tidak menimpa obrolan asli!
-            final realMessages = _messages.where((m) {
-              if (m.isSystemMessage || m.content == 'Site.Inbox.DeletedMessage')
-                return false;
-              final lower = m.content.toLowerCase();
-              return !lower.contains('site.inbox.') &&
-                  !lower.contains('percakapan di-assign') &&
-                  !lower.contains('percakapan diselesaikan') &&
-                  !lower.contains('pemberitahuan sistem');
-            }).toList();
-
-            if (realMessages.isNotEmpty) {
-              final lastMsg = realMessages.last;
-              String newContent = lastMsg.content;
-              if (lastMsg.messageType == MessageType.image) {
-                final isSticker =
-                    (lastMsg.imageUrl ?? '').toLowerCase().endsWith('.webp') ||
-                    (lastMsg.imagePath ?? '').toLowerCase().endsWith('.webp') ||
-                    newContent.toLowerCase().endsWith('.webp');
-                if (isSticker) {
-                  newContent = '🌟 Sticker';
-                } else {
-                  final cleaned = newContent
-                      .replaceAll('📷', '')
-                      .replaceAll('Photo', '')
-                      .trim();
-                  newContent =
-                      '📷 Photo${cleaned.isNotEmpty ? ' $cleaned' : ''}';
-                }
-              } else if (lastMsg.messageType == MessageType.voice) {
-                newContent = '🎵 Voice Note';
-              } else if (lastMsg.messageType == MessageType.video) {
-                final cleaned = newContent
-                    .replaceAll('🎬', '')
-                    .replaceAll('🎥', '')
-                    .replaceAll('📹', '')
-                    .replaceAll('Video', '')
-                    .trim();
-                newContent = '🎬 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
-              } else if (lastMsg.messageType == MessageType.document) {
-                if (!newContent.contains('📄') && !newContent.contains('📁')) {
-                  newContent = '📄 $newContent';
-                }
-              }
-              Provider.of<ChatProvider>(
-                context,
-                listen: false,
-              ).updateLocalLastMessage(
-                chat.id,
-                newContent,
-                isFromMe: lastMsg.isMe,
-                updateTimeAndPosition:
-                    false, // JANGAN pindahkan obrolan ke atas hanya karena sinkronisasi ikon!
-              );
-            }
+            _syncLastMessageToProvider();
           }
           // Mulai polling setelah pesan awal selesai dimuat
           if (mounted) _startChatSyncPolling();
         });
       }
+    }
+  }
+
+  /// Sinkronisasi pesan terakhir secara akurat ke ChatProvider (Chat List)
+  void _syncLastMessageToProvider() {
+    if (!mounted || _messages.isEmpty) return;
+    final realMessages = _messages.where((m) {
+      if (m.isSystemMessage || m.content == 'Site.Inbox.DeletedMessage') {
+        return false;
+      }
+      if (m.id.isNotEmpty && _deletedMessageIds.contains(m.id)) {
+        return false;
+      }
+      final lower = m.content.toLowerCase();
+      return !lower.contains('site.inbox.') &&
+          !lower.contains('percakapan di-assign') &&
+          !lower.contains('percakapan diselesaikan') &&
+          !lower.contains('pemberitahuan sistem');
+    }).toList();
+
+    if (realMessages.isNotEmpty) {
+      final lastMsg = realMessages.last;
+      String newContent = lastMsg.content;
+      String typeStr = '1';
+      if (lastMsg.messageType == MessageType.image) {
+        final isSticker =
+            (lastMsg.imageUrl ?? '').toLowerCase().endsWith('.webp') ||
+            (lastMsg.imagePath ?? '').toLowerCase().endsWith('.webp') ||
+            newContent.toLowerCase().endsWith('.webp');
+        if (isSticker) {
+          newContent = '🌟 Sticker';
+          typeStr = '16';
+        } else {
+          final cleaned = newContent
+              .replaceAll('📷', '')
+              .replaceAll('Photo', '')
+              .replaceAll('Foto', '')
+              .trim();
+          newContent = '📷 Foto${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+          typeStr = '3';
+        }
+      } else if (lastMsg.messageType == MessageType.voice) {
+        newContent = '🎤 Pesan Suara';
+        typeStr = '2';
+      } else if (lastMsg.messageType == MessageType.video) {
+        final cleaned = newContent
+            .replaceAll('🎬', '')
+            .replaceAll('🎥', '')
+            .replaceAll('📹', '')
+            .replaceAll('Video', '')
+            .trim();
+        newContent = '🎬 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+        typeStr = '4';
+      } else if (lastMsg.messageType == MessageType.document) {
+        if (!newContent.contains('📄') && !newContent.contains('📁')) {
+          newContent = '📄 $newContent';
+        }
+        typeStr = '5';
+      } else if (lastMsg.messageType == MessageType.sticker) {
+        newContent = '🌟 Sticker';
+        typeStr = '16';
+      }
+
+      Provider.of<ChatProvider>(
+        context,
+        listen: false,
+      ).updateLocalLastMessage(
+        chat.id,
+        newContent,
+        lastMessageType: typeStr,
+        isFromMe: lastMsg.isMe,
+        updateTimeAndPosition: false,
+        overrideTime: lastMsg.rawTime.isNotEmpty ? lastMsg.rawTime : null,
+      );
+    } else {
+      Provider.of<ChatProvider>(
+        context,
+        listen: false,
+      ).updateLocalLastMessage(
+        chat.id,
+        '',
+        lastMessageType: '1',
+        updateTimeAndPosition: false,
+      );
     }
   }
 
@@ -1369,7 +1399,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       if (!mounted) return;
 
       if (!response.isError && response.data != null) {
-        final List<Message> newMessages = List<Message>.from(response.data!);
+        final List<Message> newMessages = List<Message>.from(
+          (response.data ?? []).where(
+            (m) => m.id.isEmpty || !_deletedMessageIds.contains(m.id),
+          ),
+        );
 
         debugPrint(
           'AckPolling: Fetched ${newMessages.length} filtered messages. Matching...',
@@ -1594,9 +1628,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           });
 
           for (final msg in sortedList) {
-            if (msg.id.isNotEmpty &&
-                (_deletedMessageIds.contains(msg.id) ||
-                    !updatedCurrentIds.contains(msg.id))) {
+            if (msg.id.isNotEmpty && _deletedMessageIds.contains(msg.id)) {
+              continue; // Abaikan pesan yang sudah dihapus oleh pengguna
+            }
+            if (msg.id.isNotEmpty && !updatedCurrentIds.contains(msg.id)) {
               // FIX: Hindari bug duplikasi dari backend (dua pesan identik dengan ID berbeda dikembalikan oleh API)
               bool isBackendDuplicate = false;
               if (msg.isMe) {
@@ -1760,6 +1795,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 // UI update trigger
               });
               _savePersistentMessages();
+              _syncLastMessageToProvider();
             }
 
             _scrollToBottom();
@@ -1894,6 +1930,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         final echoAck = messageData['Ack'] ?? messageData['ack'];
         final echoId = messageData['Id']?.toString() ?? '';
 
+        if (echoId.isNotEmpty && _deletedMessageIds.contains(echoId)) {
+          debugPrint('SignalR: 🗑️ Mengabaikan pesan echo $echoId karena sudah dihapus user.');
+          return;
+        }
+
         final rawMsg = messageData['Msg'];
         String echoMsg = '';
         if (rawMsg is String) {
@@ -1999,6 +2040,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       // Extract ID and check duplicate
       final incomingId = messageData['Id']?.toString() ?? '';
+      if (incomingId.isNotEmpty && _deletedMessageIds.contains(incomingId)) {
+        debugPrint('SignalR: 🗑️ Mengabaikan pesan masuk $incomingId karena sudah dihapus user.');
+        return;
+      }
 
       // Guard duplikasi: cek apakah pesan ini sudah ada di list (berdasarkan ID)
       int existingIdx = _messages.indexWhere((m) {
@@ -2175,6 +2220,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             });
           });
           _scrollToBottom();
+          _syncLastMessageToProvider();
         }
       } catch (e) {
         debugPrint('SignalR: ❌ Error parsing incoming message: $e');
@@ -2267,7 +2313,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               .where((id) => id.isNotEmpty)
               .toSet();
           final uniqueOlder = olderMessages
-              .where((m) => m.id.isEmpty || !existingIds.contains(m.id))
+              .where((m) =>
+                  (m.id.isEmpty || !existingIds.contains(m.id)) &&
+                  !_deletedMessageIds.contains(m.id))
               .toList();
 
           // Prepend older messages. Server returns ASCENDING [oldest, older].
@@ -4642,63 +4690,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       });
 
                       // Update Last Message di Chat List (agar tidak menampilkan pesan yang sudah dihapus)
-                      if (_messages.isNotEmpty) {
-                        final lastMsg = _messages.last;
-                        String newLastContent = lastMsg.content;
-                        String typeStr = '1';
-                        if (lastMsg.messageType == MessageType.image)
-                          typeStr = '3';
-                        else if (lastMsg.messageType == MessageType.voice)
-                          typeStr = '2';
-                        else if (lastMsg.messageType == MessageType.document)
-                          typeStr = '5';
-                        else if (lastMsg.messageType == MessageType.video)
-                          typeStr = '4';
-
-                        if (newLastContent.isEmpty) {
-                          if (lastMsg.messageType == MessageType.image) {
-                            final isSticker =
-                                (lastMsg.imageUrl ?? '').toLowerCase().endsWith(
-                                  '.webp',
-                                ) ||
-                                (lastMsg.imagePath ?? '')
-                                    .toLowerCase()
-                                    .endsWith('.webp') ||
-                                newLastContent.toLowerCase().endsWith('.webp');
-                            newLastContent = isSticker
-                                ? '🌟 Sticker'
-                                : '📷 Foto';
-                          } else if (lastMsg.messageType == MessageType.voice) {
-                            newLastContent = '🎤 Pesan Suara';
-                          } else if (lastMsg.messageType ==
-                              MessageType.document) {
-                            newLastContent = '📄 Dokumen';
-                          } else if (lastMsg.messageType == MessageType.video) {
-                            newLastContent = '🎬 Video';
-                          }
-                        }
-                        Provider.of<ChatProvider>(
-                          context,
-                          listen: false,
-                        ).updateLocalLastMessage(
-                          chat.id,
-                          newLastContent,
-                          lastMessageType: typeStr,
-                          updateTimeAndPosition: false,
-                          overrideTime: lastMsg.rawTime.isNotEmpty
-                              ? lastMsg.rawTime
-                              : null,
-                        );
-                      } else {
-                        Provider.of<ChatProvider>(
-                          context,
-                          listen: false,
-                        ).updateLocalLastMessage(
-                          chat.id,
-                          '',
-                          updateTimeAndPosition: false,
-                        );
-                      }
+                      _syncLastMessageToProvider();
                       _showTopToast('Pesan dihapus', isError: false);
                     },
                     child: const Text(

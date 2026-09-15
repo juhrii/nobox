@@ -609,48 +609,6 @@ class ChatProvider with ChangeNotifier {
           }
           _saveReadState();
 
-          // Cek override lokal (agar override tidak tertimpa kecuali ada pesan yang BENAR-BENAR LEBIH BARU)
-          final localOverride = _localOverrides[chat.id];
-          if (localOverride != null) {
-            // Jika ada override, kita cek timestamp kapan override dibuat vs kapan pesan baru datang
-            final tsStr = _overrideTimestamps[chat.id];
-            if (tsStr != null) {
-              final overrideTs = DateTime.parse(tsStr);
-              final freshTs = DateTime.tryParse(chat.time);
-              if (freshTs != null &&
-                  freshTs.isAfter(overrideTs) &&
-                  chat.lastMessage != 'Site.Inbox.DeletedMessage') {
-                // Ada pesan asli dari server yang LEBIH BARU dari waktu override kita dibuat (dan bukan placeholder)!
-                // Hapus override.
-                debugPrint(
-                  'ChatProvider: 🗑 Override REMOVED for ${chat.id} because server time ($freshTs) is newer than override time ($overrideTs)',
-                );
-                _localOverrides.remove(chat.id);
-                _overrideTimestamps.remove(chat.id);
-                _saveLocalOverrides();
-                if (isRecentMessageFromMe(chat.id, chat.lastMessage)) {
-                  chat = chat.copyWith(
-                    isLastMessageFromMe: true,
-                    needReply: false,
-                    unreadCount: 0,
-                    sdrMsg: 'me',
-                  );
-                }
-              } else {
-                // Override masih berlaku!
-                chat = chat.copyWith(
-                  lastMessage: localOverride.lastMessage,
-                  lastMessageType: localOverride.lastMessageType,
-                  isLastMessageFromMe: localOverride.isLastMessageFromMe,
-                  needReply: localOverride.isLastMessageFromMe ? false : chat.needReply,
-                  unreadCount: localOverride.isLastMessageFromMe ? 0 : chat.unreadCount,
-                  time: localOverride.time,
-                  sdrMsg: localOverride.isLastMessageFromMe ? 'me' : (localOverride.sdrMsg.isNotEmpty ? localOverride.sdrMsg : chat.sdrMsg),
-                );
-              }
-            }
-          }
-
           if (oldChat != null) {
             // FIX: Pertahankan isBlocked untuk Guest/New Contact (tanpa CtRealId)
             if (chat.ctRealId.isEmpty || chat.ctRealId == 'null') {
@@ -750,6 +708,9 @@ class ChatProvider with ChangeNotifier {
                 lastMessageType: override.lastMessageType,
                 time: override.time,
                 isLastMessageFromMe: override.isLastMessageFromMe,
+                sdrMsg: override.isLastMessageFromMe ? 'me' : (override.sdrMsg.isNotEmpty ? override.sdrMsg : chat.sdrMsg),
+                needReply: override.isLastMessageFromMe ? false : chat.needReply,
+                unreadCount: override.isLastMessageFromMe ? 0 : chat.unreadCount,
               );
             } else {
               // Override sudah terlalu lama, kita percaya pada data server saat ini
@@ -915,16 +876,26 @@ class ChatProvider with ChangeNotifier {
           '📄 [Pagination] Initial fetch: loaded ${response.data!.length} items, hasMore=$_hasMore',
         );
 
-        // Cek jika ada lastMessage berupa log sistem / placeholder dan ambil pesan obrolan aslinya
+        // Cek jika ada lastMessage berupa log sistem / placeholder atau pesan yang dihapus lokal
+        final prefs = await SharedPreferences.getInstance();
         final invalidRooms = _chats
             .where((c) {
               final lower = c.lastMessage.toLowerCase();
-              return c.lastMessage == 'Site.Inbox.DeletedMessage' ||
+              final isSystemOrPlaceholder = c.lastMessage == 'Site.Inbox.DeletedMessage' ||
                   lower.contains('site.inbox.') ||
                   lower.contains('percakapan di-assign') ||
                   lower.contains('percakapan diselesaikan') ||
                   lower.contains('bot diaktifkan') ||
                   lower.contains('pemberitahuan sistem');
+              if (isSystemOrPlaceholder) return true;
+
+              if (!_localOverrides.containsKey(c.id)) {
+                final delList = prefs.getStringList('deleted_ids_${c.id}');
+                if (delList != null && delList.isNotEmpty) {
+                  return true;
+                }
+              }
+              return false;
             })
             .map((c) => c.id)
             .toList();
@@ -1511,14 +1482,26 @@ class ChatProvider with ChangeNotifier {
               realLastMsg.content,
               lastMessageType: typeStr,
               overrideTime: realLastMsg.rawTime,
+              isFromMe: realLastMsg.isMe,
+              updateTimeAndPosition: false,
             );
           } else {
             // All messages are deleted placeholders or system logs
-            updateLocalLastMessage(roomId, '');
+            updateLocalLastMessage(
+              roomId,
+              '',
+              lastMessageType: '1',
+              updateTimeAndPosition: false,
+            );
           }
         } else {
           // If room is completely empty
-          updateLocalLastMessage(roomId, '');
+          updateLocalLastMessage(
+            roomId,
+            '',
+            lastMessageType: '1',
+            updateTimeAndPosition: false,
+          );
         }
       } catch (e) {
         debugPrint(
@@ -2074,16 +2057,26 @@ class ChatProvider with ChangeNotifier {
           _chats.insertAll(0, newChats);
         }
 
-        // 1. Check for DeletedMessages or system logs and fetch their actual last chat messages
+        // 1. Check for DeletedMessages, system logs, or rooms with deleted messages
+        final prefs = await SharedPreferences.getInstance();
         final deletedRooms = _chats
             .where((c) {
               final lower = c.lastMessage.toLowerCase();
-              return c.lastMessage == 'Site.Inbox.DeletedMessage' ||
+              final isSystemOrPlaceholder = c.lastMessage == 'Site.Inbox.DeletedMessage' ||
                   lower.contains('site.inbox.') ||
                   lower.contains('percakapan di-assign') ||
                   lower.contains('percakapan diselesaikan') ||
                   lower.contains('bot diaktifkan') ||
                   lower.contains('pemberitahuan sistem');
+              if (isSystemOrPlaceholder) return true;
+
+              if (!_localOverrides.containsKey(c.id)) {
+                final delList = prefs.getStringList('deleted_ids_${c.id}');
+                if (delList != null && delList.isNotEmpty) {
+                  return true;
+                }
+              }
+              return false;
             })
             .map((c) => c.id)
             .toList();

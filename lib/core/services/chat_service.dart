@@ -2037,13 +2037,17 @@ class ChatService {
   /// Hapus Pesan (Delete Message) berdasarkan ID pesan
   Future<ApiResponse<bool>> deleteMessage(String msgId) async {
     try {
+      if (msgId.isEmpty || msgId.startsWith('temp_')) {
+        return ApiResponse.success(true, 200);
+      }
       debugPrint('🗑️ [Delete Message] Deleting message: $msgId');
       final isNumeric = int.tryParse(msgId) != null;
       final parsedId = isNumeric ? int.parse(msgId) : msgId;
       
-              final payload = <String, dynamic>{
-          'EntityId': parsedId
-        };
+      final payload = <String, dynamic>{
+        'EntityId': parsedId,
+        'Id': parsedId,
+      };
 
       final response = await _apiClient.post(
         'Services/Chat/Chatmessages/Delete',
@@ -2070,8 +2074,13 @@ class ChatService {
       }
       return ApiResponse.failure('Gagal menghapus pesan: ${response.statusCode}', response.statusCode ?? 500);
     } on DioException catch (e) {
-      final errorData = e.response?.data;
       final status = e.response?.statusCode ?? 500;
+      if (status == 404) {
+        debugPrint('🗑️ [Delete Message] Message already deleted on server (404)');
+        return ApiResponse.success(true, 404);
+      }
+
+      final errorData = e.response?.data;
       debugPrint('❌ [Delete Message] Dio Error ($status): $errorData');
       
       String errorMsg = e.message ?? 'Unknown error';
