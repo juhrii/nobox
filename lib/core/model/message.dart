@@ -545,6 +545,17 @@ class Message {
       return filePath.trim();
     }
 
+    String formatMediaUrl(String path) {
+      if (path.isEmpty) return path;
+      var raw = path.replaceAll('\\', '/').trim();
+      if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+      if (raw.startsWith('/')) raw = raw.substring(1);
+      if (raw.toLowerCase().startsWith('upload/')) {
+        return 'https://id.nobox.ai/$raw';
+      }
+      return 'https://id.nobox.ai/upload/$raw';
+    }
+
     String extractOriginalName(dynamic fileData) {
       if (fileData is Map) {
         return fileData['OriginalName']?.toString() ?? '';
@@ -630,34 +641,32 @@ class Message {
       // Deteksi stiker MUTLAK PERTAMA — baik stiker diam maupun bergerak (.webm/.tgs/.webp) dari semua channel
       if (isAbsoluteSticker(firstFile, typeVal, filePath, originalName, content)) {
         msgType = MessageType.sticker;
-        imgUrl = filePath.startsWith('http') || filePath.isEmpty ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        imgUrl = formatMediaUrl(filePath);
         content = isAnimated(firstFile, filePath, originalName, content, typeVal) ? '🎬 Sticker' : '🌟 Sticker';
       } else if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(firstFile) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath)) {
         // Voice note: cek ekstensi audio ATAU flag Ptt:true ATAU nama file mengandung voice note — SEBELUM cek document (type 5)
         // Server NoBox kadang mengembalikan Type=5 untuk voice notes
         msgType = MessageType.voice;
-        audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        audioPath = formatMediaUrl(filePath);
         content = '';
       } else if (typeVal == '5' || _isDocumentFlag(firstFile)) {
         // Jika dari API diset sebagai Dokumen (5) atau ada flag IsDocument: true
         msgType = MessageType.document;
         docName = originalName.isNotEmpty ? originalName : filePath.split('/').last;
-        docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        docUrl = formatMediaUrl(filePath);
         if (content.isEmpty) content = '📄 $docName';
       } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
         msgType = MessageType.video;
-        videoUrl = filePath.startsWith('http') 
-            ? filePath 
-            : 'https://id.nobox.ai/upload/$filePath';
+        videoUrl = formatMediaUrl(filePath);
         content = '🎬 Video';
       } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
-        imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        imgUrl = formatMediaUrl(filePath);
       } else if (typeVal == '2') {
         // Fallback berdasarkan API Type saat ekstensi tidak dikenali
         if (isVoiceNoteString(filePath) || content.contains('Voice Note') || content.contains('🎵') || (content.isEmpty && !_isWebLink(filePath))) {
           msgType = MessageType.voice;
-          audioPath = filePath.startsWith('http') || filePath.isEmpty ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          audioPath = formatMediaUrl(filePath);
           content = '';
         } else {
           msgType = MessageType.text; // Ignore buggy Type=2 if it's clearly a text message (like a link)
@@ -667,13 +676,11 @@ class Message {
         }
       } else if (typeVal == '4') {
         msgType = MessageType.video;
-        videoUrl = filePath.startsWith('http') 
-            ? filePath 
-            : 'https://id.nobox.ai/upload/$filePath';
+        videoUrl = formatMediaUrl(filePath);
         content = '🎬 Video';
       } else if (typeVal == '3') {
         msgType = MessageType.image;
-        imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        imgUrl = formatMediaUrl(filePath);
       } else if (typeVal == '15' || typeVal == '11' || (json['Msg'] != null && json['Msg'].toString().toLowerCase().contains('"lat":'))) {
         msgType = MessageType.text;
         if (!content.contains('[-{=||=}-]')) {
@@ -692,7 +699,7 @@ class Message {
           }
         } else {
           msgType = MessageType.document;
-          docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          docUrl = formatMediaUrl(filePath);
           if (content.isEmpty) content = '📄 $docName';
         }
       }
@@ -702,13 +709,13 @@ class Message {
       // Deteksi stiker MUTLAK PERTAMA — baik stiker diam maupun bergerak (.webm/.tgs/.webp) dari semua channel
       if (isAbsoluteSticker(json['File'], typeVal, filePath, originalName, content)) {
         msgType = MessageType.sticker;
-        imgUrl = filePath.startsWith('http') || filePath.isEmpty ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        imgUrl = formatMediaUrl(filePath);
         content = isAnimated(json['File'], filePath, originalName, content, typeVal) ? '🎬 Sticker' : '🌟 Sticker';
       } else if (typeVal == '2' || isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath)) {
         // Voice note: cek typeVal=='2', ekstensi audio, nama file, ATAU flag Ptt:true — sebelum cek document (type 5)
         if (isAudioFile(filePath) || isAudioFile(originalName) || _isPttFile(json['File']) || isVoiceNoteString(originalName) || isVoiceNoteString(filePath) || (content.trim().isEmpty && !_isWebLink(filePath) && filePath.isNotEmpty)) {
           msgType = MessageType.voice;
-          audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          audioPath = formatMediaUrl(filePath);
           content = '';
         } else {
           msgType = MessageType.text; // Ignore buggy Type=2 if it's clearly a text message (like a link)
@@ -725,27 +732,23 @@ class Message {
           }
         } else {
           msgType = MessageType.document;
-          docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          docUrl = formatMediaUrl(filePath);
           if (content.isEmpty) content = '📄 $docName';
         }
       } else if (isVideoFile(filePath) || isVideoFile(originalName)) {
         msgType = MessageType.video;
-        videoUrl = filePath.startsWith('http') 
-            ? filePath 
-            : 'https://id.nobox.ai/upload/$filePath';
+        videoUrl = formatMediaUrl(filePath);
         content = '🎬 Video';
       } else if (_isImageFile(filePath) || _isImageFile(originalName)) {
         msgType = MessageType.image;
-        imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        imgUrl = formatMediaUrl(filePath);
       } else if (typeVal == '4') {
         msgType = MessageType.video;
-        videoUrl = filePath.startsWith('http') 
-            ? filePath 
-            : 'https://id.nobox.ai/upload/$filePath';
+        videoUrl = formatMediaUrl(filePath);
         content = '🎬 Video';
       } else if (typeVal == '3') {
         msgType = MessageType.image;
-        imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+        imgUrl = formatMediaUrl(filePath);
       } else if (typeVal == '15' || typeVal == '11' || (json['Msg'] != null && json['Msg'].toString().toLowerCase().contains('"lat":'))) {
         msgType = MessageType.text;
         if (!content.contains('[-{=||=}-]')) {
@@ -763,7 +766,7 @@ class Message {
           }
         } else {
           msgType = MessageType.document;
-          docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          docUrl = formatMediaUrl(filePath);
           if (content.isEmpty) content = '📄 $docName';
         }
       }
@@ -780,7 +783,7 @@ class Message {
       // Fallback khusus stiker jika URL dikirim mentah di dalam field Msg
       msgType = MessageType.sticker;
       final cleanedPath = content.trim();
-      imgUrl = cleanedPath.startsWith('http') ? cleanedPath : 'https://id.nobox.ai/upload/$cleanedPath';
+      imgUrl = formatMediaUrl(cleanedPath);
       content = '🌟 Sticker';
     } else if ((typeVal == '16' || typeVal == '3' || typeVal == '4' || typeVal == '5' || typeVal == '2') && (content.startsWith('{') || content.startsWith('['))) {
       // Fallback: API NoBox sering mengirim URL media di dalam field Msg bukan di Files/File
@@ -788,25 +791,25 @@ class Message {
       if (filePath.isNotEmpty) {
         if (typeVal == '3' || _isImageFile(filePath)) {
           msgType = MessageType.image;
-          imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          imgUrl = formatMediaUrl(filePath);
           content = '';
         } else if (typeVal == '4' || isVideoFile(filePath)) {
           msgType = MessageType.video;
-          videoUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          videoUrl = formatMediaUrl(filePath);
           content = '🎬 Video';
         } else if (typeVal == '5') {
           msgType = MessageType.document;
-          docUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          docUrl = formatMediaUrl(filePath);
           docName = extractOriginalName(content);
           if (docName.isEmpty) docName = filePath.split('/').last;
           content = '📄 $docName';
         } else if (typeVal == '2' || isAudioFile(filePath)) {
           msgType = MessageType.voice;
-          audioPath = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          audioPath = formatMediaUrl(filePath);
           content = '';
         } else if (typeVal == '16') {
           msgType = MessageType.sticker;
-          imgUrl = filePath.startsWith('http') ? filePath : 'https://id.nobox.ai/upload/$filePath';
+          imgUrl = formatMediaUrl(filePath);
           content = '🌟 Sticker';
         }
       } else if (typeVal == '16' || typeVal == '3') {

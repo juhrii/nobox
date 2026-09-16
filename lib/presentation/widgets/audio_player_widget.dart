@@ -1,9 +1,12 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/app_config.dart';
+import '../../core/services/api_client.dart';
 import '../../core/theme/app_theme.dart';
 
 // =====================================================================
@@ -36,7 +39,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   late AudioPlayer _audioPlayer;
   bool _isPlaying = false;
-  bool _isLoading = false;
+  bool _isLoading = false; 
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
   bool _hasError = false;
@@ -160,15 +163,34 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         return;
       }
 
-      // 2. Jika URL remote, cek file di disk cache
+      // 2. Jika URL remote, cek file di disk cache atau rekaman lokal asli
       final dir = await getTemporaryDirectory();
       final cleanUrl = url.split('?').first;
       final fileName = cleanUrl.split('/').last;
+
+      // Cek cache
       final cachedPath = '${dir.path}/audio_cache_$fileName';
-      if (File(cachedPath).existsSync()) {
+      final cachedFile = File(cachedPath);
+      if (cachedFile.existsSync() && cachedFile.lengthSync() > 0) {
         _localFilePath = cachedPath;
         final tempPlayer = AudioPlayer();
         await tempPlayer.setSource(DeviceFileSource(cachedPath));
+        final d = await tempPlayer.getDuration();
+        await tempPlayer.dispose();
+        if (d != null && d > Duration.zero && mounted) {
+          _durationCache[url] = d;
+          setState(() => _duration = d);
+        }
+        return;
+      }
+
+      // Cek apakah file rekaman asli tersimpan langsung di direktori temp perangkat
+      final originalRecordedPath = '${dir.path}/$fileName';
+      final originalRecordedFile = File(originalRecordedPath);
+      if (originalRecordedFile.existsSync() && originalRecordedFile.lengthSync() > 0) {
+        _localFilePath = originalRecordedPath;
+        final tempPlayer = AudioPlayer();
+        await tempPlayer.setSource(DeviceFileSource(originalRecordedPath));
         final d = await tempPlayer.getDuration();
         await tempPlayer.dispose();
         if (d != null && d > Duration.zero && mounted) {
@@ -196,33 +218,150 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   /// Downloads audio from URL to local temp file (cached for replay)
   Future<String> _ensureDownloaded(String url) async {
-    // Return cached path if already downloaded
-    if (_localFilePath != null && File(_localFilePath!).existsSync()) {
+    // 1. Return path langsung jika sudah berupa path file lokal
+    if (!url.startsWith('http')) return url;
+
+    // 2. Return path memori jika sudah pernah diunduh dalam state aktif ini
+    if (_localFilePath != null &&
+        File(_localFilePath!).existsSync() &&
+        File(_localFilePath!).lengthSync() > 0) {
       return _localFilePath!;
     }
 
     final dir = await getTemporaryDirectory();
     final cleanUrl = url.split('?').first;
     final fileName = cleanUrl.split('/').last;
-    final filePath = '${dir.path}/audio_cache_$fileName';
+    final cachedPath = '${dir.path}/audio_cache_$fileName';
 
-    // Check if already cached on disk
-    if (File(filePath).existsSync()) {
-      _localFilePath = filePath;
-      return filePath;
+    // 3. Cek apakah sudah pernah tersimpan di cache disk
+    final cachedFile = File(cachedPath);
+    if (cachedFile.existsSync()) {
+      if (cachedFile.lengthSync() > 0) {
+        _localFilePath = cachedPath;
+        return cachedPath;
+      } else {
+        try {
+          cachedFile.deleteSync();
+        } catch (_) {}
+      }
+    }
+
+    // 4. Cek apakah ini file rekaman suara yang direkam di perangkat ini
+    final originalRecordedPath = '${dir.path}/$fileName';
+    final originalRecordedFile = File(originalRecordedPath);
+    if (originalRecordedFile.existsSync() && originalRecordedFile.lengthSync() > 0) {
+      _localFilePath = originalRecordedPath;
+      debugPrint('🔊 AudioPlayerWidget: Menggunakan rekaman lokal perangkat → $originalRecordedPath');
+      return originalRecordedPath;
     }
 
     debugPrint('🔊 AudioPlayerWidget: Downloading $url ...');
-    final dio = Dio();
-    final response = await dio.download(url, filePath);
-    if (response.statusCode == 200) {
-      _localFilePath = filePath;
-      final fileSize = File(filePath).lengthSync();
-      debugPrint('🔊 AudioPlayerWidget: Downloaded $fileSize bytes → $filePath');
-      return filePath;
-    } else {
-      throw Exception('Download failed: HTTP ${response.statusCode}');
+
+    // 5. Ambil token autentikasi NoBox
+    String? token = ApiClient().token;
+    if (token == null || token.isEmpty) {
+      const secureStorage = FlutterSecureStorage();
+      final prefs = await SharedPreferences.getInstance();
+      token = await secureStorage.read(key: AppConfig.tokenKey) ??
+          prefs.getString(AppConfig.tokenKey) ??
+          await secureStorage.read(key: 'auth_token');
+      if (token != null && token.isNotEmpty) {
+        ApiClient().setToken(token);
+      }
     }
+
+    // 6. Siapkan variasi kandidat URL untuk mengantisipasi URL anomali (temporary, double upload, dsb.)
+    final List<String> candidateUrls = [];
+    candidateUrls.add(url);
+    if (url.contains('/upload/upload/')) {
+      candidateUrls.add(url.replaceAll('/upload/upload/', '/upload/'));
+    }
+    if (url.contains('/upload/temporary/')) {
+      candidateUrls.add(url.replaceAll('/upload/temporary/', '/upload/'));
+    }
+    if (url.contains('/upload/') && !url.contains('/upload/temporary/')) {
+      candidateUrls.add(url.replaceAll('/upload/', '/upload/temporary/'));
+    }
+
+    // PENTING: Gunakan instance Dio terisolasi khusus download binary (BUKAN ApiClient().dio)
+    // agar header 'Accept: application/json' tidak merusak request ke static audio file (penyebab 404/406)
+    final downloadDio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 60),
+      ),
+    );
+
+    DioException? lastDioError;
+
+    for (final candidateUrl in candidateUrls) {
+      // Opsi A: Coba dengan token Authorization Bearer + Accept */*
+      try {
+        final Map<String, dynamic> headers = {'Accept': '*/*'};
+        if (token != null && token.isNotEmpty) {
+          headers['Authorization'] = 'Bearer $token';
+        }
+
+        final response = await downloadDio.download(
+          candidateUrl,
+          cachedPath,
+          options: Options(headers: headers),
+        );
+
+        if (response.statusCode == 200 &&
+            File(cachedPath).existsSync() &&
+            File(cachedPath).lengthSync() > 0) {
+          _localFilePath = cachedPath;
+          final fileSize = File(cachedPath).lengthSync();
+          debugPrint('🔊 AudioPlayerWidget: Berhasil unduh ($fileSize bytes) dari $candidateUrl');
+          return cachedPath;
+        }
+      } on DioException catch (e) {
+        lastDioError = e;
+        debugPrint('⚠️ AudioPlayerWidget: Percobaan dengan Auth gagal (${e.response?.statusCode}) di $candidateUrl');
+        try {
+          if (File(cachedPath).existsSync()) File(cachedPath).deleteSync();
+        } catch (_) {}
+      } catch (_) {
+        try {
+          if (File(cachedPath).existsSync()) File(cachedPath).deleteSync();
+        } catch (_) {}
+      }
+
+      // Opsi B: Coba tanpa token Authorization (beberapa server web melarang header auth untuk static upload)
+      if (token != null && token.isNotEmpty) {
+        try {
+          final response = await downloadDio.download(
+            candidateUrl,
+            cachedPath,
+            options: Options(headers: {'Accept': '*/*'}),
+          );
+
+          if (response.statusCode == 200 &&
+              File(cachedPath).existsSync() &&
+              File(cachedPath).lengthSync() > 0) {
+            _localFilePath = cachedPath;
+            final fileSize = File(cachedPath).lengthSync();
+            debugPrint('🔊 AudioPlayerWidget: Berhasil unduh tanpa auth ($fileSize bytes) dari $candidateUrl');
+            return cachedPath;
+          }
+        } on DioException catch (e) {
+          lastDioError = e;
+          try {
+            if (File(cachedPath).existsSync()) File(cachedPath).deleteSync();
+          } catch (_) {}
+        } catch (_) {
+          try {
+            if (File(cachedPath).existsSync()) File(cachedPath).deleteSync();
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (lastDioError != null) {
+      throw lastDioError;
+    }
+    throw Exception('File audio tidak ditemukan di server.');
   }
 
   Future<void> _stopPlayback() async {
@@ -277,9 +416,18 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
           _isPlaying = false;
         });
 
+        String userMsg = 'Gagal memutar audio';
+        if (e.toString().contains('404')) {
+          userMsg = 'File audio tidak ditemukan di server atau telah kedaluwarsa.';
+        } else if (e.toString().contains('401')) {
+          userMsg = 'Akses ditolak (401). Silakan login ulang.';
+        } else {
+          userMsg = 'Gagal memutar audio: $e';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to play audio: $e'),
+            content: Text(userMsg),
             backgroundColor: AppTheme.errorColor,
           ),
         );

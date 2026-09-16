@@ -916,18 +916,17 @@ class ChatProvider with ChangeNotifier {
           );
         }).toList();
 
-        // FIX: Registrasikan server-pinned chats ke local _pinnedIds
-        // dan sinkronisasikan urutannya dengan urutan resmi dari server NoBox (Telegram lalu WA).
+        // FIX: Registrasikan server-pinned chats ke local _pinnedIds secara stabil.
+        // Pertahankan urutan yang sudah ada di _pinnedIds secara absolut agar tidak berubah posisi saat ada pesan baru.
         final serverPinnedIds = _chats.where((c) => c.isPinned).map((c) => c.id).toList();
-        if (serverPinnedIds.isNotEmpty) {
-          final updatedPinned = <String>[];
-          for (final id in _pinnedIds) {
-            if (!serverPinnedIds.contains(id)) {
-              updatedPinned.add(id);
-            }
+        bool pinnedChanged = false;
+        for (final id in serverPinnedIds) {
+          if (!_pinnedIds.contains(id)) {
+            _pinnedIds.add(id);
+            pinnedChanged = true;
           }
-          updatedPinned.addAll(serverPinnedIds);
-          _pinnedIds = updatedPinned.toSet();
+        }
+        if (pinnedChanged) {
           _savePinnedState();
         }
 
@@ -1218,13 +1217,6 @@ class ChatProvider with ChangeNotifier {
           timeMsg += 'Z';
         }
       }
-      final bool isNeedReply;
-      if (roomData.containsKey('IsNeedReply')) {
-        isNeedReply =
-            roomData['IsNeedReply'] == 1 || roomData['IsNeedReply'] == true;
-      } else {
-        isNeedReply = existing.needReply;
-      }
       final sdrMsg = roomData['SdrMsg']?.toString() ?? '';
       final bool isRecentMe = _recentIsMeFlags[roomId] == true;
 
@@ -1328,11 +1320,6 @@ class ChatProvider with ChangeNotifier {
         debugPrint(
           '   - lastMsg != existingMsg: ${lastMsg.trim() != existing.lastMessage.trim()}',
         );
-
-        final bool isNewerOrDifferent = serverTimeParsed != null &&
-            (existingTimeParsed == null ||
-                serverTimeParsed.isAfter(existingTimeParsed) ||
-                lastMsg.trim() != existing.lastMessage.trim());
 
         final isFromAgent =
             isRecentMe ||
@@ -1532,8 +1519,6 @@ class ChatProvider with ChangeNotifier {
         if (!response.isError &&
             response.data != null &&
             response.data!.isNotEmpty) {
-          // Ambil daftar pesan yang dihapus secara lokal dari SharedPreferences
-          final chat = _chats.firstWhere((c) => c.id == roomId);
           final prefs = await SharedPreferences.getInstance();
           final deletedIds =
               prefs.getStringList('deleted_ids_$roomId') ?? <String>[];
@@ -1752,6 +1737,12 @@ class ChatProvider with ChangeNotifier {
             chat = chat.copyWith(unreadCount: 0);
           } else if (chat.unreadCount > 0 || chat.needReply) {
             _readIds.remove(chat.id);
+          }
+
+          // Daftarkan server-pinned chat ke _pinnedIds jika belum ada
+          if (chat.isPinned && !_pinnedIds.contains(chat.id)) {
+            _pinnedIds.add(chat.id);
+            _savePinnedState();
           }
 
           // Apply persisted local state
@@ -2783,26 +2774,38 @@ class ChatProvider with ChangeNotifier {
       }
     }
 
-    // PENTING: sesama pinned chat kini diurutkan berdasarkan riwayat pin (statis)
+    // PENTING: sesama pinned chat kini diurutkan berdasarkan riwayat pin (statis di _pinnedIds)
     // agar tidak bergerak posisi ketika ada pesan baru masuk atau di-refresh.
+    final pinnedInOrder = filtered.where((c) => c.isPinned).toList();
+
+    // Pastikan semua pinned chat terdaftar di _pinnedIds agar urutannya konsisten dan stabil
+    bool pinnedChanged = false;
+    for (final c in pinnedInOrder) {
+      if (!_pinnedIds.contains(c.id)) {
+        _pinnedIds.add(c.id);
+        pinnedChanged = true;
+      }
+    }
+    if (pinnedChanged) {
+      _savePinnedState();
+    }
+
     final pinnedList = _pinnedIds.toList();
-    final pinnedInOrder = filtered.where((c) => c.isPinned).toList()
-      ..sort((a, b) {
-        final indexA = pinnedList.indexOf(a.id);
-        final indexB = pinnedList.indexOf(b.id);
-        if (indexA != -1 && indexB != -1) {
-          return indexA.compareTo(
-            indexB,
-          ); // Urutan pin pertama / atas tetap di atas
-        } else if (indexA != -1) {
-          return -1;
-        } else if (indexB != -1) {
-          return 1;
-        } else {
-          return _chats.indexWhere((c) => c.id == a.id)
-              .compareTo(_chats.indexWhere((c) => c.id == b.id));
-        }
-      });
+    pinnedInOrder.sort((a, b) {
+      final indexA = pinnedList.indexOf(a.id);
+      final indexB = pinnedList.indexOf(b.id);
+      if (indexA != -1 && indexB != -1) {
+        return indexA.compareTo(
+          indexB,
+        ); // Urutan pin pertama / atas tetap di atas
+      } else if (indexA != -1) {
+        return -1;
+      } else if (indexB != -1) {
+        return 1;
+      } else {
+        return 0; // Jangan pernah fallback ke _chats.indexWhere atau waktu pesan!
+      }
+    });
 
     final unpinned = filtered.where((c) => !c.isPinned).toList()
       ..sort((a, b) {

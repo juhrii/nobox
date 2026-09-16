@@ -1572,7 +1572,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         : updatedMsg.videoUrl,
                     documentUrl: updatedMsg.documentUrl,
                     audioPath: resolvedType == MessageType.voice
-                        ? (_messages[i].audioPath ?? updatedMsg.audioPath)
+                        ? ((_messages[i].audioPath != null &&
+                                File(_messages[i].audioPath!).existsSync())
+                            ? _messages[i].audioPath
+                            : updatedMsg.audioPath)
                         : updatedMsg.audioPath,
                     audioDuration: _messages[i].audioDuration > 0
                         ? _messages[i].audioDuration
@@ -3597,9 +3600,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       );
 
       if (!response.isError) {
+        // Pertahankan file lokal asli yang ada di storage perangkat jika ada,
+        // sehingga pemutaran audio instan tanpa perlu unduh ulang dari server (menghindari error 404/401)
+        final localFileExists = path.isNotEmpty && File(path).existsSync();
         final updatedMsg = voiceMessage.copyWith(
           status: MessageStatus.delivered,
-          audioPath: response.data, // URL dari server
+          audioPath: localFileExists ? path : response.data,
         );
         _localSentCache.putIfAbsent(chat.id, () => []);
         _localSentCache[chat.id]!.add(
