@@ -1286,6 +1286,9 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
         AudioPlayerWidget(
           audioUrl: audioUrl,
           isMe: isMe,
+          initialDuration: widget.message.audioDuration > 0
+              ? Duration(seconds: widget.message.audioDuration)
+              : null,
           caption: widget.message.content.trim().isNotEmpty == true
               ? widget.message.content
               : null,

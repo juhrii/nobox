@@ -875,6 +875,59 @@ class Message {
       );
     }
 
+    // Parse audio duration (dalam detik) jika ini pesan suara
+    int parsedAudioDuration = 0;
+    if (msgType == MessageType.voice) {
+      final d = json['Duration'] ?? json['duration'] ?? json['AudioDuration'] ?? json['audioDuration'] ?? json['Seconds'] ?? json['seconds'] ?? json['Length'] ?? json['length'];
+      if (d != null) {
+        if (d is num) {
+          parsedAudioDuration = d.toInt();
+        } else {
+          parsedAudioDuration = int.tryParse(d.toString()) ?? (double.tryParse(d.toString())?.round() ?? 0);
+        }
+      }
+      if (parsedAudioDuration == 0 && json['Files'] is List && (json['Files'] as List).isNotEmpty) {
+        final f = (json['Files'] as List).first;
+        if (f is Map) {
+          final fd = f['Duration'] ?? f['duration'] ?? f['Seconds'] ?? f['seconds'] ?? f['Length'] ?? f['length'];
+          if (fd != null) {
+            if (fd is num) {
+              parsedAudioDuration = fd.toInt();
+            } else {
+              parsedAudioDuration = int.tryParse(fd.toString()) ?? (double.tryParse(fd.toString())?.round() ?? 0);
+            }
+          }
+        }
+      }
+      if (parsedAudioDuration == 0 && json['File'] != null) {
+        if (json['File'] is Map) {
+          final fd = json['File']['Duration'] ?? json['File']['duration'] ?? json['File']['Seconds'] ?? json['File']['seconds'];
+          if (fd != null) {
+            if (fd is num) {
+              parsedAudioDuration = fd.toInt();
+            } else {
+              parsedAudioDuration = int.tryParse(fd.toString()) ?? (double.tryParse(fd.toString())?.round() ?? 0);
+            }
+          }
+        } else if (json['File'] is String && (json['File'].toString().startsWith('{') || json['File'].toString().startsWith('['))) {
+          try {
+            final decoded = jsonDecode(json['File']);
+            final fMap = decoded is List ? (decoded.isNotEmpty ? decoded.first : null) : decoded;
+            if (fMap is Map) {
+              final fd = fMap['Duration'] ?? fMap['duration'] ?? fMap['Seconds'] ?? fMap['seconds'];
+              if (fd != null) {
+                if (fd is num) {
+                  parsedAudioDuration = fd.toInt();
+                } else {
+                  parsedAudioDuration = int.tryParse(fd.toString()) ?? (double.tryParse(fd.toString())?.round() ?? 0);
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
     if (msgType == MessageType.text && content.trim().isEmpty) {
       content = "⚠️ Pesan gagal diproses oleh server.";
     }
@@ -891,6 +944,7 @@ class Message {
       messageType: msgType,
       imageUrl: imgUrl,
       audioPath: audioPath,
+      audioDuration: parsedAudioDuration,
       videoUrl: videoUrl,
       documentName: docName,
       documentUrl: docUrl,

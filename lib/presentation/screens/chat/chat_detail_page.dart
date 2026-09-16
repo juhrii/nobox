@@ -1179,6 +1179,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 for (final recent in recentMsgs) {
                   final messageData =
                       recent['message'] as Map<String, dynamic>? ?? {};
+                  final senderData = recent['sender'] as Map<String, dynamic>?;
                   final parsedMsg = Message.fromJson(
                     messageData,
                     currentUserEmail,
@@ -1186,6 +1187,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     contactId: chat.contactId,
                   );
                   Message newMsg = parsedMsg.copyWith(status: MessageStatus.read);
+
+                  // FILTER: Jangan injeksi pesan Telegram "Saved Messages"
+                  final fromVal = messageData['From']?.toString() ?? '';
+                  final toVal = messageData['To']?.toString() ?? '';
+                  final sdrName = (senderData?['Name'] ?? messageData['Sender'] ?? messageData['SenderName'] ?? '').toString().toLowerCase();
+                  if (sdrName == 'saved messages' || sdrName == 'pesan tersimpan' ||
+                      (fromVal.isNotEmpty && fromVal == toVal && !fromVal.startsWith('-'))) {
+                    continue; // Skip Telegram Saved Messages
+                  }
 
                   // FILTER: Strict Account Isolation untuk Injeksi SignalR
                   if (chat.accountId.isNotEmpty && !isTelegram) {
@@ -1352,6 +1362,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         isFromMe: lastMsg.isMe,
         updateTimeAndPosition: false,
         overrideTime: lastMsg.rawTime.isNotEmpty ? lastMsg.rawTime : null,
+        isDeletion: _deletedMessageIds.isNotEmpty,
       );
     } else {
       Provider.of<ChatProvider>(
@@ -1362,6 +1373,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         '',
         lastMessageType: '1',
         updateTimeAndPosition: false,
+        isDeletion: _deletedMessageIds.isNotEmpty,
       );
     }
   }
@@ -1562,6 +1574,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     audioPath: resolvedType == MessageType.voice
                         ? (_messages[i].audioPath ?? updatedMsg.audioPath)
                         : updatedMsg.audioPath,
+                    audioDuration: _messages[i].audioDuration > 0
+                        ? _messages[i].audioDuration
+                        : updatedMsg.audioDuration,
                   );
                   // UPDATE: Save local reply if this message had a repliedMessage
                   if (_messages[i].repliedMessage != null) {
@@ -1835,6 +1850,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       final ctIdVal = messageData['ContactId']?.toString() ?? '';
       final linkVal = messageData['Link']?.toString() ?? '';
       final ctRealIdVal = messageData['CtRealId']?.toString() ?? '';
+
+      // FIX: Jangan proses Telegram Saved Messages
+      final isTelegram =
+          chat.chId == '2' ||
+          chat.channelType.toLowerCase().contains('telegram') ||
+          chat.channelName.toLowerCase().contains('telegram');
+      final sdrName = senderData?['Name']?.toString().toLowerCase() ?? '';
+      if (sdrName == 'saved messages' || sdrName == 'pesan tersimpan' ||
+          (fromVal.isNotEmpty && fromVal == toVal && !fromVal.startsWith('-') && isTelegram)) {
+        debugPrint('ChatDetailPage: 🛡️ Ignored Telegram Saved Message from SignalR');
+        return;
+      }
 
       final numericChatId = chat.id.replaceAll(RegExp(r'[^0-9\-]'), '');
       final numericIncomingId = incomingRoomId.replaceAll(
@@ -3718,7 +3745,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   String _formatDuration(int totalSeconds) {
     final minutes = totalSeconds ~/ 60;
     final seconds = totalSeconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
   // FITUR: Emoji Keyboard Custom
@@ -4639,6 +4666,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         _isSelectionMode = false;
                         _selectedMessageKeys.clear();
                       });
+
+                      // Sinkronkan data pesan yang dihapus ke ChatProvider SECARA INSTAN
+                      final chatProv = Provider.of<ChatProvider>(context, listen: false);
+                      for (var m in selectedMsgs) {
+                        chatProv.recordDeletedMessage(
+                          chat.id,
+                          msgId: m.id,
+                          content: m.content,
+                          rawTime: m.rawTime,
+                        );
+                      }
 
                       _savePersistentMessages();
 
@@ -5822,9 +5860,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         ? _playbackPosition.inMilliseconds / _playbackDuration.inMilliseconds
         : 0.0;
 
+    final totalSec = (isThisPlaying && _playbackDuration.inSeconds > 0)
+        ? _playbackDuration.inSeconds
+        : message.audioDuration;
+
     final displayDuration = isThisPlaying
-        ? _formatDuration(_playbackPosition.inSeconds)
-        : _formatDuration(message.audioDuration);
+        ? '${_formatDuration(_playbackPosition.inSeconds)} / ${_formatDuration(totalSec)}'
+        : '0:00 / ${_formatDuration(message.audioDuration)}';
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,

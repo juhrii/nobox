@@ -395,6 +395,23 @@ class SignalRService {
         return;
       }
 
+      // FIX: Jangan proses pesan Telegram "Saved Messages" (Pesan Tersimpan ke diri sendiri)
+      final fromVal = messageData['From']?.toString() ?? '';
+      final toVal = messageData['To']?.toString() ?? '';
+      final sdrName = senderData?['Name']?.toString().toLowerCase() ?? '';
+      final msgSender = messageData['Sender']?.toString().toLowerCase() ?? '';
+      final msgSenderName = messageData['SenderName']?.toString().toLowerCase() ?? '';
+
+      final isSavedMessage = (sdrName == 'saved messages' || sdrName == 'pesan tersimpan' ||
+          msgSender == 'saved messages' || msgSender == 'pesan tersimpan' ||
+          msgSenderName == 'saved messages' || msgSenderName == 'pesan tersimpan') ||
+          (fromVal.isNotEmpty && fromVal == toVal && !fromVal.startsWith('-'));
+
+      if (isSavedMessage) {
+        debugPrint('SignalR: 🛡️ Ignoring Telegram Saved Message to preserve chat list');
+        return;
+      }
+
       final Map<String, dynamic> parsed = {
         'roomId': roomId,
         'message': messageData,
@@ -504,6 +521,17 @@ class SignalRService {
         roomData = jsonDecode(arguments[1] as String) as Map<String, dynamic>;
       } else if (arguments[1] is Map) {
         roomData = Map<String, dynamic>.from(arguments[1] as Map);
+      }
+
+      // FIX: Jangan proses update room dari "Saved Messages"
+      final ctName = (roomData['Ct'] ?? roomData['CtRealNm'] ?? roomData['Name'] ?? '').toString().toLowerCase();
+      final fromSub = roomData['From']?.toString() ?? '';
+      final toSub = roomData['To']?.toString() ?? '';
+      final isSavedSub = (ctName == 'saved messages' || ctName == 'pesan tersimpan') ||
+          (fromSub.isNotEmpty && fromSub == toSub && !fromSub.startsWith('-'));
+      if (isSavedSub) {
+        debugPrint('SignalR: 🛡️ Ignoring TerimaSubSpv for Saved Messages');
+        return;
       }
 
       final parsed = {'tenantId': tenantId, 'room': roomData};

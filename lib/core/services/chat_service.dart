@@ -1339,8 +1339,9 @@ class ChatService {
   Future<String?> _getExtId(String? contactId, {int channelId = 1}) async {
     if (contactId == null || contactId.isEmpty) return null;
     try {
-      final response = await _apiClient.get(
-        'https://id.nobox.ai/Services/Chat/Chatlinkcontacts/Retrieve?Id=$contactId',
+      final response = await _apiClient.post(
+        'Services/Chat/Chatlinkcontacts/Retrieve',
+        data: {'EntityId': int.tryParse(contactId) ?? contactId},
       );
 
       if (response.statusCode == 200) {
@@ -2046,7 +2047,6 @@ class ChatService {
       
       final payload = <String, dynamic>{
         'EntityId': parsedId,
-        'Id': parsedId,
       };
 
       final response = await _apiClient.post(

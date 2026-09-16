@@ -136,6 +136,39 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
+  // Tracking pesan yang dihapus secara lokal agar tidak tertimpa oleh data server usang
+  final Map<String, Set<String>> _deletedMessageIds = {};
+  final Map<String, Set<String>> _deletedMessageContents = {};
+  final Set<String> _roomsWithDeletions = {};
+  Map<String, String> _deletionTimestamps = {};
+
+  void recordDeletedMessage(String roomId, {String? msgId, String? content, String? rawTime}) {
+    if (roomId.isEmpty) return;
+    _roomsWithDeletions.add(roomId);
+    _deletionTimestamps[roomId] = DateTime.now().toUtc().toIso8601String();
+    _saveDeletionTimestamps();
+    if (rawTime != null && rawTime.isNotEmpty) {
+      ignoreServerTime(roomId, rawTime);
+    }
+    if (msgId != null && msgId.isNotEmpty) {
+      _deletedMessageIds.putIfAbsent(roomId, () => <String>{}).add(msgId);
+    }
+    if (content != null && content.trim().isNotEmpty) {
+      _deletedMessageContents.putIfAbsent(roomId, () => <String>{}).add(content.trim().toLowerCase());
+    }
+  }
+
+  bool isMessageDeleted(String roomId, {String? msgId, String? content, String? rawTime}) {
+    if (roomId.isEmpty) return false;
+    if (rawTime != null && _isTimeIgnored(roomId, rawTime)) return true;
+    if (msgId != null && msgId.isNotEmpty && (_deletedMessageIds[roomId]?.contains(msgId) ?? false)) return true;
+    if (content != null && content.trim().isNotEmpty) {
+      final clean = content.trim().toLowerCase();
+      if (_deletedMessageContents[roomId]?.contains(clean) ?? false) return true;
+    }
+    return false;
+  }
+
   // Map: roomId -> bool (true if recently received message was from us)
   // Digunakan untuk melindungi flag isMe yang akurat dari TerimaPesan agar tidak ditimpa
   // oleh data TerimaSubSpv (Conversation.fromJson) yang logika isLastMessageFromMe-nya lebih lemah.
@@ -200,6 +233,75 @@ class ChatProvider with ChangeNotifier {
       }
     }
     return false;
+  }
+
+  Future<void> _saveDeletionTimestamps() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('deletion_timestamps', jsonEncode(_deletionTimestamps));
+    } catch (_) {}
+  }
+
+  /// Helper untuk mengecek apakah data server benar-benar lebih baru daripada data lokal.
+  /// Melindungi dari bug server NoBox yang tidak me-rewind waktu/pesan saat ada pesan yang dihapus.
+  bool _isServerDataNewer({
+    required String roomId,
+    required String serverTimeStr,
+    required String serverLastMsg,
+    required DateTime? localTime,
+  }) {
+    final lowerServerMsg = serverLastMsg.trim().toLowerCase();
+    if (serverLastMsg == 'Site.Inbox.DeletedMessage' ||
+        lowerServerMsg.contains('site.inbox.')) {
+      return false;
+    }
+
+    if (isMessageDeleted(roomId, content: serverLastMsg, rawTime: serverTimeStr)) {
+      return false;
+    }
+
+    final isIgnored = _isTimeIgnored(roomId, serverTimeStr);
+    if (isIgnored) return false;
+
+    final serverTime = DateTime.tryParse(
+      serverTimeStr.endsWith('Z') ? serverTimeStr : '${serverTimeStr}Z',
+    );
+    if (serverTime == null) return false;
+
+    // Jika terjadi penghapusan pesan di room ini, serverTime HARUS lebih baru dari waktu penghapusan,
+    // bukan sekadar lebih baru dari waktu pesan lokal yang tersisa!
+    final deletionTimeStr = _deletionTimestamps[roomId];
+    if (deletionTimeStr != null) {
+      final deletionTime = DateTime.tryParse(
+        deletionTimeStr.endsWith('Z') ? deletionTimeStr : '${deletionTimeStr}Z',
+      );
+      if (deletionTime != null) {
+        if (!serverTime.isAfter(deletionTime)) {
+          return false;
+        }
+      }
+    }
+
+    if (localTime == null) return true;
+
+    final bool isAfterLocal = serverTime.isAfter(localTime);
+    if (!isAfterLocal) return false;
+
+    // Grace period untuk override yang baru saja dibuat (< 10 detik lalu)
+    final overrideCreatedAtStr = _overrideTimestamps[roomId];
+    if (overrideCreatedAtStr != null) {
+      final overrideCreatedAt = DateTime.tryParse(
+        overrideCreatedAtStr.endsWith('Z') ? overrideCreatedAtStr : '${overrideCreatedAtStr}Z',
+      );
+      if (overrideCreatedAt != null) {
+        final age = DateTime.now().toUtc().difference(overrideCreatedAt).inSeconds;
+        if (age >= 0 && age < 10) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   bool get isLoading => _isLoading;
@@ -469,7 +571,12 @@ class ChatProvider with ChangeNotifier {
       );
 
       if (!response.isError && response.data != null) {
-        final freshData = response.data!;
+        final freshData = response.data!
+            .where((c) {
+              final name = c.participantEmail.toLowerCase().trim();
+              return name != 'saved messages' && name != 'pesan tersimpan';
+            })
+            .toList();
 
         // Buat map dari chat yang sudah ada untuk komparasi unreadCount
         final oldChatsMap = {for (var c in _chats) c.id: c};
@@ -666,41 +773,17 @@ class ChatProvider with ChangeNotifier {
           // Cek apakah ada override lokal (pesan dihapus/kirim pesan yang belum tersinkron di LastMessage server)
           final override = _localOverrides[chat.id];
           if (override != null) {
-            final serverTime =
-                DateTime.tryParse(chat.time) ??
-                DateTime.fromMillisecondsSinceEpoch(0);
-
-            // Gunakan waktu lokal untuk mengukur seberapa lama override ini sudah hidup
-            final overrideCreatedAtStr = _overrideTimestamps[chat.id];
-            final overrideCreatedAt = overrideCreatedAtStr != null
-                ? DateTime.tryParse(overrideCreatedAtStr) ??
-                      DateTime.now().toUtc()
-                : (DateTime.tryParse(override.time) ?? DateTime.now().toUtc());
-
-            final diffNow = DateTime.now()
-                .toUtc()
-                .difference(overrideCreatedAt)
-                .inSeconds;
-
-            final isIgnored = _isTimeIgnored(chat.id, chat.time);
-
-            // Jika override sudah lebih dari 15 detik (atau 60 detik untuk media), anggap kadaluarsa.
-            // Pengecualian: Jika waktu server (chat.time) masuk daftar ignored, pertahankan terus.
-            final serverTimeStr = chat.time;
-            final serverTimeParsed = DateTime.tryParse(
-              serverTimeStr.endsWith('Z') ? serverTimeStr : serverTimeStr + 'Z',
-            );
             final localTimeStr = override.time;
             final localTime = DateTime.tryParse(
-              localTimeStr.endsWith('Z') ? localTimeStr : localTimeStr + 'Z',
+              localTimeStr.endsWith('Z') ? localTimeStr : '${localTimeStr}Z',
             );
 
-            final serverIsNewer =
-                (localTime != null &&
-                serverTimeParsed != null &&
-                serverTimeParsed.isAfter(localTime) &&
-                !isIgnored &&
-                chat.lastMessage != 'Site.Inbox.DeletedMessage');
+            final serverIsNewer = _isServerDataNewer(
+              roomId: chat.id,
+              serverTimeStr: chat.time,
+              serverLastMsg: chat.lastMessage,
+              localTime: localTime,
+            );
 
             if (!serverIsNewer) {
               chat = chat.copyWith(
@@ -716,6 +799,8 @@ class ChatProvider with ChangeNotifier {
               // Override sudah terlalu lama, kita percaya pada data server saat ini
               _localOverrides.remove(chat.id);
               _overrideTimestamps.remove(chat.id);
+              _deletionTimestamps.remove(chat.id);
+              _roomsWithDeletions.remove(chat.id);
             }
           }
 
@@ -984,6 +1069,12 @@ class ChatProvider with ChangeNotifier {
     final roomId = roomData['Id']?.toString() ?? '';
     if (roomId.isEmpty) return;
 
+    // FIX: Abaikan update room dari Telegram "Saved Messages"
+    final ctName = (roomData['Ct'] ?? roomData['CtRealNm'] ?? roomData['Name'] ?? '').toString().toLowerCase();
+    if (ctName == 'saved messages' || ctName == 'pesan tersimpan') {
+      return;
+    }
+
     final index = _chats.indexWhere((c) => c.id == roomId);
 
     if (index >= 0) {
@@ -995,37 +1086,34 @@ class ChatProvider with ChangeNotifier {
       }
 
       // FIX: Lindungi dari data usang (pesan yang baru dihapus).
-      // Karena jam HP pengguna bisa tidak sinkron dengan server, jangan gunakan isAfter(localTime).
-      // SignalR adalah event real-time, jadi kita selalu percaya KECUALI jika ID/waktu ada di ignored list.
+      // Karena jam HP pengguna bisa tidak sinkron dengan server, gunakan _isServerDataNewer.
       if (_localOverrides.containsKey(roomId)) {
         final serverTimeStr = roomData['TimeMsg']?.toString() ?? '';
-        final isIgnored = _isTimeIgnored(roomId, serverTimeStr);
+        final localTimeStr = existing.time;
+        final localTime = DateTime.tryParse(
+          localTimeStr.endsWith('Z') ? localTimeStr : '${localTimeStr}Z',
+        );
 
-        final overrideCreatedAtStr = _overrideTimestamps[roomId];
-        final overrideCreatedAt = overrideCreatedAtStr != null
-            ? DateTime.tryParse(overrideCreatedAtStr) ?? DateTime.now().toUtc()
-            : DateTime.now().toUtc();
-        final diffNow = DateTime.now()
-            .toUtc()
-            .difference(overrideCreatedAt)
-            .inSeconds;
+        final serverIsNewer = _isServerDataNewer(
+          roomId: roomId,
+          serverTimeStr: serverTimeStr,
+          serverLastMsg: lastMsg,
+          localTime: localTime,
+        );
 
-        if (isIgnored ||
-            lastMsg == 'Site.Inbox.DeletedMessage' ||
-            diffNow < 10) {
-          // Server meng-echo data yang baru saja kita hapus/kirim, ATAU mengirim placeholder delete.
-          // Lindungi selama 10 detik agar tidak tertimpa oleh echo usang dari SignalR.
+        if (!serverIsNewer) {
           lastMsg = existing.lastMessage;
           roomData['LastMessageType'] = existing.lastMessageType;
-          roomData['TimeMsg'] =
-              existing.time; // Lindungi waktu agar posisi tidak turun!
+          roomData['TimeMsg'] = existing.time; // Lindungi waktu agar posisi tidak turun!
           debugPrint(
-            'ChatProvider: 🛡️ Override protected for $roomId – incoming SignalR event is ignored (diff=$diffNow s)',
+            'ChatProvider: 🛡️ Override protected for $roomId – incoming SignalR event is ignored',
           );
         } else {
           // Event SignalR baru yang valid! Hapus override lokal.
           _localOverrides.remove(roomId);
           _overrideTimestamps.remove(roomId);
+          _deletionTimestamps.remove(roomId);
+          _roomsWithDeletions.remove(roomId);
           _saveLocalOverrides();
           debugPrint(
             'ChatProvider: ✅ Override cleared for $roomId — valid new SignalR event received',
@@ -1359,6 +1447,9 @@ class ChatProvider with ChangeNotifier {
     String msgText = '',
   }) {
     if (roomId.isEmpty) return;
+    if (msgText.toLowerCase() == 'saved messages' || msgText.toLowerCase() == 'pesan tersimpan') {
+      return;
+    }
 
     final bool resolvedIsMe = isMe || isRecentMessageFromMe(roomId, msgText);
 
@@ -1484,6 +1575,7 @@ class ChatProvider with ChangeNotifier {
               overrideTime: realLastMsg.rawTime,
               isFromMe: realLastMsg.isMe,
               updateTimeAndPosition: false,
+              isDeletion: true,
             );
           } else {
             // All messages are deleted placeholders or system logs
@@ -1492,6 +1584,7 @@ class ChatProvider with ChangeNotifier {
               '',
               lastMessageType: '1',
               updateTimeAndPosition: false,
+              isDeletion: true,
             );
           }
         } else {
@@ -1501,6 +1594,7 @@ class ChatProvider with ChangeNotifier {
             '',
             lastMessageType: '1',
             updateTimeAndPosition: false,
+            isDeletion: true,
           );
         }
       } catch (e) {
@@ -1540,6 +1634,7 @@ class ChatProvider with ChangeNotifier {
     bool updateTimeAndPosition = true,
     String? overrideTime,
     String? lastMessageType,
+    bool isDeletion = false,
   }) {
     if (lastMessage.contains('[-{=||=}-]')) {
       lastMessage = '📍 Location';
@@ -1552,6 +1647,12 @@ class ChatProvider with ChangeNotifier {
         _readIds.add(roomId);
         _saveReadState();
       }
+    }
+
+    if (isDeletion) {
+      _roomsWithDeletions.add(roomId);
+      _deletionTimestamps[roomId] = DateTime.now().toUtc().toIso8601String();
+      _saveDeletionTimestamps();
     }
 
     final index = _chats.indexWhere((c) => c.id == roomId);
@@ -1571,8 +1672,8 @@ class ChatProvider with ChangeNotifier {
 
       // Simpan sebagai override agar tidak tertimpa Inbox/GetList yang usang
       _localOverrides[roomId] = chat;
-      _overrideTimestamps[roomId] =
-          newTime; // Catat KAPAN override ini dibuat dengan waktu baru agar tidak terhapus prematur saat fetchChats
+      _overrideTimestamps[roomId] = DateTime.now().toUtc().toIso8601String();
+      _saveLocalOverrides();
 
       if (updateTimeAndPosition) {
         // Pindahkan obrolan ke posisi paling atas
@@ -1620,7 +1721,12 @@ class ChatProvider with ChangeNotifier {
       );
 
       if (!response.isError && response.data != null) {
-        final freshData = response.data!;
+        final freshData = response.data!
+            .where((c) {
+              final name = c.participantEmail.toLowerCase().trim();
+              return name != 'saved messages' && name != 'pesan tersimpan';
+            })
+            .toList();
         final existingIds = _chats.map((c) => c.id).toSet();
 
         // Update existing chats yang datanya berubah
@@ -1686,52 +1792,33 @@ class ChatProvider with ChangeNotifier {
             // Override bertahan SELAMANYA sampai server mengirim pesan yang BENAR-BENAR lebih baru.
             if (_localOverrides.containsKey(chat.id)) {
               final localChat = _localOverrides[chat.id]!;
-              final localTimeStr =
-                  _overrideTimestamps[chat.id] ?? localChat.time;
+              final localTimeStr = localChat.time;
               final localTime = DateTime.tryParse(
                 localTimeStr.endsWith('Z') ? localTimeStr : '${localTimeStr}Z',
               );
-              final serverTimeStr = chat.time;
-              final serverTime = DateTime.tryParse(
-                serverTimeStr.endsWith('Z')
-                    ? serverTimeStr
-                    : '${serverTimeStr}Z',
+
+              final serverIsNewer = _isServerDataNewer(
+                roomId: chat.id,
+                serverTimeStr: chat.time,
+                serverLastMsg: chat.lastMessage,
+                localTime: localTime,
               );
-
-              final isIgnored = _isTimeIgnored(chat.id, serverTimeStr);
-              bool serverIsNewer =
-                  (localTime != null &&
-                  serverTime != null &&
-                  serverTime.isAfter(localTime) &&
-                  !isIgnored &&
-                  chat.lastMessage != 'Site.Inbox.DeletedMessage');
-
-              if (serverIsNewer && localTime != null) {
-                final age = DateTime.now()
-                    .toUtc()
-                    .difference(localTime)
-                    .inSeconds;
-                // _getTopSortTime() memberikan waktu +1 detik di masa depan.
-                // Jika override ini baru dibuat kurang dari 10 detik yang lalu,
-                // tahan dan hiraukan balasan server yang mungkin lambat tersinkronisasi
-                // agar chat tidak berubah kembali (revert) ke pesan lama (misal "Sticker").
-                if (age > -10 && age < 10) {
-                  serverIsNewer = false;
-                }
-              }
 
               if (serverIsNewer) {
                 // Ada pesan baru sungguhan, hapus override dan terima data server
                 _localOverrides.remove(chat.id);
                 _overrideTimestamps.remove(chat.id);
+                _deletionTimestamps.remove(chat.id);
+                _roomsWithDeletions.remove(chat.id);
                 _saveLocalOverrides();
                 // Jatuh ke logika generic/label di bawah
               } else {
                 // Server masih mengembalikan data lama, PERTAHANKAN override lokal
                 chat = chat.copyWith(
-                  lastMessage: oldChat.lastMessage,
-                  lastMessageType: oldChat.lastMessageType,
-                  time: oldChat.time,
+                  lastMessage: localChat.lastMessage,
+                  lastMessageType: localChat.lastMessageType,
+                  time: localChat.time,
+                  isLastMessageFromMe: localChat.isLastMessageFromMe,
                 );
                 _chats[idx] = chat;
                 continue;
@@ -1966,39 +2053,19 @@ class ChatProvider with ChangeNotifier {
               // FIX: Terapkan local overrides saat app baru load (Hot Restart)
               if (_localOverrides.containsKey(chat.id)) {
                 final localChat = _localOverrides[chat.id]!;
-
-                final overrideCreatedAtStr = _overrideTimestamps[chat.id];
-                final overrideCreatedAt = overrideCreatedAtStr != null
-                    ? DateTime.tryParse(overrideCreatedAtStr) ??
-                          DateTime.now().toUtc()
-                    : (DateTime.tryParse(localChat.time) ??
-                          DateTime.now().toUtc());
-
-                final diffNow = DateTime.now()
-                    .toUtc()
-                    .difference(overrideCreatedAt)
-                    .inSeconds;
-                final isIgnored = _isTimeIgnored(chat.id, chat.time);
-
-                final serverTimeStr = chat.time;
-                final serverTimeParsed = DateTime.tryParse(
-                  serverTimeStr.endsWith('Z')
-                      ? serverTimeStr
-                      : serverTimeStr + 'Z',
-                );
                 final localTimeStr = localChat.time;
                 final localTime = DateTime.tryParse(
                   localTimeStr.endsWith('Z')
                       ? localTimeStr
-                      : localTimeStr + 'Z',
+                      : '${localTimeStr}Z',
                 );
 
-                final serverIsNewer =
-                    (localTime != null &&
-                    serverTimeParsed != null &&
-                    serverTimeParsed.isAfter(localTime) &&
-                    !isIgnored &&
-                    chat.lastMessage != 'Site.Inbox.DeletedMessage');
+                final serverIsNewer = _isServerDataNewer(
+                  roomId: chat.id,
+                  serverTimeStr: chat.time,
+                  serverLastMsg: chat.lastMessage,
+                  localTime: localTime,
+                );
 
                 if (!serverIsNewer) {
                   // Server masih mengembalikan data lama, PERTAHANKAN override lokal
@@ -2013,6 +2080,8 @@ class ChatProvider with ChangeNotifier {
                   // Override kadaluarsa, terima data server
                   _localOverrides.remove(chat.id);
                   _overrideTimestamps.remove(chat.id);
+                  _deletionTimestamps.remove(chat.id);
+                  _roomsWithDeletions.remove(chat.id);
                   _saveLocalOverrides();
                 }
               }
@@ -2495,6 +2564,15 @@ class ChatProvider with ChangeNotifier {
           (key, value) => MapEntry(key, value.toString()),
         );
       }
+
+      final delTsJson = prefs.getString('deletion_timestamps');
+      if (delTsJson != null) {
+        final Map<String, dynamic> decodedDelTs = jsonDecode(delTsJson);
+        _deletionTimestamps = decodedDelTs.map(
+          (key, value) => MapEntry(key, value.toString()),
+        );
+        _roomsWithDeletions.addAll(_deletionTimestamps.keys);
+      }
     } catch (e) {
       debugPrint('ChatProvider: Error loading local overrides: $e');
     }
@@ -2533,6 +2611,10 @@ class ChatProvider with ChangeNotifier {
           'override_timestamps',
           jsonEncode(_overrideTimestamps),
         );
+        await prefs.setString(
+          'deletion_timestamps',
+          jsonEncode(_deletionTimestamps),
+        );
       } catch (e) {
         debugPrint('ChatProvider: Failed to save local overrides: $e');
       }
@@ -2541,7 +2623,14 @@ class ChatProvider with ChangeNotifier {
 
   // [ACTION: FILTER_APPLY] - Getter ini mengeksekusi filter (lokal) pada daftar chat
   List<ChatModel> get chats {
-    var filtered = _chats.where((chat) => !chat.isArchived).toList();
+    var filtered = _chats.where((chat) {
+      if (chat.isArchived) return false;
+      final senderLower = chat.sender.toLowerCase().trim();
+      if (senderLower == 'saved messages' || senderLower == 'pesan tersimpan') {
+        return false;
+      }
+      return true;
+    }).toList();
 
     // Apply Search (Hanya mencari berdasarkan Nama Kontak / Pengirim)
     if (_searchQuery.isNotEmpty) {
