@@ -572,6 +572,9 @@ class Message {
     }
 
     bool isAbsoluteSticker(dynamic fileData, String? typeVal, String filePath, String originalName, String content) {
+      if (isAudioFile(filePath) || isAudioFile(originalName) || isVoiceNoteString(filePath) || isVoiceNoteString(originalName)) {
+        return false;
+      }
       if (typeVal == '16' || typeVal == '17' || typeVal == '7') return true;
       final fLower = filePath.toLowerCase();
       final oLower = originalName.toLowerCase();
@@ -797,16 +800,16 @@ class Message {
           msgType = MessageType.video;
           videoUrl = formatMediaUrl(filePath);
           content = '🎬 Video';
+        } else if (typeVal == '2' || isAudioFile(filePath) || isVoiceNoteString(filePath)) {
+          msgType = MessageType.voice;
+          audioPath = formatMediaUrl(filePath);
+          content = '';
         } else if (typeVal == '5') {
           msgType = MessageType.document;
           docUrl = formatMediaUrl(filePath);
           docName = extractOriginalName(content);
           if (docName.isEmpty) docName = filePath.split('/').last;
           content = '📄 $docName';
-        } else if (typeVal == '2' || isAudioFile(filePath)) {
-          msgType = MessageType.voice;
-          audioPath = formatMediaUrl(filePath);
-          content = '';
         } else if (typeVal == '16') {
           msgType = MessageType.sticker;
           imgUrl = formatMediaUrl(filePath);

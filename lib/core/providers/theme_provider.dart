@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // FUNGSI: Mengelola tema aplikasi (Mode Terang/Gelap) dan penyimpanannya
 // =====================================================================
 class ThemeProvider extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.light;
   static const String _themeKey = 'is_dark_mode';
 
   ThemeMode get themeMode => _themeMode;
@@ -19,8 +19,10 @@ class ThemeProvider extends ChangeNotifier {
     final isDark = prefs.getBool(_themeKey);
     if (isDark != null) {
       _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
-      notifyListeners();
+    } else {
+      _themeMode = ThemeMode.light;
     }
+    notifyListeners();
   }
 
   Future<void> toggleTheme(bool isOn) async {

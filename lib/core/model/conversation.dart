@@ -189,7 +189,9 @@ class Conversation {
           lower1 == 'image' ||
           lower1 == 'video' ||
           lower1 == 'attachment' ||
-          lower1 == 'lampiran';
+          lower1 == 'lampiran' ||
+          lower1 == 'pesan suara' ||
+          lower1 == '🎤 pesan suara';
 
       // Jika str1 adalah placeholder generik dan str2 memiliki payload JSON media, pakai str2
       if (isGenericPlaceholder && (str2.startsWith('{') || str2.startsWith('['))) {
@@ -216,11 +218,28 @@ class Conversation {
 
     // FIX: Server NoBox sering nyangkut di LastMessageType = 2 (Voice Note) atau media lain,
     // padahal LastMsg sudah update menjadi teks biasa. 
-    // Bersihkan LastMessageType jika pesannya jelas bukan JSON.
+    // Bersihkan LastMessageType jika pesannya jelas bukan JSON dan bukan audio/voice note.
     String? rawLastMessageType = getValue(['LastMessageType', 'last_message_type'])?.toString();
     if (!finalLastMessage.startsWith('{') && !finalLastMessage.startsWith('[')) {
       final lower = finalLastMessage.trim().toLowerCase();
-      if (lower.isNotEmpty && lower != 'document(empty)' && lower != 'voice(empty)' && lower != 'image(empty)' && lower != 'video(empty)') {
+      final isAudioLastMsg = lower.contains('🎤') ||
+          lower.contains('pesan suara') ||
+          lower.contains('voice note') ||
+          lower.contains('.ogg') ||
+          lower.contains('.opus') ||
+          lower.contains('.mp3') ||
+          lower.contains('.wav') ||
+          lower.contains('.m4a') ||
+          lower.contains('voice_') ||
+          lower == 'voice(empty)';
+
+      if (isAudioLastMsg) {
+        rawLastMessageType = '2';
+      } else if (lower.isNotEmpty &&
+          lower != 'document(empty)' &&
+          lower != 'voice(empty)' &&
+          lower != 'image(empty)' &&
+          lower != 'video(empty)') {
         // Jika pesan adalah teks biasa, paksa tipe menjadi 1 (Text)
         // Ini mengatasi bug di mana server nyangkut di tipe media (seperti 6 untuk Sticker, 2 Voice, dll)
         if (rawLastMessageType != '1') {

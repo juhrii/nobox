@@ -2683,26 +2683,53 @@ class _ChatListPageState extends State<ChatListPage>
     final trimmedMsg = displayMessage.trim();
     bool parsedAsMedia = false;
 
-    // FIX: Tangani label manual (fallback) terlebih dahulu sebelum JSON parsing.
-    // Jika lastMessage diketik paksa secara lokal (misal: "🎤 Pesan Suara" saat merekam),
+    // FIX: Tangani label manual & audio terlebih dahulu sebelum JSON parsing.
+    // Jika lastMessage diketik paksa secara lokal atau berupa nama file rekaman suara,
     // langsung atur ke Voice Note agar tidak tertimpa oleh chat.lastMessageType ("Document") yang usang.
     final lowerTrimmed = trimmedMsg.toLowerCase();
-    final exactAudioLabels = [
-      '🎵 voice note',
-      '🎤 pesan suara',
-      'voice(empty)',
-      'voice (empty)',
-    ];
+
+    bool isAudioMessage(String str) {
+      if (str.isEmpty) return false;
+      final lower = str.toLowerCase().trim();
+      if (lower == '🎤 pesan suara' ||
+          lower == 'pesan suara' ||
+          lower == '🎵 voice note' ||
+          lower == 'voice note' ||
+          lower == 'voice' ||
+          lower == 'audio' ||
+          lower == 'voice(empty)' ||
+          lower == 'voice (empty)' ||
+          lower == 'audio(empty)' ||
+          lower == 'audio (empty)') {
+        return true;
+      }
+      if (lower.startsWith('voice_') ||
+          lower.startsWith('aud-') ||
+          lower.startsWith('ptt-') ||
+          lower.contains('voice_') ||
+          lower.contains('ptt-')) {
+        return true;
+      }
+      return const [
+        '.ogg',
+        '.opus',
+        '.mp3',
+        '.wav',
+        '.m4a',
+        '.aac',
+        '.weba',
+        '.amr',
+      ].any((ext) => lower.contains(ext));
+    }
 
     final exactPhotoLabels = ['📷 photo', '📷 foto'];
     final exactVideoLabels = ['🎥 video', '🎬 video'];
-
     final exactStickerLabels = ['🌟 sticker', '🎬 sticker'];
 
     if (exactStickerLabels.contains(lowerTrimmed)) {
       displayMessage = '🌟 Sticker';
       parsedAsMedia = true;
-    } else if (exactAudioLabels.contains(lowerTrimmed)) {
+    } else if (isAudioMessage(trimmedMsg) || (!trimmedMsg.startsWith('{') && !trimmedMsg.startsWith('[') && chat.lastMessageType == '2')) {
       displayMessage = '🎤 Pesan Suara';
       parsedAsMedia = true;
     } else if (exactPhotoLabels.contains(lowerTrimmed)) {
@@ -2836,29 +2863,28 @@ class _ChatListPageState extends State<ChatListPage>
           final isAudio =
               !isWebLink &&
               (isPtt ||
-                  (typeVal == '2' &&
-                      (filename.isNotEmpty ||
-                          originalName.isNotEmpty ||
-                          isPtt)) ||
-                  (!isDocument &&
-                      ([
-                            '.ogg',
-                            '.oga',
-                            '.mp3',
-                            '.wav',
-                            '.m4a',
-                            '.opus',
-                            '.aac',
-                            '.weba',
-                            '.amr',
-                          ].any(
-                            (ext) =>
-                                filename.contains(ext) ||
-                                originalName.contains(ext),
-                          ) ||
-                          originalName.contains('voice note') ||
-                          originalName.contains('voice_') ||
-                          filename.contains('voice_'))));
+                  typeVal == '2' ||
+                  [
+                    '.ogg',
+                    '.oga',
+                    '.mp3',
+                    '.wav',
+                    '.m4a',
+                    '.opus',
+                    '.aac',
+                    '.weba',
+                    '.amr',
+                  ].any(
+                    (ext) =>
+                        filename.contains(ext) ||
+                        originalName.contains(ext),
+                  ) ||
+                  originalName.contains('voice note') ||
+                  originalName.contains('pesan suara') ||
+                  originalName.contains('voice_') ||
+                  filename.contains('voice_') ||
+                  filename.contains('ptt-') ||
+                  originalName.contains('ptt-'));
 
           final isSticker =
               typeVal == '16' ||
@@ -2916,6 +2942,9 @@ class _ChatListPageState extends State<ChatListPage>
             }
             debugPrint('DEBUG STICKER JSON: isSticker=$isSticker, typeVal=$typeVal, filename=$filename, originalName=$originalName, msg=$trimmedMsg => result=$displayMessage');
             parsedAsMedia = true;
+          } else if (isAudio) {
+            displayMessage = '🎤 Pesan Suara';
+            parsedAsMedia = true;
           } else if (isDocument && !isSticker) {
             String docName = 'Dokumen';
             if (originalName.isNotEmpty) {
@@ -2939,9 +2968,6 @@ class _ChatListPageState extends State<ChatListPage>
               displayMessage = '📄 $docName';
             }
             parsedAsMedia = true;
-          } else if (isAudio) {
-            displayMessage = '🎤 Pesan Suara';
-            parsedAsMedia = true;
           } else if (isImage) {
             displayMessage = '📷 Foto${caption.isNotEmpty ? ' $caption' : ''}';
             parsedAsMedia = true;
@@ -2958,7 +2984,8 @@ class _ChatListPageState extends State<ChatListPage>
             // Cek apakah backend secara eksplisit memberitahu tipe media di lastMessageType
             final overrideType = chat.lastMessageType?.toLowerCase() ?? '';
             if (overrideType.contains('voice note') ||
-                overrideType.contains('audio')) {
+                overrideType.contains('audio') ||
+                overrideType == '2') {
               displayMessage = '🎤 Pesan Suara';
             } else if (overrideType.contains('image') ||
                 overrideType.contains('photo')) {
@@ -3049,42 +3076,45 @@ class _ChatListPageState extends State<ChatListPage>
         !trimmedMsg.startsWith('{') &&
         !trimmedMsg.startsWith('[') &&
         trimmedMsg.isNotEmpty &&
-        !exactAudioLabels.contains(lowerTrimmed) &&
+        !isAudioMessage(trimmedMsg) &&
         !exactPhotoLabels.contains(lowerTrimmed) &&
         !exactVideoLabels.contains(lowerTrimmed) &&
         !exactStickerLabels.contains(lowerTrimmed);
     if (!parsedAsMedia &&
-        !isLikelyPlainText &&
         chat.lastMessageType != null &&
         chat.lastMessageType!.isNotEmpty) {
       final overrideType = chat.lastMessageType!.toLowerCase();
 
       if (overrideType.contains('voice note') ||
           overrideType.contains('audio') ||
-          overrideType == '2') {
+          overrideType == '2' ||
+          isAudioMessage(trimmedMsg)) {
         displayMessage = '🎤 Pesan Suara';
-      } else if (overrideType.contains('image') ||
-          overrideType.contains('photo') ||
-          overrideType == '3') {
-        final cleaned = displayMessage
-            .replaceAll('📷', '')
-            .replaceAll('Photo', '')
-            .replaceAll('Foto', '')
-            .trim();
-        displayMessage = '📷 Foto${cleaned.isNotEmpty ? ' $cleaned' : ''}';
-      } else if (overrideType.contains('video') || overrideType == '4') {
-        final cleaned = displayMessage
-            .replaceAll('🎥', '')
-            .replaceAll('📹', '')
-            .replaceAll('🎬', '')
-            .replaceAll('Video', '')
-            .trim();
-        if (displayMessage.toLowerCase().contains('.webm') ||
-            displayMessage.toLowerCase().contains('.tgs') ||
-            exactStickerLabels.contains(displayMessage.toLowerCase())) {
-          displayMessage = '🎬 Sticker';
-        } else {
-          displayMessage = '🎬 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+        parsedAsMedia = true;
+      } else if (!isLikelyPlainText) {
+        if (overrideType.contains('image') ||
+            overrideType.contains('photo') ||
+            overrideType == '3') {
+          final cleaned = displayMessage
+              .replaceAll('📷', '')
+              .replaceAll('Photo', '')
+              .replaceAll('Foto', '')
+              .trim();
+          displayMessage = '📷 Foto${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+        } else if (overrideType.contains('video') || overrideType == '4') {
+          final cleaned = displayMessage
+              .replaceAll('🎥', '')
+              .replaceAll('📹', '')
+              .replaceAll('🎬', '')
+              .replaceAll('Video', '')
+              .trim();
+          if (displayMessage.toLowerCase().contains('.webm') ||
+              displayMessage.toLowerCase().contains('.tgs') ||
+              exactStickerLabels.contains(displayMessage.toLowerCase())) {
+            displayMessage = '🎬 Sticker';
+          } else {
+            displayMessage = '🎬 Video${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+          }
         }
       } else if (overrideType == '16' || overrideType == '17' || overrideType.contains('sticker')) {
         if (overrideType == '17' ||
@@ -3175,8 +3205,29 @@ class _ChatListPageState extends State<ChatListPage>
           .replaceAll('raw:', '')
           .trim();
 
+      // Deteksi ekstensi audio/voice note terlebih dahulu (server sering menganggap rekaman audio sebagai Dokumen)
+      if ([
+            '.ogg',
+            '.opus',
+            '.mp3',
+            '.wav',
+            '.m4a',
+            '.aac',
+            '.amr',
+            '.weba',
+          ].any((ext) => lower.contains(ext)) ||
+          lower.startsWith('voice_') ||
+          lower.contains('voice_') ||
+          lower.startsWith('ptt-') ||
+          lower.contains('ptt-') ||
+          lower.startsWith('aud-') ||
+          lower == 'voice note' ||
+          lower == 'pesan suara') {
+        displayMessage = '🎤 Pesan Suara';
+        parsedAsMedia = true;
+      }
       // Jika sudah ditandai sebagai dokumen (📄), TETAP jadikan Dokumen terlepas dari ekstensinya!
-      if (isDocumentAlready) {
+      else if (isDocumentAlready) {
         // Tampilkan nama aslinya jika ada (tapi dibersihkan), atau cukup "Dokumen" jika berantakan
         if (lower.contains('img-') ||
             lower.contains('vid-') ||
@@ -3223,23 +3274,6 @@ class _ChatListPageState extends State<ChatListPage>
           lower.startsWith('vid-') ||
           lower.startsWith('vid_')) {
         displayMessage = '🎬 Video';
-        parsedAsMedia = true;
-      }
-      // Deteksi ekstensi audio/voice note
-      else if ([
-            '.ogg',
-            '.opus',
-            '.mp3',
-            '.wav',
-            '.m4a',
-            '.aac',
-            '.amr',
-            '.weba',
-          ].any((ext) => lower.endsWith(ext)) ||
-          lower.startsWith('voice_') ||
-          lower.startsWith('ptt-') ||
-          lower.startsWith('aud-')) {
-        displayMessage = '🎤 Pesan Suara';
         parsedAsMedia = true;
       }
       // Deteksi ekstensi dokumen

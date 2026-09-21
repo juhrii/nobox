@@ -323,6 +323,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   bool _showAttachmentPanel = false;
   final FocusNode _focusNode = FocusNode();
 
+  // FITUR: Tombol Scroll ke Bawah (Scroll-To-Bottom)
+  // FUNGSI: Mengontrol visibilitas tombol pintasan scroll ke pesan terbaru saat pengguna menggulir ke atas,
+  //         serta menghitung jumlah pesan baru yang masuk saat pengguna sedang membaca histori obrolan lama.
+  bool _showScrollToBottomButton = false;
+  int _unreadIncomingCountWhileScrolled = 0;
+
+  bool get _isNearBottom {
+    if (!_scrollController.hasClients) return true;
+    return _scrollController.position.pixels <= 150;
+  }
+
   // FITUR: Mode Seleksi Pesan (Multiple Selection)
   // FUNGSI: Digunakan saat pengguna menahan pesan untuk memilih beberapa pesan (misal untuk forward/delete).
   bool _isSelectionMode = false;
@@ -449,16 +460,32 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     super.initState();
     _initializeChat();
 
-    // Listener gulir (scroll) untuk memuat pesan-pesan terdahulu
+    // Listener gulir (scroll) untuk memuat pesan-pesan terdahulu & tombol scroll ke bawah
     _scrollController.addListener(() {
-      // Pada mode reverse (terbalik), maxScrollExtent = pesan paling lama (di bagian atas layar)
-      if (_scrollController.hasClients &&
-          _scrollController.position.pixels >=
-              _scrollController.position.maxScrollExtent - 200 &&
-          !_isLoadingOlderMessages &&
-          _hasMoreMessages &&
-          !chat.isArchived) {
-        _loadOlderMessages();
+      if (_scrollController.hasClients) {
+        // Pada mode reverse (terbalik), maxScrollExtent = pesan paling lama (di bagian atas layar)
+        if (_scrollController.position.pixels >=
+                _scrollController.position.maxScrollExtent - 200 &&
+            !_isLoadingOlderMessages &&
+            _hasMoreMessages &&
+            !chat.isArchived) {
+          _loadOlderMessages();
+        }
+
+        // Tampilkan tombol scroll ke bawah jika user menggulir ke atas (> 150px dari bawah)
+        final shouldShow = _scrollController.position.pixels > 150;
+        if (shouldShow != _showScrollToBottomButton) {
+          setState(() {
+            _showScrollToBottomButton = shouldShow;
+            if (!shouldShow) {
+              _unreadIncomingCountWhileScrolled = 0;
+            }
+          });
+        } else if (!shouldShow && _unreadIncomingCountWhileScrolled > 0) {
+          setState(() {
+            _unreadIncomingCountWhileScrolled = 0;
+          });
+        }
       }
     });
     _messageController.addListener(() {
@@ -1816,7 +1843,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               _syncLastMessageToProvider();
             }
 
-            _scrollToBottom();
+            if (_isNearBottom) {
+              _scrollToBottom();
+            } else {
+              if (mounted) {
+                setState(() {
+                  _unreadIncomingCountWhileScrolled++;
+                });
+              }
+            }
             // Send read receipt
             try {
               final roomIdInt = int.tryParse(chat.id);
@@ -2249,7 +2284,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               }
             });
           });
-          _scrollToBottom();
+          if (_isNearBottom || newMessage.isMe) {
+            _scrollToBottom();
+          } else {
+            if (mounted) {
+              setState(() {
+                _unreadIncomingCountWhileScrolled++;
+              });
+            }
+          }
           _syncLastMessageToProvider();
         }
       } catch (e) {
@@ -3580,7 +3623,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       // FIX: Langsung beritahu daftar chat bahwa kita mengirim Voice Note sebelum proses upload dimulai
       // Sehingga kalau user langsung pencet tombol Back (keluar dari ruang obrolan), tulisan 'Voice Note' tetap muncul!
-      chatProvider.updateLocalLastMessage(chat.id, '🎤 Pesan Suara', isFromMe: true);
+      chatProvider.updateLocalLastMessage(
+        chat.id,
+        '🎤 Pesan Suara',
+        lastMessageType: '2',
+        isFromMe: true,
+      );
 
       final messageIndex = _messages.indexOf(voiceMessage);
 
@@ -3862,7 +3910,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         }
                       },
                       behavior: HitTestBehavior.translucent,
-                      child: _buildMessageList(isDark),
+                      child: Stack(
+                        children: [
+                          _buildMessageList(isDark),
+                          if (_showScrollToBottomButton)
+                            Positioned(
+                              right: 16,
+                              bottom: 12,
+                              child: _buildScrollToBottomButton(isDark),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                   SafeArea(
@@ -3895,6 +3953,96 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  // FITUR: Tombol Mengambang Pintasan Scroll ke Bawah
+  // FUNGSI: Memungkinkan pengguna yang sedang membaca histori pesan lama di atas untuk kembali ke pesan terbaru dalam satu ketukan,
+  //         dilengkapi lencana (badge) yang menghitung jumlah pesan baru yang masuk saat pengguna belum scroll ke bawah.
+  Widget _buildScrollToBottomButton(bool isDark) {
+    return AnimatedScale(
+      scale: _showScrollToBottomButton ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutBack,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              _unreadIncomingCountWhileScrolled = 0;
+            });
+            _scrollToBottom();
+          },
+          borderRadius: BorderRadius.circular(25),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.15),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withOpacity(0.12)
+                    : Colors.grey.shade300,
+                width: 0.8,
+              ),
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  Icons.keyboard_double_arrow_down_rounded,
+                  size: 24,
+                  color: isDark ? Colors.white : AppTheme.textPrimary,
+                ),
+                if (_unreadIncomingCountWhileScrolled > 0)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                          width: 1.5,
+                        ),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Center(
+                        child: Text(
+                          _unreadIncomingCountWhileScrolled > 99
+                              ? '99+'
+                              : '$_unreadIncomingCountWhileScrolled',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

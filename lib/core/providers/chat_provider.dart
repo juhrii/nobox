@@ -1176,11 +1176,22 @@ class ChatProvider with ChangeNotifier {
         final newIsAudioJson =
             lowerNew.contains('"type":2') ||
             lowerNew.contains('"type": 2') ||
+            lowerNew.contains('"type":"2"') ||
+            lowerNew.contains('"type": "2"') ||
             lowerNew.contains('"ptt":true') ||
             lowerNew.contains('"ptt": true') ||
+            lowerNew.contains('"isvoice":true') ||
+            lowerNew.contains('"isaudio":true') ||
             lowerNew.contains('.ogg') ||
             lowerNew.contains('.mp3') ||
-            lowerNew.contains('.opus');
+            lowerNew.contains('.opus') ||
+            lowerNew.contains('.wav') ||
+            lowerNew.contains('.m4a') ||
+            lowerNew.contains('.aac') ||
+            lowerNew.contains('.weba') ||
+            lowerNew.contains('.amr') ||
+            lowerNew.contains('voice_') ||
+            lowerNew.contains('ptt-');
 
         // Apakah pesan lama adalah audio? (JSON lengkap ATAU label manual)
         final oldIsAudioJson =
@@ -1239,13 +1250,26 @@ class ChatProvider with ChangeNotifier {
         resolvedIsBlocked = existing.isBlocked;
       }
 
-      // FIX Bug #4: Bersihkan LastMessageType yang usang jika pesan baru bukan JSON
+      // FIX Bug #4: Bersihkan LastMessageType yang usang jika pesan baru bukan JSON dan bukan audio
       String? updatedType = roomData['LastMessageType']?.toString();
+      final isAudioLastMsg = lowerNew == '🎤 pesan suara' ||
+          lowerNew == 'pesan suara' ||
+          lowerNew == 'voice note' ||
+          lowerNew == 'voice' ||
+          lowerNew == 'audio' ||
+          lowerNew.contains('.ogg') ||
+          lowerNew.contains('.opus') ||
+          lowerNew.contains('.mp3') ||
+          lowerNew.contains('.wav') ||
+          lowerNew.contains('.m4a') ||
+          lowerNew.contains('voice_');
+
       if (!lastMsg.startsWith('{') && !lastMsg.startsWith('[')) {
         final lower = lastMsg.trim().toLowerCase();
         if (lower.isNotEmpty &&
             lower != 'document(empty)' &&
-            lower != 'voice(empty)') {
+            lower != 'voice(empty)' &&
+            !isAudioLastMsg) {
           if (updatedType == '2' ||
               updatedType == '3' ||
               updatedType == '4' ||
@@ -1261,8 +1285,9 @@ class ChatProvider with ChangeNotifier {
             lower.isEmpty ||
             lower == 'null' ||
             lower == 'document(empty)' ||
-            lower == 'voice(empty)') {
-          updatedType = existing.lastMessageType;
+            lower == 'voice(empty)' ||
+            isAudioLastMsg) {
+          updatedType = isAudioLastMsg ? '2' : existing.lastMessageType;
         } else {
           updatedType = '1'; // Force Text
         }
@@ -1645,9 +1670,33 @@ class ChatProvider with ChangeNotifier {
       final newTime =
           overrideTime ??
           (updateTimeAndPosition ? _getTopSortTime() : _chats[index].time);
+      String resolvedLastMessageType = lastMessageType ?? '1';
+      if (lastMessageType == null) {
+        final lowerMsg = lastMessage.toLowerCase().trim();
+        if (lowerMsg.contains('🎤') ||
+            lowerMsg.contains('pesan suara') ||
+            lowerMsg.contains('voice note') ||
+            lowerMsg.contains('.ogg') ||
+            lowerMsg.contains('.opus') ||
+            lowerMsg.contains('.mp3') ||
+            lowerMsg.contains('.wav') ||
+            lowerMsg.contains('.m4a') ||
+            lowerMsg.contains('voice_')) {
+          resolvedLastMessageType = '2';
+        } else if (lowerMsg.contains('📷') || lowerMsg.contains('foto') || lowerMsg.contains('photo')) {
+          resolvedLastMessageType = '3';
+        } else if (lowerMsg.contains('🎬') || lowerMsg.contains('video')) {
+          resolvedLastMessageType = '4';
+        } else if (lowerMsg.contains('📄') || lowerMsg.contains('dokumen')) {
+          resolvedLastMessageType = '5';
+        } else if (lowerMsg.contains('🌟') || lowerMsg.contains('sticker')) {
+          resolvedLastMessageType = '16';
+        }
+      }
+
       final chat = _chats[index].copyWith(
         lastMessage: lastMessage,
-        lastMessageType: lastMessageType ?? '1',
+        lastMessageType: resolvedLastMessageType,
         isLastMessageFromMe: isFromMe,
         needReply: isFromMe ? false : _chats[index].needReply,
         unreadCount: isFromMe ? 0 : _chats[index].unreadCount,

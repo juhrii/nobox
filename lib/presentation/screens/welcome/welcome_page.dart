@@ -7,8 +7,8 @@ import '../../../core/utils/app_routes.dart';
 // FITUR: Welcome Screen (Onboarding Carousel 3 Slide)
 // FILE: lib/presentation/screens/welcome/welcome_page.dart
 // FUNGSI: Menampilkan perkenalan fitur utama NoBox Chat (Omnichannel, 
-//         Multimedia Voice/Chat, AI & Produktivitas) bagi pengguna baru 
-//         sebelum menuju halaman Login.
+//         Multimedia Voice/Chat, Label & Funnel & Pin Chat) bagi pengguna baru 
+//         sebelum menuju halaman Login. Selalu menggunakan tema terang (putih).
 // =====================================================================
 
 class WelcomePage extends StatefulWidget {
@@ -38,11 +38,11 @@ class _WelcomePageState extends State<WelcomePage> {
       illustrationType: IllustrationType.multimedia,
     ),
     const OnboardingItem(
-      badge: 'PRODUKTIVITAS & AI',
-      title: 'Tingkatkan Efisiensi\nBisnis Anda',
+      badge: 'LABEL, FUNNEL & PIN CHAT',
+      title: 'Kategorikan Kontak\n& Sematkan Obrolan',
       description:
-          'Prioritaskan percakapan penting dengan fitur Pin Chat, catatan kontak agen, arsip tiket, dan dukungan AI Agent cerdas.',
-      illustrationType: IllustrationType.productivity,
+          'Tandai pelanggan dengan Label, pantau tahap transaksi lewat Funnel penjualan, serta sematkan (Pin) obrolan penting agar selalu berada di posisi teratas.',
+      illustrationType: IllustrationType.organization,
     ),
   ];
 
@@ -72,11 +72,10 @@ class _WelcomePageState extends State<WelcomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
@@ -100,15 +99,13 @@ class _WelcomePageState extends State<WelcomePage> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
+                      const Text(
                         'NoBox',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
-                          color: isDark
-                              ? AppTheme.darkTextPrimary
-                              : AppTheme.textPrimary,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                       const Text(
@@ -125,9 +122,7 @@ class _WelcomePageState extends State<WelcomePage> {
                   TextButton(
                     onPressed: _completeOnboarding,
                     style: TextButton.styleFrom(
-                      foregroundColor: isDark
-                          ? AppTheme.darkTextSecondary
-                          : AppTheme.textSecondary,
+                      foregroundColor: AppTheme.textSecondary,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 8,
@@ -169,7 +164,6 @@ class _WelcomePageState extends State<WelcomePage> {
                           child: Center(
                             child: _buildIllustration(
                               slide.illustrationType,
-                              isDark,
                               size,
                             ),
                           ),
@@ -179,11 +173,11 @@ class _WelcomePageState extends State<WelcomePage> {
                         // Badge Kategori
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 5,
+                            horizontal: 14,
+                            vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withOpacity(0.12),
+                            color: AppTheme.primaryColor.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(30),
                           ),
                           child: Text(
@@ -196,20 +190,18 @@ class _WelcomePageState extends State<WelcomePage> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
 
                         // Judul Slide
                         Text(
                           slide.title,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 26,
                             height: 1.25,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.5,
-                            color: isDark
-                                ? AppTheme.darkTextPrimary
-                                : AppTheme.textPrimary,
+                            color: AppTheme.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -218,12 +210,10 @@ class _WelcomePageState extends State<WelcomePage> {
                         Text(
                           slide.description,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
                             height: 1.5,
-                            color: isDark
-                                ? AppTheme.darkTextSecondary
-                                : AppTheme.textSecondary,
+                            color: AppTheme.textSecondary,
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -253,9 +243,7 @@ class _WelcomePageState extends State<WelcomePage> {
                         decoration: BoxDecoration(
                           color: isActive
                               ? AppTheme.primaryColor
-                              : (isDark
-                                  ? Colors.white.withOpacity(0.2)
-                                  : Colors.grey.shade300),
+                              : Colors.grey.shade300,
                           borderRadius: BorderRadius.circular(8),
                         ),
                       );
@@ -276,13 +264,9 @@ class _WelcomePageState extends State<WelcomePage> {
                               );
                             },
                             icon: const Icon(Icons.arrow_back_rounded),
-                            color: isDark
-                                ? AppTheme.darkTextSecondary
-                                : AppTheme.textSecondary,
+                            color: AppTheme.textSecondary,
                             style: IconButton.styleFrom(
-                              backgroundColor: isDark
-                                  ? Colors.white.withOpacity(0.08)
-                                  : Colors.grey.shade100,
+                              backgroundColor: Colors.grey.shade100,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),
@@ -359,23 +343,19 @@ class _WelcomePageState extends State<WelcomePage> {
   // =====================================================================
   // VISUAL ILLUSTRATION BUILDER
   // =====================================================================
-  Widget _buildIllustration(
-    IllustrationType type,
-    bool isDark,
-    Size screenSize,
-  ) {
+  Widget _buildIllustration(IllustrationType type, Size screenSize) {
     switch (type) {
       case IllustrationType.channels:
-        return _buildChannelsIllustration(isDark);
+        return _buildChannelsIllustration();
       case IllustrationType.multimedia:
-        return _buildMultimediaIllustration(isDark);
-      case IllustrationType.productivity:
-        return _buildProductivityIllustration(isDark);
+        return _buildMultimediaIllustration();
+      case IllustrationType.organization:
+        return _buildChatListIllustration();
     }
   }
 
   /// Visual Slide 1: Logo Channels Omnichannel NoBox
-  Widget _buildChannelsIllustration(bool isDark) {
+  Widget _buildChannelsIllustration() {
     return Container(
       width: 280,
       height: 280,
@@ -383,7 +363,7 @@ class _WelcomePageState extends State<WelcomePage> {
         shape: BoxShape.circle,
         gradient: RadialGradient(
           colors: [
-            AppTheme.primaryColor.withOpacity(isDark ? 0.25 : 0.12),
+            AppTheme.primaryColor.withOpacity(0.12),
             Colors.transparent,
           ],
         ),
@@ -396,11 +376,11 @@ class _WelcomePageState extends State<WelcomePage> {
             width: 96,
             height: 96,
             decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkSurface : Colors.white,
+              color: Colors.white,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryColor.withOpacity(0.3),
+                  color: AppTheme.primaryColor.withOpacity(0.25),
                   blurRadius: 24,
                   spreadRadius: 2,
                 ),
@@ -422,38 +402,31 @@ class _WelcomePageState extends State<WelcomePage> {
           ),
 
           // Satellite Channel Bubbles
-          _buildChannelPill('assets/wa.png', 'WhatsApp', const Offset(-85, -60), isDark),
-          _buildChannelPill('assets/telegram.png', 'Telegram', const Offset(85, -55), isDark),
-          _buildChannelPill('assets/instagram.png', 'Instagram', const Offset(-90, 45), isDark),
-          _buildChannelPill('assets/tiktok.png', 'TikTok', const Offset(90, 40), isDark),
-          _buildChannelPill('assets/Tokopedia.png', 'Tokopedia', const Offset(0, 95), isDark),
-          _buildChannelPill('assets/shopee.png', 'Shopee', const Offset(0, -100), isDark),
+          _buildChannelPill('assets/wa.png', 'WhatsApp', const Offset(-85, -60)),
+          _buildChannelPill('assets/telegram.png', 'Telegram', const Offset(85, -55)),
+          _buildChannelPill('assets/instagram.png', 'Instagram', const Offset(-90, 45)),
+          _buildChannelPill('assets/tiktok.png', 'TikTok', const Offset(90, 40)),
+          _buildChannelPill('assets/Tokopedia.png', 'Tokopedia', const Offset(0, 95)),
+          _buildChannelPill('assets/shopee.png', 'Shopee', const Offset(0, -100)),
         ],
       ),
     );
   }
 
-  Widget _buildChannelPill(
-    String assetPath,
-    String label,
-    Offset offset,
-    bool isDark,
-  ) {
+  Widget _buildChannelPill(String assetPath, String label, Offset offset) {
     return Transform.translate(
       offset: offset,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF16253B) : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isDark
-                ? Colors.white.withOpacity(0.1)
-                : Colors.grey.shade200,
+            color: Colors.grey.shade200,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withOpacity(0.06),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -476,12 +449,10 @@ class _WelcomePageState extends State<WelcomePage> {
             const SizedBox(width: 5),
             Text(
               label,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: isDark
-                    ? AppTheme.darkTextPrimary
-                    : AppTheme.textPrimary,
+                color: AppTheme.textPrimary,
               ),
             ),
           ],
@@ -491,23 +462,17 @@ class _WelcomePageState extends State<WelcomePage> {
   }
 
   /// Visual Slide 2: Real-Time Chat & Multimedia Mockup
-  Widget _buildMultimediaIllustration(bool isDark) {
-    final cardBg = isDark ? const Color(0xFF132238) : Colors.white;
-    final bubbleIn = isDark ? const Color(0xFF1E324E) : const Color(0xFFEFF6FF);
-    const bubbleOut = AppTheme.primaryColor;
-
+  Widget _buildMultimediaIllustration() {
     return Container(
       width: 280,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200,
-        ),
+        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryColor.withOpacity(0.12),
+            color: AppTheme.primaryColor.withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -517,14 +482,14 @@ class _WelcomePageState extends State<WelcomePage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Customer Message Bubble (Inbound)
+          // Customer Message Bubble (Inbound Voice Note)
           Align(
             alignment: Alignment.centerLeft,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: bubbleIn,
-                borderRadius: const BorderRadius.only(
+              decoration: const BoxDecoration(
+                color: Color(0xFFEFF6FF), // Soft Blue tint
+                borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(14),
                   topRight: Radius.circular(14),
                   bottomRight: Radius.circular(14),
@@ -558,14 +523,12 @@ class _WelcomePageState extends State<WelcomePage> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
+                      const Text(
                         '0:15 / 0:45',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? AppTheme.darkTextSecondary
-                              : AppTheme.textSecondary,
+                          color: AppTheme.textSecondary,
                         ),
                       ),
                     ],
@@ -576,14 +539,14 @@ class _WelcomePageState extends State<WelcomePage> {
           ),
           const SizedBox(height: 12),
 
-          // Agent Message Bubble (Outbound Voice Note / Reply)
+          // Agent Message Bubble (Outbound Text Reply)
           Align(
             alignment: Alignment.centerRight,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: bubbleOut,
-                borderRadius: const BorderRadius.only(
+              decoration: const BoxDecoration(
+                color: AppTheme.primaryColor,
+                borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(14),
                   topRight: Radius.circular(14),
                   bottomLeft: Radius.circular(14),
@@ -617,24 +580,18 @@ class _WelcomePageState extends State<WelcomePage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : Colors.grey.shade50,
+              color: Colors.grey.shade50,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withOpacity(0.08)
-                    : Colors.grey.shade200,
-              ),
+              border: Border.all(color: Colors.grey.shade200),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.picture_as_pdf_rounded,
                   color: Colors.redAccent,
                   size: 24,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -646,18 +603,14 @@ class _WelcomePageState extends State<WelcomePage> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? AppTheme.darkTextPrimary
-                              : AppTheme.textPrimary,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                       Text(
                         '240 KB • Selesai Terkirim',
                         style: TextStyle(
                           fontSize: 9,
-                          color: isDark
-                              ? AppTheme.darkTextSecondary
-                              : AppTheme.textSecondary,
+                          color: AppTheme.textSecondary,
                         ),
                       ),
                     ],
@@ -671,22 +624,18 @@ class _WelcomePageState extends State<WelcomePage> {
     );
   }
 
-  /// Visual Slide 3: AI Assistant & Productivity Dashboard
-  Widget _buildProductivityIllustration(bool isDark) {
-    final cardBg = isDark ? const Color(0xFF132238) : Colors.white;
-
+  /// Visual Slide 3: Mockup Daftar Chat Asli NoBox (Nama, Jam, Pin, Lampiran, Label & Funnel)
+  Widget _buildChatListIllustration() {
     return Container(
-      width: 280,
-      padding: const EdgeInsets.all(16),
+      width: 295,
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200,
-        ),
+        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryColor.withOpacity(0.12),
+            color: AppTheme.primaryColor.withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -695,56 +644,127 @@ class _WelcomePageState extends State<WelcomePage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Pinned Chat Mockup Row
+          // ── TILE 1: Chat Pinned (Persis seperti layout chat_list_page.dart) ──
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withOpacity(0.08),
+              color: const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppTheme.primaryColor.withOpacity(0.2),
-              ),
+              border: Border.all(color: Colors.grey.shade200),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const CircleAvatar(
-                  radius: 16,
-                  backgroundColor: AppTheme.primaryColor,
-                  child: Icon(Icons.person, color: Colors.white, size: 18),
+                // Avatar Foto Kontak
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade100,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.person, color: AppTheme.primaryColor, size: 22),
+                  ),
                 ),
                 const SizedBox(width: 10),
+                // Konten Chat
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Baris 1: Nama Kontak + Jam & Ikon Pin Biru
                       Row(
                         children: [
-                          Text(
-                            'Pelanggan VIP NoBox',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: isDark
-                                  ? AppTheme.darkTextPrimary
-                                  : AppTheme.textPrimary,
+                          const Expanded(
+                            child: Text(
+                              'Juhri - SMKN 1 PASURUAN',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12.5,
+                                color: Colors.black,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const Spacer(),
-                          const Icon(
-                            Icons.push_pin_rounded,
-                            size: 14,
-                            color: AppTheme.primaryColor,
+                          const SizedBox(width: 4),
+                          Text(
+                            '09:27',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.push_pin,
+                            size: 13,
+                            color: Colors.blue.shade600,
                           ),
                         ],
                       ),
-                      Text(
-                        'Pesan suara baru diterima • 09:42',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isDark
-                              ? AppTheme.darkTextSecondary
-                              : AppTheme.textSecondary,
-                        ),
+                      const SizedBox(height: 3),
+                      // Baris 2: Last Message (Lampiran)
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.attach_file,
+                            size: 13,
+                            color: Colors.blue.shade700,
+                          ),
+                          const SizedBox(width: 3),
+                          const Text(
+                            'Lampiran',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      // Baris 3: Label & Funnel (Persis letak & ikonnya)
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.local_offer,
+                            size: 11,
+                            color: Colors.grey.shade500,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            'VIP, Reseller',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '|',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade400,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.filter_alt,
+                            size: 11,
+                            color: Colors.grey.shade500,
+                          ),
+                          const SizedBox(width: 3),
+                          const Text(
+                            '✅ Lunas',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Color(0xFF16A34A),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -752,100 +772,152 @@ class _WelcomePageState extends State<WelcomePage> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
-          // Smart AI Suggestion Pill
+          // ── TILE 2: Chat Kedua dengan Pesan Baru & Badge Unread ──
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFF6366F1).withOpacity(0.15),
-                  const Color(0xFFEC4899).withOpacity(0.15),
-                ],
-              ),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.auto_awesome,
-                  color: Color(0xFF8B5CF6),
-                  size: 20,
+                // Avatar
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'BS',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.indigo,
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
+                // Konten Chat
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'AI Agent Ready',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF8B5CF6),
-                        ),
+                      // Baris 1: Nama & Jam
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Budi Santoso',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12.5,
+                                color: Colors.black,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '08:45',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        'Otomatisasi balasan dan routing tiket ke agen',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          color: isDark
-                              ? AppTheme.darkTextSecondary
-                              : AppTheme.textSecondary,
-                        ),
+                      const SizedBox(height: 3),
+                      // Baris 2: Pesan Baru & Badge Unread
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Halo kak, produk ini ready?',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade600,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Text(
+                              '2',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      // Baris 3: Label & Funnel
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.local_offer,
+                            size: 11,
+                            color: Colors.grey.shade500,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            'Prospek Baru',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '|',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade400,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.filter_alt,
+                            size: 11,
+                            color: Colors.grey.shade500,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            'Follow Up',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.orange.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF8B5CF6),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'AKTIF',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-
-          // Quick status row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildFeatureBadge(Icons.sync_rounded, 'Real-Time Sync', isDark),
-              _buildFeatureBadge(Icons.shield_outlined, 'Aman & Terenkripsi', isDark),
-              _buildFeatureBadge(Icons.speed_rounded, 'Multi-Agen', isDark),
-            ],
-          ),
         ],
       ),
-    );
-  }
-
-  Widget _buildFeatureBadge(IconData icon, String title, bool isDark) {
-    return Column(
-      children: [
-        Icon(icon, size: 18, color: AppTheme.primaryColor),
-        const SizedBox(height: 4),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
-            color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -853,7 +925,7 @@ class _WelcomePageState extends State<WelcomePage> {
 enum IllustrationType {
   channels,
   multimedia,
-  productivity,
+  organization,
 }
 
 class OnboardingItem {
