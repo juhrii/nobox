@@ -216,32 +216,66 @@ class Conversation {
       finalLastMessage = '📍 Location';
     }
 
-    // FIX: Server NoBox sering nyangkut di LastMessageType = 2 (Voice Note) atau media lain,
-    // padahal LastMsg sudah update menjadi teks biasa. 
-    // Bersihkan LastMessageType jika pesannya jelas bukan JSON dan bukan audio/voice note.
+    // FIX: Normalisasi LastMessageType dan LastMessage agar Voice Note & Media tidak berubah menjadi "Lampiran" / Teks biasa
     String? rawLastMessageType = getValue(['LastMessageType', 'last_message_type'])?.toString();
-    if (!finalLastMessage.startsWith('{') && !finalLastMessage.startsWith('[')) {
-      final lower = finalLastMessage.trim().toLowerCase();
-      final isAudioLastMsg = lower.contains('🎤') ||
-          lower.contains('pesan suara') ||
-          lower.contains('voice note') ||
-          lower.contains('.ogg') ||
-          lower.contains('.opus') ||
-          lower.contains('.mp3') ||
-          lower.contains('.wav') ||
-          lower.contains('.m4a') ||
-          lower.contains('voice_') ||
-          lower == 'voice(empty)';
+    final lower = finalLastMessage.trim().toLowerCase();
 
-      if (isAudioLastMsg) {
-        rawLastMessageType = '2';
-      } else if (lower.isNotEmpty &&
-          lower != 'document(empty)' &&
-          lower != 'voice(empty)' &&
-          lower != 'image(empty)' &&
-          lower != 'video(empty)') {
-        // Jika pesan adalah teks biasa, paksa tipe menjadi 1 (Text)
-        // Ini mengatasi bug di mana server nyangkut di tipe media (seperti 6 untuk Sticker, 2 Voice, dll)
+    final isGenericMediaWord = lower.isEmpty ||
+        lower == 'null' ||
+        lower == 'document(empty)' ||
+        lower == 'voice(empty)' ||
+        lower == 'image(empty)' ||
+        lower == 'video(empty)' ||
+        lower == 'audio(empty)' ||
+        lower == 'lampiran' ||
+        lower == 'attachment' ||
+        lower == 'document' ||
+        lower == 'file' ||
+        lower == 'voice' ||
+        lower == 'voice note' ||
+        lower == 'audio' ||
+        lower == 'pesan suara' ||
+        lower == 'photo' ||
+        lower == 'foto' ||
+        lower == 'image' ||
+        lower == 'video';
+
+    final isAudioLastMsg = lower.contains('🎤') ||
+        lower.contains('pesan suara') ||
+        lower.contains('voice note') ||
+        lower.contains('.ogg') ||
+        lower.contains('.opus') ||
+        lower.contains('.mp3') ||
+        lower.contains('.wav') ||
+        lower.contains('.m4a') ||
+        lower.contains('voice_') ||
+        lower == 'voice(empty)';
+
+    if (isAudioLastMsg || rawLastMessageType == '2' || rawLastMessageType == 'voice' || rawLastMessageType == 'audio') {
+      rawLastMessageType = '2';
+      if (isGenericMediaWord || finalLastMessage.isEmpty) {
+        finalLastMessage = '🎤 Pesan Suara';
+      }
+    } else if (rawLastMessageType == '3' || rawLastMessageType == 'photo' || rawLastMessageType == 'image') {
+      if (isGenericMediaWord || finalLastMessage.isEmpty) {
+        finalLastMessage = '📷 Foto';
+      }
+    } else if (rawLastMessageType == '4' || rawLastMessageType == 'video') {
+      if (isGenericMediaWord || finalLastMessage.isEmpty) {
+        finalLastMessage = '🎬 Video';
+      }
+    } else if (rawLastMessageType == '16' || rawLastMessageType == '17' || rawLastMessageType == 'sticker') {
+      if (isGenericMediaWord || finalLastMessage.isEmpty) {
+        finalLastMessage = '🌟 Sticker';
+      }
+    } else if (rawLastMessageType == '5' || rawLastMessageType == 'document' || rawLastMessageType == 'file') {
+      if (isGenericMediaWord || finalLastMessage.isEmpty) {
+        finalLastMessage = '📄 Dokumen';
+      }
+    } else if (!finalLastMessage.startsWith('{') && !finalLastMessage.startsWith('[')) {
+      // Hanya jika pesan adalah teks nyata (bukan kata generik seperti 'Lampiran' atau 'Document'),
+      // kita perbaiki tipe jika server nyangkut di tipe media
+      if (!isGenericMediaWord && lower.isNotEmpty) {
         if (rawLastMessageType != '1') {
           rawLastMessageType = '1';
         }

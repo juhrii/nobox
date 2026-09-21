@@ -206,49 +206,84 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     return keys;
   }
 
-  void _savePersistentMessages() async {
+  Timer? _savePersistentDebounce;
+
+  void _savePersistentMessages() {
+    _savePersistentDebounce?.cancel();
+    _savePersistentDebounce = Timer(const Duration(milliseconds: 600), () async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        
+        // FIX: Batasi pesan yang disimpan secara lokal maksimal 50 pesan terakhir
+        // Menggunakan debounce agar tidak membekukan UI thread saat pesan masuk secara cepat
+        final int maxPersistent = 50;
+        final List<Message> messagesToSave = _messages.length > maxPersistent 
+            ? _messages.sublist(_messages.length - maxPersistent) 
+            : _messages;
+
+        final List<Map<String, dynamic>> mapList = messagesToSave
+            .map((m) => m.toMap())
+            .toList();
+        final jsonStr = jsonEncode(mapList);
+        final keys = _getPersistenceKeys();
+
+        for (final key in keys) {
+          await prefs.setString('persist_msgs_$key', jsonStr);
+          await prefs.setStringList(
+            'deleted_ids_$key',
+            _deletedMessageIds.toList(),
+          );
+        }
+
+        final cacheList = (_localSentCache[chat.id] ?? [])
+            .map((c) => c.toMap())
+            .toList();
+        if (cacheList.isNotEmpty) {
+          final cacheJsonStr = jsonEncode(cacheList);
+          for (final key in keys) {
+            await prefs.setString('sent_cache_$key', cacheJsonStr);
+          }
+        } else {
+          for (final key in keys) {
+            await prefs.remove('sent_cache_$key');
+          }
+        }
+      } catch (e) {
+        debugPrint('ChatDetail: ❌ Error saving persistent messages: $e');
+      }
+    });
+  }
+
+  int _parseMessageTimestamp(Message m) {
+    if (m.rawTime.isEmpty) return 0;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      
-      // FIX: Batasi pesan yang disimpan secara lokal maksimal 50 pesan terakhir
-      // Jika menyimpan ribuan pesan sekaligus, aplikasi akan freeze (ANR) saat jsonEncode()
-      final int maxPersistent = 50;
-      final List<Message> messagesToSave = _messages.length > maxPersistent 
-          ? _messages.sublist(_messages.length - maxPersistent) 
-          : _messages;
+      String t = m.rawTime.replaceFirst(' ', 'T').replaceAll('ZZ', 'Z');
+      if (!t.endsWith('Z') && !t.contains('+') && t.length >= 19) t += 'Z';
+      return DateTime.parse(t).millisecondsSinceEpoch;
+    } catch (_) {
+      return 0;
+    }
+  }
 
-      final List<Map<String, dynamic>> mapList = messagesToSave
-          .map((m) => m.toMap())
-          .toList();
-      final jsonStr = jsonEncode(mapList);
-      final keys = _getPersistenceKeys();
+  void _addMessageInOrder(Message newMessage) {
+    final newTime = _parseMessageTimestamp(newMessage);
+    if (_messages.isEmpty) {
+      _messages.add(newMessage);
+      return;
+    }
 
-      for (final key in keys) {
-        await prefs.setString('persist_msgs_$key', jsonStr);
-        await prefs.setStringList(
-          'deleted_ids_$key',
-          _deletedMessageIds.toList(),
-        );
-      }
-
-      final cacheList = (_localSentCache[chat.id] ?? [])
-          .map((c) => c.toMap())
-          .toList();
-      if (cacheList.isNotEmpty) {
-        final cacheJsonStr = jsonEncode(cacheList);
-        for (final key in keys) {
-          await prefs.setString('sent_cache_$key', cacheJsonStr);
-        }
+    final lastTime = _parseMessageTimestamp(_messages.last);
+    if (newTime >= lastTime) {
+      // 99.9% dari pesan realtime yang masuk adalah pesan terbaru: O(1) append langsung
+      _messages.add(newMessage);
+    } else {
+      // Jika waktu pesan lebih lampau (out of order), sisipkan di indeks yang tepat
+      int insertIdx = _messages.indexWhere((m) => _parseMessageTimestamp(m) > newTime);
+      if (insertIdx != -1) {
+        _messages.insert(insertIdx, newMessage);
       } else {
-        for (final key in keys) {
-          await prefs.remove('sent_cache_$key');
-        }
+        _messages.add(newMessage);
       }
-      debugPrint(
-        'ChatDetail: 💾 Saved ${_messages.length} messages and ${_deletedMessageIds.length} deleted IDs to SharedPreferences using keys: $keys (Hot Restart Protection)',
-      );
-    } catch (e) {
-      debugPrint('ChatDetail: ❌ Error saving persistent messages: $e');
     }
   }
 
@@ -452,6 +487,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     _recordingTimer?.cancel();
     _quickReplyDebounce?.cancel();
     _ackPollTimer?.cancel();
+    _savePersistentDebounce?.cancel();
     super.dispose();
   }
 
@@ -1379,6 +1415,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         typeStr = '16';
       }
 
+      if (chat.lastMessage == newContent &&
+          chat.lastMessageType == typeStr &&
+          chat.isLastMessageFromMe == lastMsg.isMe) {
+        return; // Sudah up to date, lewati update provider redundan
+      }
+
       Provider.of<ChatProvider>(
         context,
         listen: false,
@@ -1412,9 +1454,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void _startChatSyncPolling() {
     debugPrint('ChatSync: Started polling timer.');
     _ackPollTimer?.cancel();
-    _ackPollTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+    _ackPollTimer = Timer.periodic(const Duration(seconds: 12), (timer) async {
       if (!mounted) {
         timer.cancel();
+        return;
+      }
+
+      // Jika SignalR terhubung dan tidak ada pesan yang sedang menunggu ACK (ack < 3 / id kosong),
+      // lewati pemanggilan API untuk mencegah lag dan menghemat performa ponsel
+      final hasPendingAcks = _messages.any(
+        (m) => m.isMe && (m.id.isEmpty || m.id.startsWith('temp_') || m.ack < 3),
+      );
+      if (SignalRService().isConnected && !hasPendingAcks) {
         return;
       }
 
@@ -2264,34 +2315,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               }
             }
 
-            _messages.add(newMessage);
-            _messages.sort((a, b) {
-              if (a.rawTime.isEmpty || b.rawTime.isEmpty) return 0;
-              try {
-                String ta = a.rawTime
-                    .replaceFirst(' ', 'T')
-                    .replaceAll('ZZ', 'Z');
-                String tb = b.rawTime
-                    .replaceFirst(' ', 'T')
-                    .replaceAll('ZZ', 'Z');
-                if (!ta.endsWith('Z') && !ta.contains('+') && ta.length >= 19)
-                  ta += 'Z';
-                if (!tb.endsWith('Z') && !tb.contains('+') && tb.length >= 19)
-                  tb += 'Z';
-                return DateTime.parse(ta).compareTo(DateTime.parse(tb));
-              } catch (_) {
-                return 0;
-              }
-            });
+            _addMessageInOrder(newMessage);
+            if (!_isNearBottom && !newMessage.isMe) {
+              _unreadIncomingCountWhileScrolled++;
+            }
           });
           if (_isNearBottom || newMessage.isMe) {
             _scrollToBottom();
-          } else {
-            if (mounted) {
-              setState(() {
-                _unreadIncomingCountWhileScrolled++;
-              });
-            }
           }
           _syncLastMessageToProvider();
         }
@@ -2332,17 +2362,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   // FITUR: Scroll Otomatis ke Bawah
   // FUNGSI: Menganimasi daftar pesan secara instan ke pesan yang paling baru saat ada pesan masuk atau saat form dibuka.
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animate = true}) {
     _savePersistentMessages();
     if (_scrollController.hasClients) {
-      Future.delayed(const Duration(milliseconds: 100), () {
-        // With reverse: true, position 0.0 is the newest message (bottom)
+      // Jika sudah berada di bawah (offset <= 2.0 piksel pada reverse ListView),
+      // tidak perlu memicu animasi berlebih agar tidak terjadi stutter/lag pada UI
+      if (_scrollController.position.pixels <= 2.0) return;
+      if (animate) {
         _scrollController.animateTo(
           0.0,
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
-      });
+      } else {
+        _scrollController.jumpTo(0.0);
+      }
     }
   }
 
@@ -3839,18 +3873,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FUNGSI: Titik masuk utama untuk membangun UI Scaffold, AppBar (normal atau seleksi), Daftar Pesan, dan Area Input (termasuk banner jika diblokir/diarsipkan).
   @override
   Widget build(BuildContext context) {
-    final chatProvider = Provider.of<ChatProvider>(context);
+    // OPTIMASI: Gunakan context.select hanya untuk status isBlocked agar perubahan pesan
+    // atau chat lain di ChatProvider TIDAK memicu rebuild menyeluruh di halaman ini (menghilangkan lag)
+    final bool isChatBlocked = context.select<ChatProvider, bool>((p) {
+      try {
+        return p.allChats.firstWhere((c) => c.id == chat.id).isBlocked;
+      } catch (_) {
+        return chat.isBlocked;
+      }
+    });
 
-    // Get latest state to reflect block/unblock updates
-    try {
-      final updatedChat = chatProvider.allChats.firstWhere(
-        (c) => c.id == chat.id,
-      );
-      chat = updatedChat;
-    } catch (_) {
-      // Jangan timpa dengan widget.chat jika tidak ditemukan, pertahankan 'chat' lokal saat ini
-      // yang mungkin sudah menyimpan nama baru hasil edit.
-    }
+    final chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    chat = chat.copyWith(isBlocked: isChatBlocked);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -5140,7 +5174,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
           // System message fallback
           if (message.isSystemMessage) {
-            return _buildSystemMessage(message, isDark);
+            return KeyedSubtree(
+              key: ValueKey('sys_${_getMessageKey(message)}'),
+              child: _buildSystemMessage(message, isDark),
+            );
           }
 
           // Date separator — show when this message has a different date from the one above it
@@ -5155,6 +5192,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           final isSelected = _selectedMessageKeys.contains(msgKey);
 
           return Column(
+            key: ValueKey('col_$msgKey'),
             children: [
               if (dateSeparator != null) dateSeparator,
               Container(
@@ -5164,6 +5202,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                           : Colors.blue.withOpacity(0.15))
                     : Colors.transparent,
                 child: MessageBubbleWidget(
+                  key: ValueKey('bubble_$msgKey'),
                   message: message,
                   allMessages: _messages,
                   isSelected: isSelected,

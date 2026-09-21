@@ -153,16 +153,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
       final message = data['message'] as Map<String, dynamic>? ?? {};
 
-      // DEBUG LOGGING UNTUK KEPERLUAN ANALISIS PAYLOAD SIGNALR
-      try {
-        final logFile = File('C:\\Users\\LENOVO\\.gemini\\antigravity-ide\\brain\\69aec70c-8f43-4ff0-b225-c155a41fffe7\\scratch\\signalr_payload.txt');
-        final logContent = 'TerimaPesan at ${DateTime.now().toIso8601String()}: ${jsonEncode(message)}\n';
-        if (!logFile.existsSync()) logFile.createSync(recursive: true);
-        logFile.writeAsStringSync(logContent, mode: FileMode.append);
-      } catch (e) {
-        // ignore
-      }
-
       final sender = data['sender'] as Map<String, dynamic>?;
       final msgText = message['Msg']?.toString() ?? '';
       final senderName = sender?['Name']?.toString() ?? 'Pesan Baru';

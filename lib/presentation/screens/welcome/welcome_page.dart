@@ -624,7 +624,7 @@ class _WelcomePageState extends State<WelcomePage> {
     );
   }
 
-  /// Visual Slide 3: Mockup Daftar Chat Asli NoBox (Nama, Jam, Pin, Lampiran, Label & Funnel)
+  /// Visual Slide 3: Mockup Daftar Chat Asli NoBox (Nama, Jam, Pin, Pesan Suara, Label & Funnel)
   Widget _buildChatListIllustration() {
     return Container(
       width: 295,
@@ -705,17 +705,17 @@ class _WelcomePageState extends State<WelcomePage> {
                         ],
                       ),
                       const SizedBox(height: 3),
-                      // Baris 2: Last Message (Lampiran)
+                      // Baris 2: Last Message (Voice Note / Pesan Suara)
                       Row(
                         children: [
                           Icon(
-                            Icons.attach_file,
+                            Icons.mic_rounded,
                             size: 13,
                             color: Colors.blue.shade700,
                           ),
                           const SizedBox(width: 3),
                           const Text(
-                            'Lampiran',
+                            '🎤 Pesan Suara (0:15)',
                             style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w500,

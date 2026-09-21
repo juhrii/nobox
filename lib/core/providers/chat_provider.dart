@@ -757,15 +757,27 @@ class ChatProvider with ChangeNotifier {
             final newLower = chat.lastMessage.trim().toLowerCase();
             final isNewGeneric =
                 newLower.isEmpty ||
+                newLower == 'null' ||
+                newLower == 'lampiran' ||
+                newLower == 'attachment' ||
+                newLower == 'document' ||
                 newLower == 'document(empty)' ||
+                newLower == 'voice' ||
                 newLower == 'voice(empty)' ||
-                newLower == 'file' ||
-                newLower == 'null';
+                newLower == 'image(empty)' ||
+                newLower == 'video(empty)' ||
+                newLower == 'audio(empty)' ||
+                newLower == 'file';
 
             if (isOldMedia && isNewGeneric) {
               chat = chat.copyWith(
                 lastMessageType: oldChat.lastMessageType,
                 lastMessage: oldChat.lastMessage,
+              );
+            } else if (chat.lastMessageType == '2' && isNewGeneric) {
+              chat = chat.copyWith(
+                lastMessageType: '2',
+                lastMessage: '🎤 Pesan Suara',
               );
             }
           }
@@ -1250,47 +1262,52 @@ class ChatProvider with ChangeNotifier {
         resolvedIsBlocked = existing.isBlocked;
       }
 
-      // FIX Bug #4: Bersihkan LastMessageType yang usang jika pesan baru bukan JSON dan bukan audio
-      String? updatedType = roomData['LastMessageType']?.toString();
-      final isAudioLastMsg = lowerNew == '🎤 pesan suara' ||
-          lowerNew == 'pesan suara' ||
-          lowerNew == 'voice note' ||
-          lowerNew == 'voice' ||
-          lowerNew == 'audio' ||
-          lowerNew.contains('.ogg') ||
-          lowerNew.contains('.opus') ||
-          lowerNew.contains('.mp3') ||
-          lowerNew.contains('.wav') ||
-          lowerNew.contains('.m4a') ||
-          lowerNew.contains('voice_');
+      // FIX: Normalisasi LastMessageType dan LastMessage pada event SignalR
+      String? updatedType = roomData['LastMessageType']?.toString() ?? existing.lastMessageType;
+      final lowerResolved = lastMsg.trim().toLowerCase();
 
-      if (!lastMsg.startsWith('{') && !lastMsg.startsWith('[')) {
-        final lower = lastMsg.trim().toLowerCase();
-        if (lower.isNotEmpty &&
-            lower != 'document(empty)' &&
-            lower != 'voice(empty)' &&
-            !isAudioLastMsg) {
-          if (updatedType == '2' ||
-              updatedType == '3' ||
-              updatedType == '4' ||
-              updatedType == '5') {
+      final isGenericWord = lowerResolved.isEmpty ||
+          lowerResolved == 'null' ||
+          lowerResolved == 'document(empty)' ||
+          lowerResolved == 'voice(empty)' ||
+          lowerResolved == 'image(empty)' ||
+          lowerResolved == 'video(empty)' ||
+          lowerResolved == 'audio(empty)' ||
+          lowerResolved == 'lampiran' ||
+          lowerResolved == 'attachment' ||
+          lowerResolved == 'document' ||
+          lowerResolved == 'file' ||
+          lowerResolved == 'voice' ||
+          lowerResolved == 'voice note' ||
+          lowerResolved == 'audio' ||
+          lowerResolved == 'pesan suara';
+
+      final isAudioLastMsg = lowerResolved.contains('🎤') ||
+          lowerResolved.contains('pesan suara') ||
+          lowerResolved.contains('voice note') ||
+          lowerResolved.contains('.ogg') ||
+          lowerResolved.contains('.opus') ||
+          lowerResolved.contains('.mp3') ||
+          lowerResolved.contains('.wav') ||
+          lowerResolved.contains('.m4a') ||
+          lowerResolved.contains('voice_') ||
+          lowerResolved == 'voice(empty)' ||
+          (existing.lastMessageType == '2' && isGenericWord);
+
+      if (isAudioLastMsg || updatedType == '2' || updatedType == 'voice' || updatedType == 'audio') {
+        updatedType = '2';
+        if (isGenericWord || lastMsg.isEmpty) {
+          lastMsg = '🎤 Pesan Suara';
+        }
+      } else if (!lastMsg.startsWith('{') && !lastMsg.startsWith('[')) {
+        if (!isGenericWord && lowerResolved.isNotEmpty) {
+          if (updatedType != '1') {
             updatedType = '1';
           }
         }
       }
       if (updatedType == null) {
-        final lower = lastMsg.trim().toLowerCase();
-        if (lastMsg.startsWith('{') ||
-            lastMsg.startsWith('[') ||
-            lower.isEmpty ||
-            lower == 'null' ||
-            lower == 'document(empty)' ||
-            lower == 'voice(empty)' ||
-            isAudioLastMsg) {
-          updatedType = isAudioLastMsg ? '2' : existing.lastMessageType;
-        } else {
-          updatedType = '1'; // Force Text
-        }
+        updatedType = existing.lastMessageType ?? '1';
       }
 
       // FIX: Karena server NoBox sering salah mengirim SdrMsg (bukan 'You') untuk pesan kita sendiri,
@@ -1509,8 +1526,24 @@ class ChatProvider with ChangeNotifier {
         if (msgText.contains('[-{=||=}-]')) {
           msgText = '📍 Location';
         }
+        final lowerMsg = msgText.trim().toLowerCase();
+        final isGeneric = lowerMsg == 'lampiran' ||
+            lowerMsg == 'attachment' ||
+            lowerMsg == 'document' ||
+            lowerMsg == 'file' ||
+            lowerMsg == 'document(empty)' ||
+            lowerMsg == 'voice(empty)';
+
+        String finalMsgText = msgText;
+        String? finalLastType = _chats[index].lastMessageType;
+        if (isGeneric && (_chats[index].lastMessageType == '2' || _chats[index].lastMessage.contains('🎤') || _chats[index].lastMessage.contains('Pesan Suara'))) {
+          finalMsgText = '🎤 Pesan Suara';
+          finalLastType = '2';
+        }
+
         _chats[index] = _chats[index].copyWith(
-          lastMessage: msgText,
+          lastMessage: finalMsgText,
+          lastMessageType: finalLastType,
           time: DateTime.now().toUtc().toIso8601String(),
           unreadCount: resolvedIsMe
               ? 0

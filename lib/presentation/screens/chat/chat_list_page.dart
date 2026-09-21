@@ -2726,16 +2726,21 @@ class _ChatListPageState extends State<ChatListPage>
     final exactVideoLabels = ['🎥 video', '🎬 video'];
     final exactStickerLabels = ['🌟 sticker', '🎬 sticker'];
 
-    if (exactStickerLabels.contains(lowerTrimmed)) {
-      displayMessage = '🌟 Sticker';
-      parsedAsMedia = true;
-    } else if (isAudioMessage(trimmedMsg) || (!trimmedMsg.startsWith('{') && !trimmedMsg.startsWith('[') && chat.lastMessageType == '2')) {
+    final isVoiceNote = chat.lastMessageType == '2' ||
+        chat.lastMessageType?.toLowerCase() == 'voice note' ||
+        chat.lastMessageType?.toLowerCase() == 'audio' ||
+        isAudioMessage(trimmedMsg);
+
+    if (isVoiceNote) {
       displayMessage = '🎤 Pesan Suara';
       parsedAsMedia = true;
-    } else if (exactPhotoLabels.contains(lowerTrimmed)) {
+    } else if (exactStickerLabels.contains(lowerTrimmed) || chat.lastMessageType == '16' || chat.lastMessageType == '17') {
+      displayMessage = '🌟 Sticker';
+      parsedAsMedia = true;
+    } else if (exactPhotoLabels.contains(lowerTrimmed) || chat.lastMessageType == '3') {
       displayMessage = '📷 Foto';
       parsedAsMedia = true;
-    } else if (exactVideoLabels.contains(lowerTrimmed)) {
+    } else if (exactVideoLabels.contains(lowerTrimmed) || chat.lastMessageType == '4') {
       displayMessage = '🎬 Video';
       parsedAsMedia = true;
     }
@@ -3222,7 +3227,10 @@ class _ChatListPageState extends State<ChatListPage>
           lower.contains('ptt-') ||
           lower.startsWith('aud-') ||
           lower == 'voice note' ||
-          lower == 'pesan suara') {
+          lower == 'pesan suara' ||
+          chat.lastMessageType == '2' ||
+          chat.lastMessageType?.toLowerCase() == 'voice note' ||
+          chat.lastMessageType?.toLowerCase() == 'audio') {
         displayMessage = '🎤 Pesan Suara';
         parsedAsMedia = true;
       }
