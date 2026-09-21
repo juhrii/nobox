@@ -2437,9 +2437,10 @@ class _ChatListPageState extends State<ChatListPage>
                                 Expanded(
                                   child: Text(
                                     chat.sender,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 15,
+                                      color: isDark ? Colors.white : Colors.black,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),

@@ -17,6 +17,7 @@ import 'core/services/push_notification_service.dart';
 import 'core/services/background_service_manager.dart';
 import 'core/utils/app_routes.dart';
 import 'presentation/screens/splash/splash_page.dart';
+import 'presentation/screens/welcome/welcome_page.dart';
 import 'presentation/screens/auth/login_page.dart';
 import 'presentation/screens/chat/chat_list_page.dart';
 import 'presentation/screens/chat/chat_detail_page.dart';
@@ -380,11 +381,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           navigatorKey: navigatorKey,
           home: const SplashPage(),
           routes: {
+            AppRoutes.welcome: (_) => const WelcomePage(),
             AppRoutes.login: (_) => const LoginPage(),
             AppRoutes.home: (_) => const ResponsiveChatHome(),
             AppRoutes.chatDetail: (_) => const ChatDetailPage(),
             AppRoutes.archivedChats: (_) => const ArchiveListPage(),
-
           },
         );
       },

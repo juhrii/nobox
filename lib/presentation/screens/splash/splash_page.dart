@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/theme_provider.dart';
@@ -66,13 +67,29 @@ class _SplashPageState extends State<SplashPage> {
         });
         Navigator.pushReplacementNamed(context, AppRoutes.home);
       } else {
-        Navigator.pushReplacementNamed(context, AppRoutes.login);
+        final prefs = await SharedPreferences.getInstance();
+        final hasSeenWelcome = prefs.getBool('has_seen_welcome') ?? false;
+        if (!hasSeenWelcome) {
+          Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+        } else {
+          Navigator.pushReplacementNamed(context, AppRoutes.login);
+        }
       }
     } catch (e) {
       debugPrint('SplashPage Error: $e');
       // Fallback navigation if something goes wrong
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.login);
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final hasSeenWelcome = prefs.getBool('has_seen_welcome') ?? false;
+          if (!hasSeenWelcome) {
+            Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+          } else {
+            Navigator.pushReplacementNamed(context, AppRoutes.login);
+          }
+        } catch (_) {
+          Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+        }
       }
     }
   }
