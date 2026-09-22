@@ -633,13 +633,31 @@ class _ChatListPageState extends State<ChatListPage>
                         ],
                         const SizedBox(height: 12),
                         // FITUR 2: Paging & Pengambilan Chat
-                        // FUNGSI: fetchChats() digunakan untuk memanggil 20 percakapan pertama dari server.
-                        //         Jika terjadi error (misal 503), tombol ini memanggil fetchChats() lagi (retry).
-                        TextButton.icon(
-                          onPressed: () => chatProvider.fetchChats(),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
-                        ),
+                        // FUNGSI: fetchChats() digunakan untuk memanggil percakapan dari server.
+                        if (chatProvider.error != null)
+                          TextButton.icon(
+                            onPressed: () => chatProvider.fetchChats(),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Coba Lagi'),
+                          )
+                        else if (isSearching)
+                          TextButton.icon(
+                            onPressed: () {
+                              _searchController.clear();
+                              context.read<ChatProvider>().setSearchQuery('');
+                              setState(() {
+                                _isSearching = false;
+                              });
+                            },
+                            icon: const Icon(Icons.clear),
+                            label: const Text('Hapus Pencarian'),
+                          )
+                        else
+                          TextButton.icon(
+                            onPressed: () => chatProvider.fetchChats(),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Segarkan'),
+                          ),
                       ],
                     ),
                   );
