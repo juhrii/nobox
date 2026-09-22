@@ -1813,7 +1813,7 @@ class _ChatListPageState extends State<ChatListPage>
                                     if (idx >= 0 && idx < accounts.length) {
                                       accountIdInt =
                                           int.tryParse(
-                                            accounts[idx]['Id']?.toString() ??
+                                            (accounts[idx]['Id'] ?? accounts[idx]['id'])?.toString() ??
                                                 '',
                                           ) ??
                                           0;
@@ -1829,7 +1829,7 @@ class _ChatListPageState extends State<ChatListPage>
                                     if (idx >= 0 && idx < channels.length) {
                                       channelIdInt =
                                           int.tryParse(
-                                            channels[idx]['Id']?.toString() ??
+                                            (channels[idx]['Id'] ?? channels[idx]['id'])?.toString() ??
                                                 '',
                                           ) ??
                                           1;
@@ -1849,7 +1849,7 @@ class _ChatListPageState extends State<ChatListPage>
                                     );
                                     if (idx >= 0 && idx < contacts.length) {
                                       final contact = contacts[idx];
-                                      receiver = contact['Id']?.toString();
+                                      receiver = (contact['Id'] ?? contact['id'])?.toString();
                                       contactId = int.tryParse(receiver ?? '');
 
                                       // CARI LeadLink yang 100% cocok dengan Channel (misal 2 = Telegram) & Akun
