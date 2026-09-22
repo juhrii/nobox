@@ -1343,7 +1343,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           });
           if (!response.isError && _messages.isNotEmpty) {
             _injectLocalReplies(_messages).then((_) {
-              if (mounted) setState(() {});
+              if (mounted) {
+                setState(() {});
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _scrollToBottom(animate: false);
+                });
+              }
             });
 
             _syncLastMessageToProvider();

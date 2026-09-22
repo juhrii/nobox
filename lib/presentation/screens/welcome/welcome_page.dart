@@ -24,21 +24,18 @@ class _WelcomePageState extends State<WelcomePage> {
 
   final List<OnboardingItem> _slides = [
     const OnboardingItem(
-      badge: 'OMNICHANNEL INBOX',
       title: 'Satu Aplikasi,\nSemua Saluran',
       description:
           'Kelola seluruh percakapan pelanggan dari WhatsApp, Telegram, Instagram, TikTok, hingga marketplace dalam satu kotak masuk terpadu.',
       illustrationType: IllustrationType.channels,
     ),
     const OnboardingItem(
-      badge: 'REAL-TIME & MULTIMEDIA',
       title: 'Komunikasi Cepat\n& Tanpa Hambatan',
       description:
           'Kirim pesan suara (Voice Note), berkas dokumen, foto, hingga balasan cepat dengan sinkronisasi langsung berbasis SignalR.',
       illustrationType: IllustrationType.multimedia,
     ),
     const OnboardingItem(
-      badge: 'LABEL, FUNNEL & PIN CHAT',
       title: 'Kategorikan Kontak\n& Sematkan Obrolan',
       description:
           'Tandai pelanggan dengan Label, pantau tahap transaksi lewat Funnel penjualan, serta sematkan (Pin) obrolan penting agar selalu berada di posisi teratas.',
@@ -170,27 +167,7 @@ class _WelcomePageState extends State<WelcomePage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Badge Kategori
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: Text(
-                            slide.badge,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.1,
-                              color: AppTheme.primaryColor,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
+
 
                         // Judul Slide
                         Text(
@@ -929,13 +906,11 @@ enum IllustrationType {
 }
 
 class OnboardingItem {
-  final String badge;
   final String title;
   final String description;
   final IllustrationType illustrationType;
 
   const OnboardingItem({
-    required this.badge,
     required this.title,
     required this.description,
     required this.illustrationType,

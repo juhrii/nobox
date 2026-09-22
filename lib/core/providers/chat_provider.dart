@@ -2790,10 +2790,29 @@ class ChatProvider with ChangeNotifier {
           .where(
             (c) =>
                 c.ctRealId == _filterContact ||
-                c.contactId ==
-                    _filterContact, // fallback jika server-side tidak filter sempurna
+                c.contactId == _filterContact,
           )
           .toList();
+    }
+
+    // Group fallback
+    if (_filterGroup != null && _filterGroup!.isNotEmpty) {
+      filtered = filtered.where((c) => c.groupId == _filterGroup).toList();
+    }
+
+    // Campaign fallback
+    if (_filterCampaign != null && _filterCampaign!.isNotEmpty) {
+      filtered = filtered.where((c) => c.campaign == _filterCampaign).toList();
+    }
+
+    // Deal fallback
+    if (_filterDeal != null && _filterDeal!.isNotEmpty) {
+      filtered = filtered.where((c) => c.deal == _filterDeal).toList();
+    }
+
+    // Account fallback
+    if (_filterAccountIds.isNotEmpty) {
+      filtered = filtered.where((c) => _filterAccountIds.contains(c.accountId)).toList();
     }
 
     // ── Jalur 2: Filters berikut di-remove dari payload API ─────────────────
