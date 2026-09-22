@@ -5105,7 +5105,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
-              'Belum ada pesan di sini.\nKetik sesuatu untuk memulai!',
+              'No conversation yet',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[500]),
             ),
