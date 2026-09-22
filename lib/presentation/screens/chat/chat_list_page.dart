@@ -1671,6 +1671,7 @@ class _ChatListPageState extends State<ChatListPage>
                                     String title,
                                     String msg,
                                   ) {
+                                    debugPrint('ChatList: Validation Failed -> $title: $msg');
                                     ScaffoldMessenger.of(
                                       context,
                                     ).hideCurrentSnackBar();
@@ -1759,6 +1760,7 @@ class _ChatListPageState extends State<ChatListPage>
                                     );
                                   }
 
+                                  debugPrint('ChatList: CREATE CLICKED. Channel: $selectedChannel, Account: $selectedAccount, To: $selectedTo, Contact: $selectedContact');
                                   // Validasi wajib isian sebelum proses pembuatan ruangan (New Conversation)
                                   if (selectedChannel == null ||
                                       selectedChannel!.trim().isEmpty) {
@@ -1850,8 +1852,10 @@ class _ChatListPageState extends State<ChatListPage>
                                     );
                                     if (idx >= 0 && idx < contacts.length) {
                                       final contact = contacts[idx];
+                                      debugPrint('ChatList: Selected Contact RAW: $contact');
                                       receiver = (contact['Id'] ?? contact['id'])?.toString();
                                       contactId = int.tryParse(receiver ?? '');
+                                      debugPrint('ChatList: Receiver (Id): $receiver, Parsed CtId: $contactId');
 
                                       // CARI LeadLink yang 100% cocok dengan Channel (misal 2 = Telegram) & Akun
                                       // agar obrolan yang dibuka memiliki riwayat pesan yang benar (tidak salah WA / tidak 0 pesan)!

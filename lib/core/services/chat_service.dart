@@ -1455,7 +1455,7 @@ class ChatService {
             };
           }
 
-          final dataObj = result['Data'] ?? result['Value'] ?? result['Entity'] ?? result['data'] ?? result['value'];
+          final dataObj = result['Data'] ?? result['Value'] ?? result['Entity'] ?? result['data'] ?? result['value'] ?? result['Room'];
           String? extractedRoomId;
           String? extractedCtId;
           String? extractedLinkId;
