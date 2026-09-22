@@ -3893,8 +3893,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return GestureDetector(
-      onTap: () {
+    return PopScope(
+      canPop: !_isSelectionMode,
+      onPopInvoked: (didPop) {
+        if (!didPop && _isSelectionMode) {
+          setState(() {
+            _isSelectionMode = false;
+            _selectedMessageKeys.clear();
+          });
+        }
+      },
+      child: GestureDetector(
+        onTap: () {
         FocusScope.of(context).unfocus();
         if (_showEmojiPicker || _showAttachmentPanel || _isShowingQuickReply) {
           setState(() {
@@ -3993,6 +4003,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             );
           },
         ),
+      ),
       ),
     );
   }
