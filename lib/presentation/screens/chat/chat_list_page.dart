@@ -1162,6 +1162,7 @@ class _ChatListPageState extends State<ChatListPage>
     List<Map<String, dynamic>> contacts = [];
     bool isLoadingData = true;
     String? loadError;
+    bool isCreatingRoom = false;
 
     final chatService = ChatService();
 
@@ -1665,7 +1666,7 @@ class _ChatListPageState extends State<ChatListPage>
                             const SizedBox(width: 12),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () async {
+                                onPressed: isCreatingRoom ? null : () async {
                                   void showValidationToast(
                                     String title,
                                     String msg,
@@ -1915,15 +1916,7 @@ class _ChatListPageState extends State<ChatListPage>
                                     return;
                                   }
 
-                                  Navigator.pop(dialogContext);
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Membuat ruangan obrolan...',
-                                      ),
-                                    ),
-                                  );
+                                  setDialogState(() => isCreatingRoom = true);
 
                                   // Buat ruang obrolan (room) melalui API baru alih-alih sekadar mengirim pesan
                                   final result = await chatService
@@ -1938,7 +1931,12 @@ class _ChatListPageState extends State<ChatListPage>
                                         isGroup: isGroup,
                                       );
 
+                                  if (!mounted) return;
+                                  setDialogState(() => isCreatingRoom = false);
+
                                   if (result['success'] == true) {
+                                    Navigator.pop(dialogContext);
+
                                     // Muat ulang daftar chat dan navigasikan layar ke ruang chat yang baru dibuat
                                     if (mounted) {
                                       // Sesuai kode mentor: Jeda statis lalu fetch ulang paksa
@@ -2181,17 +2179,19 @@ class _ChatListPageState extends State<ChatListPage>
                                       }
                                     }
                                   } else {
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Gagal membuat ruangan: ${result['error']}',
+                                    showDialog(
+                                      context: dialogContext,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('Gagal Membuat Percakapan'),
+                                        content: Text('Terjadi kesalahan:\n\n${result['error']}\n\nPastikan konfigurasi channel di server sudah benar dan sedang online.'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx),
+                                            child: const Text('Tutup'),
                                           ),
-                                        ),
-                                      );
-                                    }
+                                        ],
+                                      ),
+                                    );
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
@@ -2204,7 +2204,16 @@ class _ChatListPageState extends State<ChatListPage>
                                     vertical: 12,
                                   ),
                                 ),
-                                child: const Text('Create'),
+                                child: isCreatingRoom
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('Create'),
                               ),
                             ),
                           ],
