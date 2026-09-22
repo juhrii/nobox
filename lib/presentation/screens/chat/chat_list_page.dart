@@ -654,9 +654,9 @@ class _ChatListPageState extends State<ChatListPage>
                           )
                         else
                           TextButton.icon(
-                            onPressed: () => chatProvider.fetchChats(),
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Segarkan'),
+                            onPressed: () => _showNewConversationDialog(),
+                            icon: const Icon(Icons.add_comment),
+                            label: const Text('Mulai Percakapan'),
                           ),
                       ],
                     ),
