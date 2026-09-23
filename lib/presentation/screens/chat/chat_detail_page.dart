@@ -46,9 +46,41 @@ import 'file_preview_screen.dart';
 // =====================================================================
 // FITUR: Halaman Detail Chat (Room)
 // FILE: lib/presentation/screens/chat/chat_detail_page.dart
-// FUNGSI: Halaman utama untuk satu ruang obrolan. Menangani pesan real-time
-//         via SignalR, fallback sinkronisasi, attachment media, dan UI
-//         interaktif chat bubble.
+// FUNGSI: Halaman utama ruang obrolan dengan seseorang. Menangani pesan real-time
+//         via SignalR, REST API, attachment media, input bar, dan daftar pesan.
+//
+// ── DIREKTORI KATA KUNCI & RENTANG BARIS FITUR ────────────────────────
+// 1. [HEADER (APPBAR)]
+//    - Baris ~4410 - 4550 : [KATA KUNCI: Status AppBar | Blocked | Resolved]
+//    - Baris ~4465 - 4550 : [KATA KUNCI: Menu Titik Tiga | Add Agent | Mark Resolved]
+//    - Baris ~4560 - 4610 : [KATA KUNCI: Archived AppBar | Chat Arsip | Restore Chat]
+//    - Baris ~4610 - 4750 : [KATA KUNCI: Normal AppBar | Header Chat Utama | Avatar]
+//    - Baris ~4800 - 4950 : [KATA KUNCI: Selection AppBar | Mode Seleksi Pesan | Multi Select]
+//
+// 2. [DAFTAR PESAN (MESSAGE LIST)]
+//    - Baris ~4040 - 4110 : [KATA KUNCI: Scroll Ke Bawah | Scroll To Bottom | Unread Badge]
+//    - Baris ~5170 - 5330 : [KATA KUNCI: Message List | Daftar Pesan | ListView Pesan | Bubble]
+//    - Baris ~5340 - 5390 : [KATA KUNCI: Status Divider | Pembatas Status Chat | Resolved Divider]
+//    - Baris ~5395 - 5450 : [KATA KUNCI: Date Separator | Pembatas Tanggal | Hari Ini]
+//
+// 3. [INPUT BAR DI BAWAH]
+//    - Baris ~610  - 750  : [KATA KUNCI: Quick Reply List | Template Balasan Cepat]
+//    - Baris ~6485 - 6595 : [KATA KUNCI: Input Bar | Kolom Chat | TextField Pesan | Send Button]
+//    - Baris ~6600 - 6695 : [KATA KUNCI: Attachment Panel | Panel Lampiran | Menu Media]
+//    - Baris ~6700 - 6780 : [KATA KUNCI: Emoji Picker | Keyboard Emoji | Emoticon]
+//    - Baris ~6795 - 6850 : [KATA KUNCI: Reply Preview | Balas Pesan | Pratinjau Balasan]
+//
+// 4. [FITUR INTERAKSI PESAN]
+//    - Baris ~2665 - 2755 : [KATA KUNCI: Kirim Pesan Teks | Send Message]
+//    - Baris ~2880 - 2975 : [KATA KUNCI: Kamera | Camera Picker | Ambil Foto]
+//    - Baris ~2980 - 3220 : [KATA KUNCI: Video | Video Picker | Kirim Video]
+//    - Baris ~3225 - 3350 : [KATA KUNCI: Dokumen | File Picker | Kirim Dokumen | PDF]
+//    - Baris ~3360 - 3450 : [KATA KUNCI: Lokasi | Share Location | Google Maps]
+//    - Baris ~3460 - 3550 : [KATA KUNCI: Foto | Galeri | Kirim Gambar | Image Picker]
+//    - Baris ~3790 - 3860 : [KATA KUNCI: Voice Note | Rekam Suara | Audio Recorder]
+//    - Baris ~4885 - 4950 : [KATA KUNCI: Hapus Pesan | Delete Message | Dialog Hapus]
+//    - Baris ~5560 - 5645 : [KATA KUNCI: Opsi Pesan | Message Options | Star | Salin]
+//    - Baris ~5650 - 5840 : [KATA KUNCI: Teruskan Pesan | Forward Message | Dialog Teruskan]
 // =====================================================================
 
 class ChatDetailPage extends StatefulWidget {
@@ -605,8 +637,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
   }
 
-  // FITUR: Tampilan List Quick Reply
-  // FUNGSI: Merender daftar popup yang berisi template balasan cepat sesuai dengan filter pencarian dari input text.
+  // =====================================================================
+  // [KATA KUNCI: Quick Reply List | Template Balasan Cepat | Shortcut Chat]
+  // [FITUR: Daftar Template Balasan Cepat (Quick Reply)]
+  // [RENTANG: Baris ~610 - 750]
+  // [FUNGSI: Menampilkan daftar popup berisi template pesan cepat saat pengguna
+  //          mengetik karakter '/' di input bar. Memungkinkan pemilihan template
+  //          secara instan tanpa harus mengetik ulang seluruh pesan.]
+  // =====================================================================
   Widget _buildQuickReplyList(bool isDark) {
     return Container(
       key: const ValueKey('quickReplyList'),
@@ -2655,9 +2693,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   bool _isSending = false;
 
-  // FITUR: Kirim Pesan Teks (REST API / SignalR)
-  // FUNGSI: Mengirimkan teks yang diinputkan pengguna ke server. Menggunakan SignalR khusus untuk Telegram (karena REST API backend memiliki bug ExtId untuk Telegram), dan REST API standar untuk channel lainnya.
-  // [ACTION: SEND_MESSAGE] - Eksekusi pengiriman pesan teks biasa
+  // =====================================================================
+  // [KATA KUNCI: Kirim Pesan Teks | Send Message | REST API | SignalR]
+  // [FITUR: Pengiriman Pesan Teks Obrolan]
+  // [RENTANG: Baris ~2665 - 2755]
+  // [FUNGSI: Mengirimkan teks yang diinputkan pengguna ke server (menggunakan
+  //          REST API atau SignalR). Menerapkan optimistic UI update (pesan
+  //          langsung muncul di layar sebelum response server), menangani
+  //          status terkirim/pending, serta membersihkan input bar.]
+  // =====================================================================
   void _sendMessage() async {
     if (_isSending) return; // Mencegah pengiriman ganda (double-tap)
 
@@ -2865,13 +2909,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     });
   }
 
-  // ─────────────────────────────────────────────
-  //  PICK & SEND IMAGE FROM CAMERA
-  // ─────────────────────────────────────────────
-
-  // FITUR: Ambil Foto/Kamera & Pratinjau
-  // FUNGSI: Membuka antarmuka kamera bawaan perangkat untuk mengambil foto, lalu membuka layar pratinjau sebelum dikonfirmasi.
-  // [ACTION: PICK_MEDIA] - Mengambil foto langsung dari Kamera perangkat
+  // =====================================================================
+  // [KATA KUNCI: Kamera | Camera Picker | Ambil Foto | Lampiran Kamera]
+  // [FITUR: Ambil Foto dari Kamera & Kirim]
+  // [RENTANG: Baris ~2880 - 2975]
+  // [FUNGSI: Membuka kamera bawaan perangkat untuk memotret foto, menampilkan
+  //          layar pratinjau (FilePreviewScreen), mengunggah ke server, dan
+  //          mengirimkannya sebagai pesan gambar ke obrolan.]
+  // =====================================================================
   Future<void> _pickAndSendFromCamera() async {
     setState(() => _showAttachmentPanel = false);
     final picker = ImagePicker();
@@ -2964,12 +3009,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
-  // ─────────────────────────────────────────────
-  //  PICK & SEND VIDEO
-  // ─────────────────────────────────────────────
-
-  // FITUR: Pilih Video Galeri & Pratinjau
-  // FUNGSI: Membuka pemilih file khusus video, menetapkan batasan durasi (5 menit), dan membuka layar pratinjau sebelum dikirim.
+  // =====================================================================
+  // [KATA KUNCI: Video | Video Picker | Kirim Video | Lampiran Video]
+  // [FITUR: Pilih Video dari Galeri & Kirim]
+  // [RENTANG: Baris ~2980 - 3220]
+  // [FUNGSI: Membuka galeri video perangkat dengan batas durasi maksimal 5 menit,
+  //          menampilkan pratinjau, mengunggah video ke server NoBox, dan
+  //          mengirimkannya sebagai pesan video.]
+  // =====================================================================
   Future<void> _pickAndSendVideo() async {
     setState(() => _showAttachmentPanel = false);
     final picker = ImagePicker();
@@ -3205,8 +3252,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     return resolvedAccountId;
   }
 
-  // FITUR: Pilih Dokumen & Pratinjau
-  // FUNGSI: Menggunakan FilePicker platform-native untuk memilih file sembarang jenis, lalu meneruskannya ke layar pratinjau.
+  // =====================================================================
+  // [KATA KUNCI: Dokumen | File Picker | Kirim Dokumen | PDF | Lampiran File]
+  // [FITUR: Pilih Dokumen & Kirim File]
+  // [RENTANG: Baris ~3225 - 3350]
+  // [FUNGSI: Menggunakan FilePicker untuk memilih dokumen dari memori perangkat
+  //          (PDF, Word, Excel, ZIP, dsb.), menampilkan pratinjau dokumen,
+  //          dan mengirimkannya sebagai lampiran file obrolan.]
+  // =====================================================================
   Future<void> _pickAndSendDocument() async {
     setState(() => _showAttachmentPanel = false);
 
@@ -3336,12 +3389,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
-  // ─────────────────────────────────────────────
-  //  SHARE LOCATION
-  // ─────────────────────────────────────────────
-
-  // FITUR: Bagikan Lokasi (Maps)
-  // FUNGSI: Membuka halaman LocationPickerPage untuk memilih koordinat, lalu mengirimkannya sebagai tautan Google Maps ke ruang obrolan.
+  // =====================================================================
+  // [KATA KUNCI: Lokasi | Share Location | Bagikan Lokasi | Google Maps | GPS]
+  // [FITUR: Bagikan Titik Lokasi / Maps]
+  // [RENTANG: Baris ~3360 - 3450]
+  // [FUNGSI: Membuka layar LocationPickerPage (peta) untuk memilih titik koordinat
+  //          GPS, lalu mengirimkan tautan Google Maps beserta preview ke ruang chat.]
+  // =====================================================================
   Future<void> _shareLocation() async {
     setState(() => _showAttachmentPanel = false);
 
@@ -3431,12 +3485,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
-  // ─────────────────────────────────────────────
-  //  PICK & SEND IMAGE FROM GALLERY
-  // ─────────────────────────────────────────────
-
-  // FITUR: Pilih Gambar Galeri & Pratinjau
-  // FUNGSI: Membuka pemilih gambar bawaan perangkat dari galeri, dan menampilkannya di halaman pratinjau sebelum dikirim.
+  // =====================================================================
+  // [KATA KUNCI: Foto | Galeri | Kirim Gambar | Image Picker | Lampiran Foto]
+  // [FITUR: Pilih Foto dari Galeri & Kirim]
+  // [RENTANG: Baris ~3460 - 3550]
+  // [FUNGSI: Membuka galeri foto perangkat, menampilkan pratinjau FilePreviewScreen,
+  //          mengunggah foto ke server, dan mengirimkannya sebagai pesan gambar.]
+  // =====================================================================
   Future<void> _pickAndSendImage() async {
     setState(() => _showAttachmentPanel = false);
     final picker = ImagePicker();
@@ -3767,8 +3822,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
-  // FITUR: Menampilkan Modal Perekaman Suara
-  // FUNGSI: Membuka bottom sheet khusus yang berisi UI untuk merekam suara (durasi, gelombang suara visual, tombol pause/stop/delete).
+  // =====================================================================
+  // [KATA KUNCI: Voice Note | Rekam Suara | Pesan Suara | Audio Recorder | Mic]
+  // [FITUR: Rekam & Kirim Pesan Suara (Voice Note)]
+  // [RENTANG: Baris ~3790 - 3860]
+  // [FUNGSI: Membuka VoiceRecordingBottomSheet untuk merekam suara secara real-time,
+  //          visualisasi waveform, pause/resume, playback, dan mengirimkan file audio ke obrolan.]
+  // =====================================================================
   void _showVoiceBottomSheet() async {
     // Start recording first
     await _startRecording();
@@ -4008,9 +4068,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  // FITUR: Tombol Mengambang Pintasan Scroll ke Bawah
-  // FUNGSI: Memungkinkan pengguna yang sedang membaca histori pesan lama di atas untuk kembali ke pesan terbaru dalam satu ketukan,
-  //         dilengkapi lencana (badge) yang menghitung jumlah pesan baru yang masuk saat pengguna belum scroll ke bawah.
+  // =====================================================================
+  // [KATA KUNCI: Scroll Ke Bawah | Scroll To Bottom | Unread Badge | Floating Button]
+  // [FITUR: Tombol Mengambang Pintasan Scroll ke Pesan Terbaru]
+  // [RENTANG: Baris ~4040 - 4110]
+  // [FUNGSI: Tombol melayang di pojok kanan bawah yang muncul saat pengguna scroll
+  //          ke riwayat pesan lama di atas. Menampilkan badge jumlah pesan baru
+  //          yang masuk dan mengembalikan posisi scroll ke bawah dalam satu ketukan.]
+  // =====================================================================
   Widget _buildScrollToBottomButton(bool isDark) {
     return AnimatedScale(
       scale: _showScrollToBottomButton ? 1.0 : 0.0,
@@ -4371,10 +4436,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  //  APP BAR — matching screenshot
-  // ─────────────────────────────────────────────
-
+  // =====================================================================
+  // [KATA KUNCI: Status AppBar | Blocked | Resolved | Header Kontak Diblokir]
+  // [FITUR: Header Status Obrolan (AppBar)]
+  // [RENTANG: Baris ~4410 - 4550]
+  // [FUNGSI: Menampilkan bilah header khusus ketika kontak berstatus Blocked
+  //          atau percakapan telah diselesaikan (Resolved). Menyediakan teks
+  //          status peringatan, tombol info kontak, dan menu opsi lanjutan.]
+  // =====================================================================
   PreferredSizeWidget _buildAppBar(bool isDark) {
     // ── STATUS APP BAR (Resolved / Blocked - Web Dashboard Style) ──
     final bool isResolved = chat.status.toLowerCase() == 'resolved';
@@ -4423,7 +4492,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               );
             },
           ),
-          // FITUR: Menu Opsi Lanjutan (Titik Tiga Di Dalam Chat)
+          // =====================================================================
+          // [KATA KUNCI: Menu Titik Tiga | Opsi Chat | Add Agent | Mark Resolved | Archive]
+          // [FITUR: Menu Opsi Lanjutan Obrolan (Popup Menu)]
+          // [RENTANG: Baris ~4465 - 4550]
+          // [FUNGSI: Menu drop-down titik tiga di AppBar untuk menugaskan agen (Add Human Agent),
+          //          menyelesaikan chat (Mark as Resolved), mengarsipkan (Archive), atau membuka bantuan.]
+          // =====================================================================
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert, color: iconColor),
             shape: RoundedRectangleBorder(
@@ -4511,7 +4586,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       );
     }
 
-    // ── ARCHIVED APP BAR ──
+    // =====================================================================
+    // [KATA KUNCI: Archived AppBar | Chat Arsip | Restore Chat | Pulihkan Obrolan]
+    // [FITUR: Header Percakapan Diarsipkan (AppBar)]
+    // [RENTANG: Baris ~4560 - 4610]
+    // [FUNGSI: Menampilkan bilah header saat obrolan berada di folder arsip.
+    //          Menyediakan tombol pemulihan (restore) obrolan kembali ke daftar utama.]
+    // =====================================================================
     if (chat.isArchived) {
       return AppBar(
         automaticallyImplyLeading: MediaQuery.of(context).size.width <= 800,
@@ -4555,7 +4636,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       );
     }
 
-    // ── NORMAL APP BAR (non-archived) ──
+    // =====================================================================
+    // [KATA KUNCI: Normal AppBar | Header Chat Utama | Profil Kontak | Channel Badge]
+    // [FITUR: Header Obrolan Standar (AppBar)]
+    // [RENTANG: Baris ~4610 - 4750]
+    // [FUNGSI: Header utama ruang percakapan. Menampilkan avatar profil penerima,
+    //          nama kontak, badge nomor/akun WhatsApp/Instagram, tombol profil
+    //          kontak (sidebar), dan menu aksi titik tiga.]
+    // =====================================================================
     return AppBar(
       automaticallyImplyLeading: MediaQuery.of(context).size.width <= 800,
       backgroundColor: isDark ? AppTheme.darkSurface : Colors.blue,
@@ -4739,10 +4827,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  //  SELECTION APP BAR — matching WhatsApp style
-  // ─────────────────────────────────────────────
-
+  // =====================================================================
+  // [KATA KUNCI: Selection AppBar | Mode Seleksi Pesan | Multi Select | Reply | Forward | Copy | Delete]
+  // [FITUR: Header Mode Seleksi Pesan (Selection AppBar)]
+  // [RENTANG: Baris ~4800 - 4950]
+  // [FUNGSI: Menampilkan bilah aksi atas ketika pengguna memilih satu atau beberapa
+  //          pesan. Menyediakan tombol Balas (Reply), Teruskan (Forward), Salin (Copy),
+  //          dan Hapus Pesan (Delete).]
+  // =====================================================================
   PreferredSizeWidget _buildSelectionAppBar(bool isDark) {
     return AppBar(
       backgroundColor: isDark ? AppTheme.darkSurface : const Color(
@@ -4819,7 +4911,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           },
         ),
 
-        // Delete / Trash
+        // =====================================================================
+        // [KATA KUNCI: Hapus Pesan | Delete Message | Dialog Hapus]
+        // [FITUR: Dialog & Eksekusi Hapus Pesan Terpilih]
+        // [RENTANG: Baris ~4885 - 4950]
+        // [FUNGSI: Membuka dialog konfirmasi untuk menghapus semua pesan yang
+        //          sedang diseleksi, memperbarui cache lokal, dan memanggil API backend.]
+        // =====================================================================
         IconButton(
           icon: const Icon(Icons.delete, color: Colors.white),
           onPressed: () {
@@ -5099,10 +5197,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
-  // ─────────────────────────────────────────────
-  //  MESSAGE LIST
-  // ─────────────────────────────────────────────
-
+  // =====================================================================
+  // [KATA KUNCI: Message List | Daftar Pesan | ListView Pesan | Bubble Chat | Riwayat Obrolan]
+  // [FITUR: Daftar Tampilan Pesan Obrolan (Message List)]
+  // [RENTANG: Baris ~5170 - 5330]
+  // [FUNGSI: Merender daftar pesan dalam ruangan obrolan menggunakan ListView.builder
+  //          (reverse: true). Menampilkan efek shimmer saat loading, status kosong
+  //          jika belum ada pesan, pembatas tanggal otomatis, serta membungkus
+  //          setiap pesan ke dalam widget MessageBubbleWidget.]
+  // =====================================================================
   Widget _buildMessageList(bool isDark) {
     if (_isLoadingMessages) {
       return const MessageShimmerWidget();
@@ -5263,7 +5366,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  /// Status divider widget — shown once at the bottom of archived or resolved chat messages
+  // =====================================================================
+  // [KATA KUNCI: Status Divider | Pembatas Status Chat | Resolved Divider | Archived Divider]
+  // [FITUR: Garis Pembatas Status Percakapan]
+  // [RENTANG: Baris ~5340 - 5390]
+  // [FUNGSI: Menampilkan garis pemisah dan teks keterangan di bagian bawah daftar pesan
+  //          apabila percakapan telah diselesaikan (Resolved) atau diarsipkan.]
+  // =====================================================================
   Widget _buildStatusDivider({required bool isResolved}) {
     final textLabel = isResolved
         ? 'Percakapan ini telah diselesaikan'
@@ -5316,7 +5425,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  /// Check if we should show a date separator between two messages
+  // =====================================================================
+  // [KATA KUNCI: Date Separator | Pembatas Tanggal | Hari Ini | Kemarin]
+  // [FITUR: Pembatas Tanggal Antar Pesan]
+  // [RENTANG: Baris ~5395 - 5450]
+  // [FUNGSI: Menentukan apakah harus menampilkan pembatas tanggal (misal: Hari ini,
+  //          Kemarin, atau tanggal spesifik) di antara dua pesan yang dikirim pada hari berbeda.]
+  // =====================================================================
   bool _shouldShowDateSeparator(Message prev, Message current) {
     final prevDate = _extractDate(prev.rawTime);
     final curDate = _extractDate(current.rawTime);
@@ -5474,6 +5589,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   }
 
   /// Bottom sheet with message options (Reply, Star)
+  // =====================================================================
+  // [KATA KUNCI: Opsi Pesan | Message Options | Balas | Bintang | Star | Salin | Teruskan]
+  // [FITUR: Lembar Aksi Menu Pesan (Bottom Sheet Options)]
+  // [RENTANG: Baris ~5560 - 5645]
+  // [FUNGSI: Membuka bottom sheet aksi pesan saat pesan di-tap/dipilih:
+  //          - Balas (Reply)
+  //          - Tandai Bintang (Star/Unstar message)
+  //          - Salin Teks (Copy to clipboard)
+  //          - Teruskan (Forward to other chats)]
+  // =====================================================================
   void _showMessageOptions(Message message) {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     final msgId = '${message.content.hashCode}_${message.time}';
@@ -5560,7 +5685,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  /// Forward message dialog
+  // =====================================================================
+  // [KATA KUNCI: Teruskan Pesan | Forward Message | Dialog Teruskan]
+  // [FITUR: Dialog Teruskan Pesan ke Kontak Lain]
+  // [RENTANG: Baris ~5650 - 5840]
+  // [FUNGSI: Menampilkan dialog daftar obrolan aktif untuk meneruskan isi pesan
+  //          ke kontak lain yang dipilih.]
+  // =====================================================================
   void _showForwardDialog(Message message) {
     final chatProvider = Provider.of<ChatProvider>(context, listen: false);
     final allChats = chatProvider.chats;
@@ -6379,10 +6510,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  //  INPUT BAR — matching screenshot
-  // ─────────────────────────────────────────────
-
+  // =====================================================================
+  // [KATA KUNCI: Input Bar | Kolom Chat | TextField Pesan | Send Button | Tombol Mic]
+  // [FITUR: Kolom Pengetikan Pesan Bawah (Input Bar)]
+  // [RENTANG: Baris ~6485 - 6595]
+  // [FUNGSI: Wadah utama interaksi pengetikan pesan di bagian bawah layar.
+  //          Menyediakan tombol lampiran (attach file), TextField pengetikan,
+  //          tombol toggle keyboard emoji, serta tombol kirim teks / mikrofon rekaman suara.]
+  // =====================================================================
   Widget _buildInputBar(bool isDark) {
     // Attachment panel or spacing
     final bottomPadding = MediaQuery.of(context).padding.bottom + 8;
@@ -6494,10 +6629,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  //  ATTACHMENT PANEL
-  // ─────────────────────────────────────────────
-
+  // =====================================================================
+  // [KATA KUNCI: Attachment Panel | Panel Lampiran | Menu Media | Kamera | Galeri | Video | Dokumen | Lokasi]
+  // [FITUR: Panel Menu Lampiran Media (Attachment Panel)]
+  // [RENTANG: Baris ~6600 - 6695]
+  // [FUNGSI: Menampilkan menu pop-up animasi berisi pilihan jenis lampiran media
+  //          (Kamera, Galeri Foto, Video, Dokumen, dan Berbagi Lokasi Google Maps).]
+  // =====================================================================
   Widget _buildAttachmentPanel(bool isDark) {
     return AnimatedContainer(
       key: const ValueKey('attachmentPanel'),
@@ -6590,10 +6728,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   // Removed _buildRecordingBar as it's replaced by VoiceRecordingBottomSheet
 
-  // ─────────────────────────────────────────────
-  //  EMOJI PICKER — WhatsApp style
-  // ─────────────────────────────────────────────
-
+  // =====================================================================
+  // [KATA KUNCI: Emoji Picker | Keyboard Emoji | Emoticon | Stiker]
+  // [FITUR: Papan Tombol Emoji (Emoji Picker)]
+  // [RENTANG: Baris ~6700 - 6780]
+  // [FUNGSI: Menampilkan keyboard khusus emoji bergaya WhatsApp dengan fitur
+  //          kategori emoji, pencarian emoji, dan tombol backspace.]
+  // =====================================================================
   Widget _buildEmojiPicker(bool isDark) {
     return SizedBox(
       key: const ValueKey('emojiPicker'),
@@ -6681,6 +6822,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
+  // =====================================================================
+  // [KATA KUNCI: Reply Preview | Balas Pesan | Pratinjau Balasan | Kutipan Pesan]
+  // [FITUR: Kartu Pratinjau Balasan Pesan (Reply Preview)]
+  // [RENTANG: Baris ~6795 - 6850]
+  // [FUNGSI: Menampilkan bar kecil di atas kolom input yang berisi kutipan pesan
+  //          yang sedang dibalas (nama pengirim, cuplikan isi pesan, dan tombol silang 'X' untuk membatalkan).]
+  // =====================================================================
   Widget _buildReplyPreview(bool isDark) {
     return Container(
       key: const ValueKey('replyPreview'),

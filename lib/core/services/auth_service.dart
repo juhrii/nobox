@@ -39,10 +39,17 @@ class AuthService {
       }
     } on DioException catch (e) {
       String errorMessage = e.message ?? 'Unknown connection error';
+      final statusCode = e.response?.statusCode ?? 500;
+
       if (e.response != null && e.response?.data is Map) {
-        errorMessage = e.response?.data['error'] ?? errorMessage;
+        final data = e.response?.data as Map;
+        // NoBox API returns {"InitialText": "...", "Key": "..."} for auth errors
+        errorMessage = data['InitialText'] 
+            ?? data['error'] 
+            ?? data['Error']?.toString()
+            ?? errorMessage;
       }
-      return ApiResponse.failure(errorMessage, e.response?.statusCode ?? 500);
+      return ApiResponse.failure(errorMessage, statusCode);
     } catch (e) {
       return ApiResponse.failure(e.toString(), 500);
     }

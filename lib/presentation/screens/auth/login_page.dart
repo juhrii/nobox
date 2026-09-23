@@ -5,6 +5,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/signalr_service.dart';
 import 'package:nobox_chat_basic/core/providers/theme_provider.dart';
 import 'package:nobox_chat_basic/core/utils/app_routes.dart';
+import '../../widgets/top_notification.dart';
 
 // =====================================================================
 // FITUR: Halaman Login
@@ -76,11 +77,10 @@ class _LoginPageState extends State<LoginPage> {
         Navigator.pushReplacementNamed(context, AppRoutes.home);
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response.error ?? 'Login failed. Please check your credentials.'),
-            backgroundColor: Colors.redAccent,
-          ),
+        TopNotification.show(
+          context,
+          message: response.error ?? 'Login gagal. Periksa kembali kredensial Anda.',
+          isError: true,
         );
       }
     }
@@ -312,12 +312,12 @@ class _LoginPageState extends State<LoginPage> {
       prefixIcon: Icon(icon, color: isDark ? Colors.white30 : Colors.black26, size: 22),
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.transparent,
+      fillColor: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
       contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.08),
+          color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.08),
         ),
       ),
       focusedBorder: OutlineInputBorder(

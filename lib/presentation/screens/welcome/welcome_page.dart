@@ -26,7 +26,7 @@ class _WelcomePageState extends State<WelcomePage> {
     const OnboardingItem(
       title: 'Satu Aplikasi,\nSemua Saluran',
       description:
-          'Kelola seluruh percakapan pelanggan dari WhatsApp, Telegram, Instagram, TikTok, hingga marketplace dalam satu kotak masuk terpadu.',
+          ' seluruh percakapan pelanggan dari KelolaWhatsApp, Telegram, Instagram, TikTok, hingga marketplace dalam satu kotak masuk terpadu.',
       illustrationType: IllustrationType.channels,
     ),
     const OnboardingItem(
