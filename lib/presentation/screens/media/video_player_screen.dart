@@ -197,8 +197,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
       // No AppBar — full-screen clean look
       body: GestureDetector(
         onTap: _onScreenTap,
@@ -256,7 +260,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                               IconButton(
                                 icon: const Icon(Icons.arrow_back,
                                     color: Colors.white, size: 26),
-                                onPressed: () => Navigator.pop(context),
+                                onPressed: () {
+                                  FocusManager.instance.primaryFocus?.unfocus();
+                                  Navigator.pop(context);
+                                },
                               ),
                               const Expanded(
                                 child: Text(
@@ -357,8 +364,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildBottomControls() {
     final progress = _totalDuration.inMilliseconds > 0

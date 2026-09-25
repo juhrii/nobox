@@ -979,8 +979,9 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: GestureDetector(
-            onTap: () {
-              Navigator.of(context).push(
+            onTap: () async {
+              FocusManager.instance.primaryFocus?.unfocus();
+              await Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => ImageViewerScreen(
                     imageUrl: (imageUrl != null && imageUrl.isNotEmpty) 
@@ -990,6 +991,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                   ),
                 ),
               );
+              FocusManager.instance.primaryFocus?.unfocus();
             },
             child: Hero(
               tag: imageUrl ?? widget.message.imagePath ?? 'image_${widget.message.id}',
@@ -1094,9 +1096,10 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
       crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         GestureDetector(
-          onTap: () {
+          onTap: () async {
             if (videoUrl.isNotEmpty) {
-              Navigator.of(context).push(
+              FocusManager.instance.primaryFocus?.unfocus();
+              await Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => VideoPlayerScreen(
                     videoUrl: videoUrl,
@@ -1104,6 +1107,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                   ),
                 ),
               );
+              FocusManager.instance.primaryFocus?.unfocus();
             }
           },
           child: ClipRRect(

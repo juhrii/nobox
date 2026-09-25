@@ -2931,6 +2931,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     // Show preview before sending
     if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _focusNode.unfocus();
     final confirmed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -2941,6 +2943,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         ),
       ),
     );
+    FocusManager.instance.primaryFocus?.unfocus();
+    _focusNode.unfocus();
     if (confirmed != true) return;
 
     final now = DateTime.now();
@@ -3029,6 +3033,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     // Show preview before sending
     if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _focusNode.unfocus();
     final confirmed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -3039,6 +3045,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         ),
       ),
     );
+    FocusManager.instance.primaryFocus?.unfocus();
+    _focusNode.unfocus();
     if (confirmed != true) return;
 
     final now = DateTime.now();
@@ -3293,6 +3301,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       // Show preview before sending
       if (!mounted) return;
+      FocusManager.instance.primaryFocus?.unfocus();
+      _focusNode.unfocus();
       final confirmed = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
@@ -3303,6 +3313,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           ),
         ),
       );
+      FocusManager.instance.primaryFocus?.unfocus();
+      _focusNode.unfocus();
       if (confirmed != true) return;
 
       final now = DateTime.now();
@@ -3506,6 +3518,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     // Show preview before sending
     if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _focusNode.unfocus();
     final confirmed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -3516,6 +3530,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         ),
       ),
     );
+    FocusManager.instance.primaryFocus?.unfocus();
+    _focusNode.unfocus();
     if (confirmed != true) return;
 
     final now = DateTime.now();
@@ -5258,6 +5274,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       alignment: Alignment.topCenter,
       child: ListView.builder(
         controller: _scrollController,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         reverse: true,
         shrinkWrap: displayMessages.length < 15,
         addRepaintBoundaries: true,
@@ -6551,6 +6568,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             child: TextField(
               controller: _messageController,
               focusNode: _focusNode,
+              autofocus: false,
               minLines: 1,
               maxLines: 3,
               onTap: () {
