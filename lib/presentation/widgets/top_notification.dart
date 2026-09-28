@@ -13,18 +13,22 @@ class TopNotification {
 
   static void show(
     BuildContext context, {
+    String? title,
     required String message,
     bool isError = true,
     Duration duration = const Duration(seconds: 4),
   }) {
     dismissImmediately();
 
-    final overlay = Overlay.maybeOf(context);
+    final overlay = Overlay.maybeOf(context, rootOverlay: true) ??
+        Overlay.maybeOf(context) ??
+        Navigator.maybeOf(context, rootNavigator: true)?.overlay;
     if (overlay == null) return;
 
     late OverlayEntry entry;
     entry = OverlayEntry(
       builder: (context) => _TopNotificationWidget(
+        title: title,
         message: message,
         isError: isError,
         duration: duration,
@@ -54,12 +58,14 @@ class TopNotification {
 }
 
 class _TopNotificationWidget extends StatefulWidget {
+  final String? title;
   final String message;
   final bool isError;
   final VoidCallback onDismiss;
   final Duration duration;
 
   const _TopNotificationWidget({
+    this.title,
     required this.message,
     required this.isError,
     required this.onDismiss,
@@ -185,14 +191,36 @@ class _TopNotificationWidgetState extends State<_TopNotificationWidget>
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            widget.message,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              height: 1.3,
-                            ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (widget.title != null &&
+                                  widget.title!.isNotEmpty) ...[
+                                Text(
+                                  widget.title!,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                              ],
+                              Text(
+                                widget.message,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(
+                                    alpha: widget.title != null ? 0.95 : 1.0,
+                                  ),
+                                  fontSize: widget.title != null ? 12 : 14,
+                                  fontWeight: widget.title != null
+                                      ? FontWeight.normal
+                                      : FontWeight.w600,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 8),

@@ -1409,6 +1409,7 @@ class ChatService {
     int? contactId,
     int? linkId,
     String? manualNumber,
+    int? groupId,
     bool isGroup = false,
   }) async {
     try {
@@ -1422,9 +1423,9 @@ class ChatService {
         "AccId": accountId,
         "ChId": channelId,
         "LinkId": linkId ?? 0,
-        "GrpId": 0, // Fill properly if isGroup = true later
+        "GrpId": isGroup ? (groupId ?? 0) : 0,
         "Chat": isGroup ? 1 : 0,
-        "CtId": contactId ?? 0,
+        "CtId": isGroup ? 0 : (contactId ?? 0),
         "Manual": manualNumber ?? "",
         "To": toType,
       };
@@ -1485,6 +1486,7 @@ class ChatService {
             'linkId': extractedLinkId,
             'accountId': extractedAccId,
             'ctRealId': extractedCtRealId,
+            'groupId': groupId?.toString(),
             'data': result['Data'] ?? responseData,
           };
         } else if (responseData != null) {

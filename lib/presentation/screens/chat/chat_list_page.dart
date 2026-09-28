@@ -27,6 +27,7 @@ import '../../widgets/chat_list_skeleton.dart';
 import '../../widgets/connection_status_banner.dart';
 import '../../widgets/authenticated_avatar.dart';
 import '../../widgets/channel_icon.dart';
+import '../../widgets/top_notification.dart';
 import '../../../core/utils/date_time_helper.dart';
 import '../../../core/utils/string_helper.dart';
 import '../../../core/providers/chat_settings_provider.dart';
@@ -1145,8 +1146,9 @@ class _ChatListPageState extends State<ChatListPage>
     String selectedChat = 'Private';
     String? selectedChannel;
     String? selectedAccount;
-    String selectedTo = 'Contact'; // Contact, Link, Manual
+    String selectedTo = 'Contact'; // Contact, Link, Manual (or Group, Link, Manual)
     String? selectedContact;
+    String? selectedGroup;
     String manualInput = '';
     String initialMessage = 'Hello';
 
@@ -1154,6 +1156,7 @@ class _ChatListPageState extends State<ChatListPage>
     List<Map<String, dynamic>> channels = [];
     List<Map<String, dynamic>> accounts = [];
     List<Map<String, dynamic>> contacts = [];
+    List<Map<String, dynamic>> groups = [];
     bool isLoadingData = true;
     String? loadError;
     bool isCreatingRoom = false;
@@ -1173,6 +1176,7 @@ class _ChatListPageState extends State<ChatListPage>
                     chatService.getChannels(),
                     chatService.getAccounts(),
                     chatService.getContacts(),
+                    chatService.getGroups(),
                   ]);
 
                   final channelResp =
@@ -1181,6 +1185,8 @@ class _ChatListPageState extends State<ChatListPage>
                       results[1] as ApiResponse<List<Map<String, dynamic>>>;
                   final contactResp =
                       results[2] as ApiResponse<List<Map<String, dynamic>>>;
+                  final groupResp =
+                      results[3] as ApiResponse<List<Map<String, dynamic>>>;
 
                   setDialogState(() {
                     isLoadingData = false;
@@ -1218,6 +1224,9 @@ class _ChatListPageState extends State<ChatListPage>
                           }
                         }
                       }
+                    }
+                    if (!groupResp.isError && groupResp.data != null) {
+                      groups = groupResp.data!;
                     }
                   });
                 } catch (e) {
@@ -1316,6 +1325,14 @@ class _ChatListPageState extends State<ChatListPage>
               'nm',
               'DisplayName',
             ]);
+            final groupNames = _toUniqueNames(groups, [
+              'Name',
+              'DisplayName',
+              'Title',
+              'Nm',
+              'nm',
+              'GroupName',
+            ]);
 
             final isDark = Theme.of(context).brightness == Brightness.dark;
             return Dialog(
@@ -1395,6 +1412,9 @@ class _ChatListPageState extends State<ChatListPage>
                                     isLoadingData = true;
                                     loadError = null;
                                     channels = [];
+                                    accounts = [];
+                                    contacts = [];
+                                    groups = [];
                                   });
                                 },
                                 child: const Text('Retry'),
@@ -1409,8 +1429,18 @@ class _ChatListPageState extends State<ChatListPage>
                           selectedChat,
                           ['Private', 'Group'],
                           (val) {
-                            if (val != null)
-                              setDialogState(() => selectedChat = val);
+                            if (val != null && val != selectedChat) {
+                              setDialogState(() {
+                                selectedChat = val;
+                                if (selectedChat == 'Group') {
+                                  selectedTo = 'Group';
+                                  selectedGroup = null;
+                                } else {
+                                  selectedTo = 'Contact';
+                                  selectedContact = null;
+                                }
+                              });
+                            }
                           },
                         ),
 
@@ -1476,7 +1506,9 @@ class _ChatListPageState extends State<ChatListPage>
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Radio<String>(
-                                            value: 'Contact',
+                                            value: selectedChat == 'Group'
+                                                ? 'Group'
+                                                : 'Contact',
                                             groupValue: selectedTo,
                                             onChanged: (val) {
                                               if (val != null)
@@ -1490,9 +1522,11 @@ class _ChatListPageState extends State<ChatListPage>
                                             visualDensity:
                                                 VisualDensity.compact,
                                           ),
-                                          const Text(
-                                            'Contact',
-                                            style: TextStyle(fontSize: 14),
+                                          Text(
+                                            selectedChat == 'Group'
+                                                ? 'Group'
+                                                : 'Contact',
+                                            style: const TextStyle(fontSize: 14),
                                           ),
                                         ],
                                       ),
@@ -1552,8 +1586,18 @@ class _ChatListPageState extends State<ChatListPage>
                           ),
                         ),
 
-                        // Dropdown pilihan Kontak (dari API) atau input angka secara Manual
-                        if (selectedTo == 'Contact')
+                        // Dropdown pilihan Kontak / Grup (dari API) atau input angka secara Manual
+                        if (selectedChat == 'Group' && selectedTo == 'Group')
+                          buildDropdownRow(
+                            'Group',
+                            selectedGroup,
+                            groupNames,
+                            (val) {
+                              setDialogState(() => selectedGroup = val);
+                            },
+                            hintText: groupNames.isEmpty ? 'Tidak ada grup' : '--select--',
+                          )
+                        else if (selectedChat != 'Group' && selectedTo == 'Contact')
                           buildDropdownRow(
                             'Contact',
                             selectedContact,
@@ -1581,7 +1625,9 @@ class _ChatListPageState extends State<ChatListPage>
                                 Expanded(
                                   child: TextField(
                                     decoration: InputDecoration(
-                                      hintText: 'Enter phone number...',
+                                      hintText: selectedChat == 'Group'
+                                          ? 'Enter group ID or number...'
+                                          : 'Enter phone number...',
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
@@ -1616,7 +1662,9 @@ class _ChatListPageState extends State<ChatListPage>
                                 Expanded(
                                   child: TextField(
                                     decoration: InputDecoration(
-                                      hintText: 'Paste link...',
+                                      hintText: selectedChat == 'Group'
+                                          ? 'Paste group link...'
+                                          : 'Paste link...',
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
@@ -1666,91 +1714,11 @@ class _ChatListPageState extends State<ChatListPage>
                                     String msg,
                                   ) {
                                     debugPrint('ChatList: Validation Failed -> $title: $msg');
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).hideCurrentSnackBar();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        behavior: SnackBarBehavior.floating,
-                                        elevation: 8,
-                                        backgroundColor: Colors.transparent,
-                                        margin: const EdgeInsets.all(16),
-                                        padding: EdgeInsets.zero,
-                                        duration: const Duration(seconds: 4),
-                                        content: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 14,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            gradient: const LinearGradient(
-                                              colors: [
-                                                Color(0xFFD32F2F),
-                                                Color(0xFFB71C1C),
-                                              ],
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withValues(
-                                                  alpha: 0.25,
-                                                ),
-                                                blurRadius: 10,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                padding: const EdgeInsets.all(
-                                                  8,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.2),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: const Icon(
-                                                  Icons.info_outline_rounded,
-                                                  color: Colors.white,
-                                                  size: 24,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 14),
-                                              Expanded(
-                                                child: Column(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      title,
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 3),
-                                                    Text(
-                                                      msg,
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
+                                    TopNotification.show(
+                                      dialogContext,
+                                      title: title,
+                                      message: msg,
+                                      isError: true,
                                     );
                                   }
 
@@ -1772,7 +1740,33 @@ class _ChatListPageState extends State<ChatListPage>
                                     );
                                     return;
                                   }
-                                  if (selectedChat != 'Group') {
+                                  if (selectedChat == 'Group') {
+                                    if (selectedTo == 'Group' &&
+                                        (selectedGroup == null ||
+                                            selectedGroup!.trim().isEmpty ||
+                                            selectedGroup!.contains('No Groups') ||
+                                            selectedGroup!.contains('Tidak ada grup'))) {
+                                      showValidationToast(
+                                        'Kolom Belum Lengkap!',
+                                        'Silakan pilih Grup tujuan dari daftar yang tersedia.',
+                                      );
+                                      return;
+                                    } else if (selectedTo == 'Manual' &&
+                                        manualInput.trim().isEmpty) {
+                                      showValidationToast(
+                                        'Kolom Belum Lengkap!',
+                                        'Silakan masukkan nomor/ID grup tujuan secara manual.',
+                                      );
+                                      return;
+                                    } else if (selectedTo == 'Link' &&
+                                        manualInput.trim().isEmpty) {
+                                      showValidationToast(
+                                        'Kolom Belum Lengkap!',
+                                        'Silakan masukkan ID Tautan (Link) grup tujuan.',
+                                      );
+                                      return;
+                                    }
+                                  } else {
                                     if (selectedTo == 'Contact' &&
                                         (selectedContact == null ||
                                             selectedContact!.trim().isEmpty ||
@@ -1837,79 +1831,102 @@ class _ChatListPageState extends State<ChatListPage>
                                   String? receiver;
                                   int? contactId;
                                   int? linkId;
+                                  int? groupId;
+                                  String? groupName;
                                   bool isGroup = selectedChat == 'Group';
 
-                                  if (selectedTo == 'Contact' &&
-                                      selectedContact != null) {
-                                    final idx = contactNames.indexOf(
-                                      selectedContact!,
-                                    );
-                                    if (idx >= 0 && idx < contacts.length) {
-                                      final contact = contacts[idx];
-                                      debugPrint('ChatList: Selected Contact RAW: $contact');
-                                      receiver = (contact['Id'] ?? contact['id'])?.toString();
-                                      contactId = int.tryParse(receiver ?? '');
-                                      debugPrint('ChatList: Receiver (Id): $receiver, Parsed CtId: $contactId');
+                                  if (isGroup) {
+                                    if (selectedTo == 'Group' && selectedGroup != null) {
+                                      final idx = groupNames.indexOf(selectedGroup!);
+                                      if (idx >= 0 && idx < groups.length) {
+                                        final grp = groups[idx];
+                                        debugPrint('ChatList: Selected Group RAW: $grp');
+                                        final rawGrpId = (grp['Id'] ?? grp['id'] ?? grp['GroupId'] ?? grp['GrpId'])?.toString();
+                                        groupId = int.tryParse(rawGrpId ?? '');
+                                        groupName = (grp['Name'] ?? grp['DisplayName'] ?? grp['Title'] ?? grp['Nm'])?.toString();
+                                        receiver = rawGrpId;
+                                        debugPrint('ChatList: Receiver (GroupId): $receiver, Parsed GrpId: $groupId, GroupName: $groupName');
+                                      }
+                                    } else if (selectedTo == 'Manual' || selectedTo == 'Link') {
+                                      receiver = manualInput;
+                                      groupId = int.tryParse(manualInput);
+                                      groupName = manualInput;
+                                      if (selectedTo == 'Link') {
+                                        linkId = int.tryParse(manualInput);
+                                      }
+                                    }
+                                  } else {
+                                    if (selectedTo == 'Contact' &&
+                                        selectedContact != null) {
+                                      final idx = contactNames.indexOf(
+                                        selectedContact!,
+                                      );
+                                      if (idx >= 0 && idx < contacts.length) {
+                                        final contact = contacts[idx];
+                                        debugPrint('ChatList: Selected Contact RAW: $contact');
+                                        receiver = (contact['Id'] ?? contact['id'])?.toString();
+                                        contactId = int.tryParse(receiver ?? '');
+                                        debugPrint('ChatList: Receiver (Id): $receiver, Parsed CtId: $contactId');
 
-                                      // CARI LeadLink yang 100% cocok dengan Channel (misal 2 = Telegram) & Akun
-                                      // agar obrolan yang dibuka memiliki riwayat pesan yang benar (tidak salah WA / tidak 0 pesan)!
-                                      final leadLinks = contact['LeadLinks'];
-                                      if (leadLinks is List &&
-                                          leadLinks.isNotEmpty) {
-                                        Map? targetLink;
-                                        for (final l in leadLinks) {
-                                          if (l is Map) {
-                                            final lChId =
-                                                l['ChId']?.toString() ??
-                                                l['Ch']?.toString() ??
-                                                l['ChannelId']?.toString() ??
-                                                l['chId']?.toString() ??
-                                                '';
-                                            final lAccId =
-                                                l['AccId']?.toString() ??
-                                                l['AccountId']?.toString() ??
-                                                l['IdAccount']?.toString() ??
-                                                l['accId']?.toString() ??
-                                                '';
+                                        // CARI LeadLink yang 100% cocok dengan Channel (misal 2 = Telegram) & Akun
+                                        // agar obrolan yang dibuka memiliki riwayat pesan yang benar (tidak salah WA / tidak 0 pesan)!
+                                        final leadLinks = contact['LeadLinks'];
+                                        if (leadLinks is List &&
+                                            leadLinks.isNotEmpty) {
+                                          Map? targetLink;
+                                          for (final l in leadLinks) {
+                                            if (l is Map) {
+                                              final lChId =
+                                                  l['ChId']?.toString() ??
+                                                  l['Ch']?.toString() ??
+                                                  l['ChannelId']?.toString() ??
+                                                  l['chId']?.toString() ??
+                                                  '';
+                                              final lAccId =
+                                                  l['AccId']?.toString() ??
+                                                  l['AccountId']?.toString() ??
+                                                  l['IdAccount']?.toString() ??
+                                                  l['accId']?.toString() ??
+                                                  '';
 
-                                            if (lChId ==
-                                                channelIdInt.toString()) {
-                                              if (accountIdInt > 0 &&
-                                                  lAccId ==
-                                                      accountIdInt.toString()) {
-                                                targetLink = l;
-                                                break;
-                                              } else if (targetLink == null) {
-                                                targetLink = l;
+                                              if (lChId ==
+                                                  channelIdInt.toString()) {
+                                                if (accountIdInt > 0 &&
+                                                    lAccId ==
+                                                        accountIdInt.toString()) {
+                                                  targetLink = l;
+                                                  break;
+                                                } else if (targetLink == null) {
+                                                  targetLink = l;
+                                                }
                                               }
                                             }
                                           }
-                                        }
-                                        targetLink ??= (leadLinks[0] is Map
-                                            ? leadLinks[0]
-                                            : null);
-                                        if (targetLink != null) {
-                                          linkId = int.tryParse(
-                                            targetLink['Id']?.toString() ??
-                                                targetLink['id']?.toString() ??
-                                                '',
-                                          );
+                                          targetLink ??= (leadLinks[0] is Map
+                                              ? leadLinks[0]
+                                              : null);
+                                          if (targetLink != null) {
+                                            linkId = int.tryParse(
+                                              targetLink['Id']?.toString() ??
+                                                  targetLink['id']?.toString() ??
+                                                  '',
+                                            );
+                                          }
                                         }
                                       }
-                                    }
-                                  } else if (selectedTo == 'Manual' ||
-                                      selectedTo == 'Link') {
-                                    receiver = manualInput;
-                                    if (selectedTo == 'Link') {
-                                      linkId = int.tryParse(manualInput);
+                                    } else if (selectedTo == 'Manual' ||
+                                        selectedTo == 'Link') {
+                                      receiver = manualInput;
+                                      if (selectedTo == 'Link') {
+                                        linkId = int.tryParse(manualInput);
+                                      }
                                     }
                                   }
 
-                                  if (!isGroup &&
-                                      (receiver == null || receiver!.isEmpty)) {
+                                  if (receiver == null || receiver!.isEmpty) {
                                     showValidationToast(
                                       'Kolom Belum Lengkap!',
-                                      'Silakan periksa kembali data penerima yang dipilih.',
+                                      'Silakan periksa kembali data ${isGroup ? "grup" : "penerima"} yang dipilih.',
                                     );
                                     return;
                                   }
@@ -1921,8 +1938,9 @@ class _ChatListPageState extends State<ChatListPage>
                                       .createNewRoom(
                                         accountId: accountIdInt,
                                         channelId: channelIdInt,
-                                        contactId: contactId,
+                                        contactId: isGroup ? null : contactId,
                                         linkId: linkId,
+                                        groupId: groupId,
                                         manualNumber: selectedTo == 'Manual'
                                             ? manualInput
                                             : null,
@@ -1978,6 +1996,21 @@ class _ChatListPageState extends State<ChatListPage>
                                           bool isSameChannel =
                                               c.chId == channelIdInt.toString();
                                           if (!isSameChannel) return false;
+
+                                          if (isGroup) {
+                                            if (groupId != null &&
+                                                groupId > 0 &&
+                                                c.groupId == groupId.toString()) {
+                                              return true;
+                                            }
+                                            if (groupName != null &&
+                                                groupName.isNotEmpty &&
+                                                c.groupName.trim().toLowerCase() ==
+                                                    groupName.trim().toLowerCase()) {
+                                              return true;
+                                            }
+                                            return false;
+                                          }
 
                                           if (linkId != null &&
                                               linkId! > 0 &&
@@ -2095,10 +2128,20 @@ class _ChatListPageState extends State<ChatListPage>
 
                                         newChat = ChatModel(
                                           id: newRoomIdStr ?? '',
-                                          contactId: resolvedCtId.isNotEmpty
-                                              ? resolvedCtId
-                                              : (receiver ?? ''),
-                                          sender: resolvedSender,
+                                          contactId: isGroup
+                                              ? ''
+                                              : (resolvedCtId.isNotEmpty
+                                                  ? resolvedCtId
+                                                  : (receiver ?? '')),
+                                          sender: isGroup
+                                              ? (groupName?.isNotEmpty == true
+                                                  ? groupName!
+                                                  : (selectedGroup?.isNotEmpty == true
+                                                      ? selectedGroup!
+                                                      : (manualInput.isNotEmpty
+                                                          ? manualInput
+                                                          : 'Group')))
+                                              : resolvedSender,
                                           lastMessage: '',
                                           time:
                                               DateTime.now().toIso8601String(),
@@ -2126,12 +2169,16 @@ class _ChatListPageState extends State<ChatListPage>
                                           campaign: '',
                                           deal: '',
                                           groupName: isGroup
-                                              ? (manualInput.isNotEmpty
-                                                  ? manualInput
-                                                  : 'Group')
+                                              ? (groupName?.isNotEmpty == true
+                                                  ? groupName!
+                                                  : (selectedGroup?.isNotEmpty == true
+                                                      ? selectedGroup!
+                                                      : (manualInput.isNotEmpty
+                                                          ? manualInput
+                                                          : 'Group')))
                                               : '',
                                           groupId:
-                                              isGroup ? (receiver ?? '') : '',
+                                              isGroup ? (groupId?.toString() ?? receiver ?? '') : '',
                                         );
                                         // Masukkan ke daftar lokal agar langsung terlihat
                                         context

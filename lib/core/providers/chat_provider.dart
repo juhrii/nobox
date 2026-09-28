@@ -1500,23 +1500,53 @@ class ChatProvider with ChangeNotifier {
       _saveReadState();
     }
 
-    final index = _chats.indexWhere((c) => c.id == roomId);
+    int index = _chats.indexWhere((c) => c.id == roomId);
+    if (index == -1) {
+      final cleanRoomId = roomId
+          .replaceAll('@s.whatsapp.net', '')
+          .replaceAll('@c.us', '')
+          .replaceAll('@g.us', '')
+          .replaceAll(RegExp(r'^[0-9]+_'), '');
+      final numericRoomId = roomId.replaceAll(RegExp(r'[^0-9\-]'), '');
+      index = _chats.indexWhere((c) {
+        if (c.contactId == roomId || c.ctRealId == roomId || c.link == roomId || c.extId == roomId) return true;
+        if (cleanRoomId.isNotEmpty && (c.contactId == cleanRoomId || c.ctRealId == cleanRoomId || c.link == cleanRoomId || c.extId == cleanRoomId)) return true;
+        if (numericRoomId.isNotEmpty) {
+          final cNum = c.id.replaceAll(RegExp(r'[^0-9\-]'), '');
+          final ctNum = c.ctRealId.replaceAll(RegExp(r'[^0-9\-]'), '');
+          if (cNum.isNotEmpty && cNum == numericRoomId) return true;
+          if (ctNum.isNotEmpty && ctNum == numericRoomId) return true;
+        }
+        return false;
+      });
+    }
+
     if (index == -1) {
       debugPrint(
         'ChatProvider: 🚨 Room $roomId missing on TerimaPesan! Triggering fallback refresh.',
       );
       refreshFirstPage();
     } else {
-      if (PushNotificationService.currentRoomId != roomId && !resolvedIsMe) {
-        final currentUc = _localUnreadOverrides[roomId] ?? _chats[index].unreadCount;
+      final matchedChat = _chats[index];
+      final isCurrentRoom = PushNotificationService.currentRoomId != null &&
+          (PushNotificationService.currentRoomId == roomId ||
+              PushNotificationService.currentRoomId == matchedChat.id ||
+              PushNotificationService.currentRoomId == matchedChat.contactId ||
+              PushNotificationService.currentRoomId == matchedChat.ctRealId);
+      if (!isCurrentRoom && !resolvedIsMe) {
+        final currentUc = _localUnreadOverrides[roomId] ?? _localUnreadOverrides[matchedChat.id] ?? matchedChat.unreadCount;
         final newUc = currentUc > 0 ? currentUc + 1 : 1;
         _localUnreadOverrides[roomId] = newUc;
+        _localUnreadOverrides[matchedChat.id] = newUc;
         _readIds.remove(roomId);
+        _readIds.remove(matchedChat.id);
         _saveReadState();
         debugPrint('ChatProvider: 📈 Incremented Unread (via handleTerimaPesanSync) for room $roomId. New Uc: $newUc');
       } else if (resolvedIsMe) {
         _localUnreadOverrides.remove(roomId);
+        _localUnreadOverrides.remove(matchedChat.id);
         if (!_readIds.contains(roomId)) _readIds.add(roomId);
+        if (!_readIds.contains(matchedChat.id)) _readIds.add(matchedChat.id);
         _chats[index] = _chats[index].copyWith(unreadCount: 0);
         _saveReadState();
       }

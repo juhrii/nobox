@@ -1964,6 +1964,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FITUR: Koneksi Pesan Real-time (SignalR)
   // FUNGSI: Mendaftarkan listener WebSocket (SignalR) untuk menerima pesan masuk secara instan ke dalam UI, dan mengirim status "sudah dibaca".
   void _subscribeToSignalR() {
+    _signalRSubscription?.cancel();
     final signalR = SignalRService();
 
     // Listen to TerimaPesan (pre-parsed by SignalRService)
@@ -1982,81 +1983,134 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       final ctIdVal = messageData['ContactId']?.toString() ?? '';
       final linkVal = messageData['Link']?.toString() ?? '';
       final ctRealIdVal = messageData['CtRealId']?.toString() ?? '';
+      final msgRoomId = messageData['RoomId']?.toString() ?? '';
 
       // FIX: Jangan proses Telegram Saved Messages
       final isTelegram =
           chat.chId == '2' ||
           chat.channelType.toLowerCase().contains('telegram') ||
           chat.channelName.toLowerCase().contains('telegram');
-      final sdrName = senderData?['Name']?.toString().toLowerCase() ?? '';
+      final sdrName = (senderData?['Name'] ?? messageData['Sender'] ?? messageData['SenderName'] ?? '').toString().toLowerCase();
       if (sdrName == 'saved messages' || sdrName == 'pesan tersimpan' ||
           (fromVal.isNotEmpty && fromVal == toVal && !fromVal.startsWith('-') && isTelegram)) {
         debugPrint('ChatDetailPage: 🛡️ Ignored Telegram Saved Message from SignalR');
         return;
       }
 
+      // Channel & Account Isolation Guard: Cegah pesan channel/akun lain masuk
+      final incomingChId = (messageData['ChId'] ?? messageData['ch_id'])?.toString() ?? '';
+      if (incomingChId.isNotEmpty && chat.chId.isNotEmpty && incomingChId != chat.chId) {
+        debugPrint('ChatDetailPage: 🛡️ Ignored message from different channel: incoming $incomingChId vs current ${chat.chId}');
+        return;
+      }
+
+      final incomingAccId = (messageData['ChAccId'] ?? messageData['IdAccount'] ?? messageData['AccountId'])?.toString() ?? '';
+      if (incomingAccId.isNotEmpty && chat.accountId.isNotEmpty && incomingAccId != '0' && chat.accountId != '0' && incomingAccId != chat.accountId) {
+        debugPrint('ChatDetailPage: 🛡️ Ignored message from different account: incoming $incomingAccId vs current ${chat.accountId}');
+        return;
+      }
+
+      final isResolved = chat.status.toLowerCase() == 'resolved' || chat.status == '3' || chat.isArchived;
+
       final numericChatId = chat.id.replaceAll(RegExp(r'[^0-9\-]'), '');
-      final numericIncomingId = incomingRoomId.replaceAll(
-        RegExp(r'[^0-9\-]'),
-        '',
-      );
+      final numericIncomingId = incomingRoomId.replaceAll(RegExp(r'[^0-9\-]'), '');
+      final numericMsgRoomId = msgRoomId.replaceAll(RegExp(r'[^0-9\-]'), '');
 
       bool isMatch = false;
-      final bool hasValidLocalRoomId = chat.id.isNotEmpty && chat.id != '0' && chat.id != 'null';
 
-      if (hasValidLocalRoomId) {
-        // Aturan Ketat: Jika chat ID lokal valid, MAKA Room ID dari SignalR WAJIB COCOK.
-        // Mencegah chat Resolved (lama) ikut ter-update oleh pesan dari chat aktif (baru).
-        if (incomingRoomId == chat.id ||
-            incomingRoomId.replaceAll(RegExp(r'^[0-9]+_'), '') == chat.id.replaceAll(RegExp(r'^[0-9]+_'), '') ||
-            (numericIncomingId.isNotEmpty && numericIncomingId == numericChatId)) {
-          isMatch = true;
+      // 1. Direct RoomId match (selalu valid untuk semua kondisi, termasuk resolved)
+      if ((incomingRoomId.isNotEmpty && incomingRoomId == chat.id) ||
+          (msgRoomId.isNotEmpty && msgRoomId == chat.id) ||
+          (numericIncomingId.isNotEmpty && numericChatId.isNotEmpty && numericIncomingId == numericChatId) ||
+          (numericMsgRoomId.isNotEmpty && numericChatId.isNotEmpty && numericMsgRoomId == numericChatId) ||
+          (incomingRoomId.isNotEmpty && incomingRoomId.replaceAll(RegExp(r'^[0-9]+_'), '') == chat.id.replaceAll(RegExp(r'^[0-9]+_'), '')) ||
+          (msgRoomId.isNotEmpty && msgRoomId.replaceAll(RegExp(r'^[0-9]+_'), '') == chat.id.replaceAll(RegExp(r'^[0-9]+_'), ''))) {
+        isMatch = true;
+      }
+
+      // 2. Pencocokan ID kontak/channel (ContactId, CtRealId, Link, Phone, GroupId, Sender)
+      // Hanya izinkan jika chat BUKAN status Resolved (mencegah chat resolved lama ter-update oleh sesi baru)
+      if (!isMatch && !isResolved) {
+        String cleanPhone(String s) => s
+            .replaceAll('@s.whatsapp.net', '')
+            .replaceAll('@c.us', '')
+            .replaceAll('@g.us', '')
+            .replaceAll(RegExp(r'^[0-9]+_'), '');
+
+        String cleanDigits(String s) => s.replaceAll(RegExp(r'[^0-9\-]'), '');
+
+        final candidateSet = <String>{};
+        void addCandidate(String? v) {
+          if (v == null) return;
+          final s = v.trim();
+          if (s.isEmpty || s == '0' || s == 'null' || s == 'false' || s == 'true' || s == 'undefined') return;
+          candidateSet.add(s);
+          final cp = cleanPhone(s);
+          if (cp.isNotEmpty && cp != s) candidateSet.add(cp);
+          final cd = cleanDigits(s);
+          if (cd.isNotEmpty && cd != s && cd != cp) candidateSet.add(cd);
         }
-      } else {
-        // Jika chat ID lokal KOSONG (misal chat baru dibuat dari kontak),
-        // BARU KITA BOLEH fallback mencocokkan berdasarkan Contact ID / CtRealId.
-        final candidates = [
-          incomingRoomId,
-          incomingRoomId.replaceAll(RegExp(r'^[0-9]+_'), ''),
-          numericIncomingId,
-          fromVal,
-          toVal,
-          ctIdVal,
-          linkVal,
-          ctRealIdVal,
-        ].where((e) => e.isNotEmpty && e != '0' && e != 'null').toSet();
 
-        final myIds = [
-          chat.contactId,
-          chat.groupId,
-          chat.ctRealId,
-          chat.link,
-          chat.sender,
-        ].where((e) => e.isNotEmpty && e != '0' && e != 'null').toSet();
+        addCandidate(incomingRoomId);
+        addCandidate(msgRoomId);
+        addCandidate(ctIdVal);
+        addCandidate(ctRealIdVal);
+        addCandidate(linkVal);
+        addCandidate(fromVal);
+        addCandidate(messageData['SenderId']?.toString());
+        addCandidate(messageData['GroupId']?.toString());
 
-        if (candidates.intersection(myIds).isNotEmpty) {
+        final myIdSet = <String>{};
+        void addMyId(String? v) {
+          if (v == null) return;
+          final s = v.trim();
+          if (s.isEmpty || s == '0' || s == 'null' || s == 'false' || s == 'true' || s == 'undefined') return;
+          myIdSet.add(s);
+          final cp = cleanPhone(s);
+          if (cp.isNotEmpty && cp != s) myIdSet.add(cp);
+          final cd = cleanDigits(s);
+          if (cd.isNotEmpty && cd != s && cd != cp) myIdSet.add(cd);
+        }
+
+        addMyId(chat.id);
+        addMyId(chat.contactId);
+        addMyId(chat.ctRealId);
+        addMyId(chat.link);
+        addMyId(chat.groupId);
+        addMyId(chat.extId);
+        if (RegExp(r'^[0-9\-\+\s]+$').hasMatch(chat.sender.trim())) {
+          addMyId(chat.sender);
+        }
+
+        final intersection = candidateSet.intersection(myIdSet);
+        if (intersection.isNotEmpty) {
           isMatch = true;
+          debugPrint('ChatDetailPage: ✅ Room matched via identifier: ${intersection.first}');
         }
       }
 
       if (!isMatch) {
         final errMsg =
-            '🛑 IGNORED! Incoming: $incomingRoomId | ChatId: ${chat.id} | CtId: ${chat.contactId} | GrpId: ${chat.groupId} | RealId: ${chat.ctRealId}';
+            '🛑 IGNORED! Incoming: $incomingRoomId (msgRoom: $msgRoomId) | ChatId: ${chat.id} | CtId: ${chat.contactId} | GrpId: ${chat.groupId} | RealId: ${chat.ctRealId}';
         debugPrint(errMsg);
         return;
       }
 
       // 🚨 AUTO-REPAIR CHAT ID DI REALTIME 🚨
-      if ((chat.id.isEmpty || chat.id == '0' || chat.id == 'null') &&
-          incomingRoomId.isNotEmpty &&
-          incomingRoomId != '0' &&
-          incomingRoomId != 'null') {
-        chat = chat.copyWith(id: incomingRoomId);
+      final realRoomId = (msgRoomId.isNotEmpty && msgRoomId != '0' && msgRoomId != 'null')
+          ? msgRoomId
+          : incomingRoomId;
+      if ((chat.id.isEmpty || chat.id == '0' || chat.id == 'null' || !RegExp(r'^[0-9]+$').hasMatch(chat.id)) &&
+          realRoomId.isNotEmpty &&
+          realRoomId != '0' &&
+          realRoomId != 'null' &&
+          RegExp(r'^[0-9]+$').hasMatch(realRoomId)) {
+        chat = chat.copyWith(id: realRoomId);
         try {
           context.read<ChatProvider>().updateLocalChat(chat);
         } catch (_) {}
         debugPrint(
-          'SignalR: 🛠️ REPAIRED EMPTY CHAT ID in Realtime from 0 to $incomingRoomId',
+          'SignalR: 🛠️ REPAIRED EMPTY/NON-NUMERIC CHAT ID in Realtime to $realRoomId',
         );
       }
 
@@ -2374,7 +2428,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       // Tell server we've read this message
       try {
-        final roomIdInt = int.tryParse(chat.id);
+        final roomIdInt = int.tryParse(chat.id) ?? int.tryParse(msgRoomId) ?? int.tryParse(incomingRoomId);
         if (roomIdInt != null) {
           signalR.sendReadCount(roomIdInt);
         }
