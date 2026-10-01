@@ -223,6 +223,10 @@ class SignalRService {
         _connectionStateController.add(true);
         // Re-subscribe setelah reconnect (seperti project mentor)
         _subscribeUser();
+        final currentRoom = PushNotificationService.currentRoomId;
+        if (currentRoom != null && currentRoom.isNotEmpty) {
+          joinConversation(currentRoom);
+        }
       });
 
       // Start the connection
@@ -750,6 +754,49 @@ class SignalRService {
       await invoke('ReadMsgCount', args: [roomId]);
     } catch (e) {
       debugPrint('SignalR: Failed to send ReadMsgCount for room $roomId: $e');
+    }
+  }
+
+  /// Join a conversation room group in SignalR so the server streams TerimaPesan directly.
+  Future<void> joinConversation(dynamic roomId) async {
+    if (_hubConnection == null || _hubConnection!.state != HubConnectionState.Connected) {
+      debugPrint('SignalR: ⚠️ Cannot JoinConversation - not connected');
+      return;
+    }
+    try {
+      final rawRoomStr = roomId?.toString().trim() ?? '';
+      String cleanRoomStr = rawRoomStr;
+      if (rawRoomStr.contains('_')) {
+        cleanRoomStr = rawRoomStr.split('_').last;
+      }
+      final parsedIdRoom = int.tryParse(cleanRoomStr.replaceAll(RegExp(r'[^0-9\-]'), ''));
+      final joinRoomId = parsedIdRoom?.toString() ?? cleanRoomStr;
+      if (joinRoomId.isEmpty || joinRoomId == '0' || joinRoomId == 'null') return;
+      debugPrint('SignalR: 🚪 Invoking JoinConversation for Room $joinRoomId');
+      await invoke('JoinConversation', args: [joinRoomId, ""]);
+    } catch (e) {
+      debugPrint('SignalR: ⚠️ JoinConversation failed: $e');
+    }
+  }
+
+  /// Leave a conversation room group in SignalR.
+  Future<void> leaveConversation(dynamic roomId) async {
+    if (_hubConnection == null || _hubConnection!.state != HubConnectionState.Connected) {
+      return;
+    }
+    try {
+      final rawRoomStr = roomId?.toString().trim() ?? '';
+      String cleanRoomStr = rawRoomStr;
+      if (rawRoomStr.contains('_')) {
+        cleanRoomStr = rawRoomStr.split('_').last;
+      }
+      final parsedIdRoom = int.tryParse(cleanRoomStr.replaceAll(RegExp(r'[^0-9\-]'), ''));
+      final joinRoomId = parsedIdRoom?.toString() ?? cleanRoomStr;
+      if (joinRoomId.isEmpty || joinRoomId == '0' || joinRoomId == 'null') return;
+      debugPrint('SignalR: 🚪 Invoking LeaveConversation for Room $joinRoomId');
+      await invoke('LeaveConversation', args: [joinRoomId, ""]);
+    } catch (_) {
+      // Backend may not implement LeaveConversation, safe to ignore
     }
   }
 

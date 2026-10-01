@@ -384,6 +384,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   Message? _repliedMessage;
   ChatStatusProvider? _statusProvider;
   StreamSubscription<Map<String, dynamic>>? _signalRSubscription;
+  StreamSubscription<Map<String, dynamic>>? _subSpvSubscription;
   final ScrollController _scrollController = ScrollController();
   bool _isComposing = false;
   bool _showEmojiPicker = false;
@@ -511,6 +512,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       });
     }
     _signalRSubscription?.cancel();
+    _subSpvSubscription?.cancel();
+    SignalRService().leaveConversation(chat.id);
     _messageController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -1492,29 +1495,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FUNGSI: Memulai proses polling interval untuk memperbarui status baca/terkirim (ack) pada pesan, jika koneksi real-time tidak memadai.
   // FITUR 4: Timer polling untuk memperbarui status centang di layar secara berkala.
   // [ACTION: ACK_POLLING] - Proses sinkronisasi status pesan di background
-  void _startChatSyncPolling() {
-    debugPrint('ChatSync: Started polling timer.');
-    _ackPollTimer?.cancel();
-    _ackPollTimer = Timer.periodic(const Duration(seconds: 12), (timer) async {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
+  bool _isSyncingMessages = false;
 
+  // FITUR: Sinkronisasi Pesan Instan & Latar Belakang
+  // FUNGSI: Mengambil pesan terbaru dari server secara langsung (dipicu oleh event TerimaSubSpv atau timer polling berkala)
+  Future<void> _fetchLatestMessagesImmediately() async {
+    if (_isSyncingMessages || !mounted) return;
+    _isSyncingMessages = true;
+    try {
       final isTelegram =
           chat.chId == '2' ||
           chat.channelType.toLowerCase().contains('telegram') ||
           chat.channelName.toLowerCase().contains('telegram');
-
-      // Jika SignalR terhubung dan tidak ada pesan yang sedang menunggu ACK (ack < 3 / id kosong),
-      // lewati pemanggilan API untuk non-Telegram untuk menghemat performa ponsel.
-      // Untuk Telegram, tetap jalankan polling periodik agar pesan masuk real-time tidak tertinggal.
-      final hasPendingAcks = _messages.any(
-        (m) => m.isMe && (m.id.isEmpty || m.id.startsWith('temp_') || m.ack < 3),
-      );
-      if (SignalRService().isConnected && !hasPendingAcks && !isTelegram) {
-        return;
-      }
 
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final currentUserEmail = authProvider.currentUser ?? '';
@@ -1538,7 +1530,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         );
 
         debugPrint(
-          'AckPolling: Fetched ${newMessages.length} filtered messages. Matching...',
+          'ChatSync: Fetched ${newMessages.length} filtered messages. Matching...',
         );
         setState(() {
           bool hasNewMessages = false;
@@ -1945,7 +1937,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 });
               }
             }
-            // Send read receipt
             try {
               final roomIdInt = int.tryParse(chat.id);
               if (roomIdInt != null) {
@@ -1955,8 +1946,24 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           }
         });
       } else {
-        debugPrint('AckPolling: ❌ API Error: ${response.error}');
+        debugPrint('ChatSync: ❌ API Error: ${response.error}');
       }
+    } catch (e) {
+      debugPrint('ChatSync: ❌ Error during sync: $e');
+    } finally {
+      _isSyncingMessages = false;
+    }
+  }
+
+  void _startChatSyncPolling() {
+    debugPrint('ChatSync: Started polling timer.');
+    _ackPollTimer?.cancel();
+    _ackPollTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      _fetchLatestMessagesImmediately();
     });
   }
 
@@ -1964,7 +1971,27 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FUNGSI: Mendaftarkan listener WebSocket (SignalR) untuk menerima pesan masuk secara instan ke dalam UI, dan mengirim status "sudah dibaca".
   void _subscribeToSignalR() {
     _signalRSubscription?.cancel();
+    _subSpvSubscription?.cancel();
     final signalR = SignalRService();
+
+    // Listen to TerimaSubSpv / TerimaSubAgent for instant room update notifications
+    _subSpvSubscription = signalR.onTerimaSubSpv.listen((data) {
+      final roomData = data['room'] as Map<String, dynamic>? ?? {};
+      final incomingRoomId = roomData['Id']?.toString() ?? '';
+      if (incomingRoomId.isEmpty) return;
+
+      final isMatch = incomingRoomId == chat.id ||
+          (chat.contactId.isNotEmpty && incomingRoomId == chat.contactId) ||
+          (chat.ctRealId.isNotEmpty && incomingRoomId == chat.ctRealId) ||
+          (chat.link.isNotEmpty && incomingRoomId == chat.link) ||
+          (chat.groupId.isNotEmpty && incomingRoomId == chat.groupId) ||
+          (incomingRoomId.replaceAll(RegExp(r'[^0-9]'), '') == chat.id.replaceAll(RegExp(r'[^0-9]'), ''));
+
+      if (isMatch) {
+        debugPrint('ChatDetailPage: ⚡ Realtime TerimaSubSpv matched for room $incomingRoomId! Fetching immediately...');
+        _fetchLatestMessagesImmediately();
+      }
+    });
 
     // Listen to TerimaPesan (pre-parsed by SignalRService)
     _signalRSubscription = signalR.onTerimaPesan.listen((data) {
@@ -2555,6 +2582,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       _statusProvider = Provider.of<ChatStatusProvider>(context, listen: false);
       _loadInitialMessages();
       _subscribeToSignalR();
+      SignalRService().joinConversation(chat.id);
+      if (chat.contactId.isNotEmpty && chat.contactId != chat.id) {
+        SignalRService().joinConversation(chat.contactId);
+      }
+      if (chat.ctRealId.isNotEmpty && chat.ctRealId != chat.id) {
+        SignalRService().joinConversation(chat.ctRealId);
+      }
 
       // Background refresh detail room agar AccountId, LinkId, dan ExtId selalu yang terbaru dari database
       _chatService.getDetailRoom(chat.id).then((resp) {
