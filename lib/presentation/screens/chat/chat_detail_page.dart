@@ -1290,11 +1290,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   Message newMsg = parsedMsg.copyWith(status: MessageStatus.read);
 
                   // FILTER: Jangan injeksi pesan Telegram "Saved Messages"
-                  final fromVal = messageData['From']?.toString() ?? '';
-                  final toVal = messageData['To']?.toString() ?? '';
                   final sdrName = (senderData?['Name'] ?? messageData['Sender'] ?? messageData['SenderName'] ?? '').toString().toLowerCase();
-                  if (sdrName == 'saved messages' || sdrName == 'pesan tersimpan' ||
-                      (fromVal.isNotEmpty && fromVal == toVal && !fromVal.startsWith('-'))) {
+                  if (sdrName == 'saved messages' || sdrName == 'pesan tersimpan') {
                     continue; // Skip Telegram Saved Messages
                   }
 
@@ -1430,10 +1427,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         } else {
           final cleaned = newContent
               .replaceAll('📷', '')
-              .replaceAll('Photo', '')
-              .replaceAll('Foto', '')
+              .replaceAll('🖼️', '')
+              .replaceAll('🖼', '')
+              .replaceAll(RegExp(r'^(Photo|Foto)\s*', caseSensitive: false), '')
               .trim();
-          newContent = '📷 Foto${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+          newContent = cleaned.isNotEmpty ? '📷 $cleaned' : '📷 Foto';
           typeStr = '3';
         }
       } else if (lastMsg.messageType == MessageType.voice) {
@@ -1503,22 +1501,23 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         return;
       }
 
+      final isTelegram =
+          chat.chId == '2' ||
+          chat.channelType.toLowerCase().contains('telegram') ||
+          chat.channelName.toLowerCase().contains('telegram');
+
       // Jika SignalR terhubung dan tidak ada pesan yang sedang menunggu ACK (ack < 3 / id kosong),
-      // lewati pemanggilan API untuk mencegah lag dan menghemat performa ponsel
+      // lewati pemanggilan API untuk non-Telegram untuk menghemat performa ponsel.
+      // Untuk Telegram, tetap jalankan polling periodik agar pesan masuk real-time tidak tertinggal.
       final hasPendingAcks = _messages.any(
         (m) => m.isMe && (m.id.isEmpty || m.id.startsWith('temp_') || m.ack < 3),
       );
-      if (SignalRService().isConnected && !hasPendingAcks) {
+      if (SignalRService().isConnected && !hasPendingAcks && !isTelegram) {
         return;
       }
 
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final currentUserEmail = authProvider.currentUser ?? '';
-
-      final isTelegram =
-          chat.chId == '2' ||
-          chat.channelType.toLowerCase().contains('telegram') ||
-          chat.channelName.toLowerCase().contains('telegram');
       final response = await _chatService.getMessageHistory(
         chat.id,
         currentUserEmail,
@@ -1991,23 +1990,24 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           chat.channelType.toLowerCase().contains('telegram') ||
           chat.channelName.toLowerCase().contains('telegram');
       final sdrName = (senderData?['Name'] ?? messageData['Sender'] ?? messageData['SenderName'] ?? '').toString().toLowerCase();
-      if (sdrName == 'saved messages' || sdrName == 'pesan tersimpan' ||
-          (fromVal.isNotEmpty && fromVal == toVal && !fromVal.startsWith('-') && isTelegram)) {
+      if (sdrName == 'saved messages' || sdrName == 'pesan tersimpan') {
         debugPrint('ChatDetailPage: 🛡️ Ignored Telegram Saved Message from SignalR');
         return;
       }
 
-      // Channel & Account Isolation Guard: Cegah pesan channel/akun lain masuk
-      final incomingChId = (messageData['ChId'] ?? messageData['ch_id'])?.toString() ?? '';
-      if (incomingChId.isNotEmpty && chat.chId.isNotEmpty && incomingChId != chat.chId) {
-        debugPrint('ChatDetailPage: 🛡️ Ignored message from different channel: incoming $incomingChId vs current ${chat.chId}');
-        return;
-      }
+      // Channel & Account Isolation Guard: Cegah pesan channel/akun lain masuk (hanya untuk WhatsApp / non-Telegram)
+      if (!isTelegram) {
+        final incomingChId = (messageData['ChId'] ?? messageData['ch_id'])?.toString() ?? '';
+        if (incomingChId.isNotEmpty && chat.chId.isNotEmpty && incomingChId != chat.chId) {
+          debugPrint('ChatDetailPage: 🛡️ Ignored message from different channel: incoming $incomingChId vs current ${chat.chId}');
+          return;
+        }
 
-      final incomingAccId = (messageData['ChAccId'] ?? messageData['IdAccount'] ?? messageData['AccountId'])?.toString() ?? '';
-      if (incomingAccId.isNotEmpty && chat.accountId.isNotEmpty && incomingAccId != '0' && chat.accountId != '0' && incomingAccId != chat.accountId) {
-        debugPrint('ChatDetailPage: 🛡️ Ignored message from different account: incoming $incomingAccId vs current ${chat.accountId}');
-        return;
+        final incomingAccId = (messageData['ChAccId'] ?? messageData['IdAccount'] ?? messageData['AccountId'])?.toString() ?? '';
+        if (incomingAccId.isNotEmpty && chat.accountId.isNotEmpty && incomingAccId != '0' && chat.accountId != '0' && incomingAccId != chat.accountId) {
+          debugPrint('ChatDetailPage: 🛡️ Ignored message from different account: incoming $incomingAccId vs current ${chat.accountId}');
+          return;
+        }
       }
 
       final isResolved = chat.status.toLowerCase() == 'resolved' || chat.status == '3' || chat.isArchived;
@@ -2029,8 +2029,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       }
 
       // 2. Pencocokan ID kontak/channel (ContactId, CtRealId, Link, Phone, GroupId, Sender)
-      // Hanya izinkan jika chat BUKAN status Resolved (mencegah chat resolved lama ter-update oleh sesi baru)
-      if (!isMatch && !isResolved) {
+      // Hanya izinkan jika chat BUKAN status Resolved (mencegah chat resolved lama ter-update oleh sesi baru),
+      // namun untuk Telegram tetap izinkan pencocokan identifier.
+      if (!isMatch && (!isResolved || isTelegram)) {
         String cleanPhone(String s) => s
             .replaceAll('@s.whatsapp.net', '')
             .replaceAll('@c.us', '')
@@ -2057,6 +2058,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         addCandidate(ctRealIdVal);
         addCandidate(linkVal);
         addCandidate(fromVal);
+        addCandidate(toVal);
         addCandidate(messageData['SenderId']?.toString());
         addCandidate(messageData['GroupId']?.toString());
 

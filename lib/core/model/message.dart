@@ -396,7 +396,7 @@ class Message {
           isMe = true;
         } else if (extSenderId.isNotEmpty && extChAccId.isNotEmpty && extSenderId == extChAccId) {
           isMe = true;
-        } else if (extSenderId.isNotEmpty && extFrom.isNotEmpty && extSenderId == extFrom && dirStr != 'in' && dirStr != '0') {
+        } else if (extSenderId.isNotEmpty && extFrom.isNotEmpty && extSenderId == extFrom && (dirStr == 'out' || dirStr == 'outbound' || dirStr == '1' || dirStr == '2')) {
           isMe = true;
         } else {
           // Fallback: cek kecocokan email
@@ -637,7 +637,22 @@ class Message {
     String? docName;
     String? docUrl;
 
-    if (json['Files'] != null && json['Files'] is List && (json['Files'] as List).isNotEmpty) {
+    final bool isLocation = content.contains('[-{=||=}-]') ||
+        (json['Msg'] != null && json['Msg'].toString().contains('[-{=||=}-]')) ||
+        (json['Content'] != null && json['Content'].toString().contains('[-{=||=}-]')) ||
+        typeVal == '15' ||
+        typeVal == '11' ||
+        (json['Msg'] != null && json['Msg'].toString().toLowerCase().contains('"lat":'));
+
+    if (isLocation) {
+      msgType = MessageType.text;
+      final rawCoord = (json['Msg']?.toString().contains('[-{=||=}-]') == true)
+          ? json['Msg'].toString()
+          : ((json['Content']?.toString().contains('[-{=||=}-]') == true)
+              ? json['Content'].toString()
+              : content);
+      content = rawCoord;
+    } else if (json['Files'] != null && json['Files'] is List && (json['Files'] as List).isNotEmpty) {
       final firstFile = (json['Files'] as List).first;
       final filePath = extractFilePath(firstFile);
       final originalName = extractOriginalName(firstFile);

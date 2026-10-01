@@ -75,6 +75,10 @@ class SignalRService {
   Stream<Map<String, dynamic>> get onBlockUnblock =>
       _blockUnblockController.stream;
 
+  // Cache deduplikasi event TerimaSubSpv & TerimaSubAgent ganda
+  String _lastProcessedSubSpvKey = '';
+  DateTime _lastProcessedSubSpvTime = DateTime.fromMillisecondsSinceEpoch(0);
+
   /// Hubungkan ke SignalR hub menggunakan token autentikasi pengguna.
   // FITUR 3: Terhubung ke server hub SignalR menggunakan Token JWT.
   // [ACTION: SIGNALR_CONNECT] - Membangun dan menjaga koneksi Web-Socket real-time
@@ -396,16 +400,13 @@ class SignalRService {
       }
 
       // FIX: Jangan proses pesan Telegram "Saved Messages" (Pesan Tersimpan ke diri sendiri)
-      final fromVal = messageData['From']?.toString() ?? '';
-      final toVal = messageData['To']?.toString() ?? '';
       final sdrName = senderData?['Name']?.toString().toLowerCase() ?? '';
       final msgSender = messageData['Sender']?.toString().toLowerCase() ?? '';
       final msgSenderName = messageData['SenderName']?.toString().toLowerCase() ?? '';
 
       final isSavedMessage = (sdrName == 'saved messages' || sdrName == 'pesan tersimpan' ||
           msgSender == 'saved messages' || msgSender == 'pesan tersimpan' ||
-          msgSenderName == 'saved messages' || msgSenderName == 'pesan tersimpan') ||
-          (fromVal.isNotEmpty && fromVal == toVal && !fromVal.startsWith('-'));
+          msgSenderName == 'saved messages' || msgSenderName == 'pesan tersimpan');
 
       if (isSavedMessage) {
         debugPrint('SignalR: 🛡️ Ignoring Telegram Saved Message to preserve chat list');
@@ -525,14 +526,29 @@ class SignalRService {
 
       // FIX: Jangan proses update room dari "Saved Messages"
       final ctName = (roomData['Ct'] ?? roomData['CtRealNm'] ?? roomData['Name'] ?? '').toString().toLowerCase();
-      final fromSub = roomData['From']?.toString() ?? '';
-      final toSub = roomData['To']?.toString() ?? '';
-      final isSavedSub = (ctName == 'saved messages' || ctName == 'pesan tersimpan') ||
-          (fromSub.isNotEmpty && fromSub == toSub && !fromSub.startsWith('-'));
+      final isSavedSub = (ctName == 'saved messages' || ctName == 'pesan tersimpan');
       if (isSavedSub) {
         debugPrint('SignalR: 🛡️ Ignoring TerimaSubSpv for Saved Messages');
         return;
       }
+
+      final roomId = roomData['Id']?.toString() ?? '';
+      final lastMsg = roomData['LastMsg']?.toString() ?? '';
+      final timeMsg = roomData['TimeMsg']?.toString() ?? '';
+      final uc = roomData['Uc']?.toString() ?? '';
+
+      // Deduplikasi event ganda (misal server broadcast TerimaSubSpv & TerimaSubAgent sekaligus)
+      final dedupeKey = '${roomId}_${lastMsg}_${timeMsg}_$uc';
+      final now = DateTime.now();
+      if (dedupeKey == _lastProcessedSubSpvKey &&
+          now.difference(_lastProcessedSubSpvTime).inMilliseconds < 1200) {
+        debugPrint(
+          'SignalR: ⏩ Skipping duplicate TerimaSubSpv/SubAgent for room $roomId within 1200ms',
+        );
+        return;
+      }
+      _lastProcessedSubSpvKey = dedupeKey;
+      _lastProcessedSubSpvTime = now;
 
       final parsed = {'tenantId': tenantId, 'room': roomData};
 

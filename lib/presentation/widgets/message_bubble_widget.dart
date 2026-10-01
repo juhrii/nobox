@@ -182,7 +182,9 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
 
   bool _isLocationMessage(String content) {
     return content.contains('Location:') ||
-        content.contains('maps.google.com/maps?q=') ||
+        content.contains('maps.google.com') ||
+        content.contains('maps.app.goo.gl') ||
+        content.contains('📍 Lokasi') ||
         content.contains('[-{=||=}-]');
   }
 
@@ -541,8 +543,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
   }
 
   Widget _buildMessageContent(BuildContext context, bool isMe, bool isDarkMode) {
-    if (widget.message.messageType == MessageType.text &&
-        _isLocationMessage(widget.message.content)) {
+    if (_isLocationMessage(widget.message.content)) {
       return _buildLocationMessage(isMe, isDarkMode);
     }
 
@@ -1309,8 +1310,9 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     double? latitude;
     double? longitude;
     String? mapsUrl;
+    String? address;
 
-    final locationRegex = RegExp(r'Location: (-?\d+\.\d+), (-?\d+\.\d+)');
+    final locationRegex = RegExp(r'Location:\s*(-?\d+\.?\d*),\s*(-?\d+\.?\d*)', caseSensitive: false);
     final match = locationRegex.firstMatch(messageText);
 
     if (match != null) {
@@ -1319,12 +1321,25 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
     } else if (messageText.contains('[-{=||=}-]')) {
       final parts = messageText.split('[-{=||=}-]');
       if (parts.length >= 2) {
-        latitude = double.tryParse(parts[0]);
-        longitude = double.tryParse(parts[1]);
+        latitude = double.tryParse(parts[0].trim());
+        longitude = double.tryParse(parts[1].trim());
+      }
+      if (parts.length >= 3) {
+        final rawAddr = parts[2].trim();
+        if (rawAddr.isNotEmpty && rawAddr != '-') {
+          address = rawAddr;
+        }
+      }
+    } else {
+      final coordRegex = RegExp(r'(?:query|q)=(-?\d+\.?\d*),(-?\d+\.?\d*)');
+      final coordMatch = coordRegex.firstMatch(messageText);
+      if (coordMatch != null) {
+        latitude = double.tryParse(coordMatch.group(1)!);
+        longitude = double.tryParse(coordMatch.group(2)!);
       }
     }
 
-    final urlRegex = RegExp(r'https://maps\.google\.com/maps\?q=(-?\d+\.\d+),(-?\d+\.\d+)');
+    final urlRegex = RegExp(r'https?:\/\/(?:www\.)?(?:google\.com\/maps[^\s]+|maps\.google\.com[^\s]+|maps\.app\.goo\.gl[^\s]+)');
     final urlMatch = urlRegex.firstMatch(messageText);
     if (urlMatch != null) {
       mapsUrl = urlMatch.group(0);
@@ -1339,7 +1354,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
             if (mapsUrl != null) {
               _openInMaps(mapsUrl);
             } else if (latitude != null && longitude != null) {
-              final url = 'https://maps.google.com/maps?q=$latitude,$longitude';
+              final url = 'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
               _openInMaps(url);
             }
           },
@@ -1370,7 +1385,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Location',
+                      'Lokasi',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: isMe
@@ -1383,6 +1398,23 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                     ),
                   ],
                 ),
+                if (address != null && address.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    address,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isMe
+                          ? Colors.white
+                          : (isDarkMode
+                              ? AppTheme.darkTextPrimary
+                              : AppTheme.textPrimary),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Container(
                   width: double.infinity,
@@ -1419,7 +1451,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Text(
-                            'Tap to open in Maps',
+                            'Ketuk untuk buka di Maps',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 10,
@@ -1434,7 +1466,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                 const SizedBox(height: 8),
                 if (latitude != null && longitude != null)
                   Text(
-                    'Lat: ${(latitude ?? 0.0).toStringAsFixed(6)}, Lng: ${(longitude ?? 0.0).toStringAsFixed(6)}',
+                    'Lat: ${latitude.toStringAsFixed(6)}, Lng: ${longitude.toStringAsFixed(6)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: isMe ? Colors.white70 : AppTheme.textSecondary,
@@ -1467,7 +1499,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'Open in Maps',
+                        'Buka di Google Maps',
                         style: TextStyle(
                           fontSize: 14,
                           color: isMe ? Colors.white : AppTheme.primaryColor,
@@ -1481,7 +1513,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
             ),
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 4),
         _buildTimestampRow(isMe),
       ],
     );

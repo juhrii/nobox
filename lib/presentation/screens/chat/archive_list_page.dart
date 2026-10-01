@@ -407,6 +407,15 @@ class _ArchiveListPageState extends State<ArchiveListPage> {
        }
     }
 
+    if (RegExp(r'^(📷|🖼️|🖼)\s*(Photo|Foto)', caseSensitive: false).hasMatch(displayMessage)) {
+      String t = displayMessage.replaceAll('📷', '').replaceAll('🖼️', '').replaceAll('🖼', '').trim();
+      final match = RegExp(r'^(Photo|Foto)\s*(.*)$', caseSensitive: false).firstMatch(t);
+      if (match != null) {
+        final desc = match.group(2)?.trim() ?? '';
+        displayMessage = desc.isNotEmpty ? '📷 $desc' : '📷 Foto';
+      }
+    }
+
     return Text(
       displayMessage,
       maxLines: 1,

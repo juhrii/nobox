@@ -681,8 +681,9 @@ class ChatProvider with ChangeNotifier {
                 !chat.isLastMessageFromMe &&
                 PushNotificationService.currentRoomId != chat.id) {
               isNewMessage = true;
-              forcedUnread =
-                  (_localUnreadOverrides[chat.id] ?? oldChat.unreadCount) + 1;
+              forcedUnread = chat.unreadCount > 0
+                  ? chat.unreadCount
+                  : ((_localUnreadOverrides[chat.id] ?? oldChat.unreadCount) + 1);
             } else if (chat.isLastMessageFromMe) {
               // Jika pesan terakhir dari Agen (isLastMessageFromMe = true),
               // Hapus override angka indikator dan tandai sebagai terbaca (0) 
@@ -1378,11 +1379,8 @@ class ChatProvider with ChangeNotifier {
           // Pesan dari pelanggan (Customer)!
           int finalUc;
           if (uc > 0) {
-            if (uc <= existing.unreadCount) {
-              finalUc = existing.unreadCount + 1;
-            } else {
-              finalUc = uc;
-            }
+            // Gunakan Uc akurat dari server NoBox
+            finalUc = uc;
           } else {
             final currentOver = _localUnreadOverrides[roomId] ?? existing.unreadCount;
             finalUc = currentOver > 0 ? currentOver : 1;

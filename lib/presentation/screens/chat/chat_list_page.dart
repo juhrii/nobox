@@ -139,11 +139,23 @@ class _ChatListPageState extends State<ChatListPage>
       actions: [
         IconButton(
           icon: const Icon(Icons.push_pin, color: Colors.white),
-          onPressed: () async {
-            for (var id in _selectedChats) {
-              await chatProvider.togglePin(id);
-            }
+          onPressed: () {
+            final selected = List<String>.from(_selectedChats);
+            final count = selected.length;
             setState(() => _selectedChats.clear());
+            for (var id in selected) {
+              chatProvider.togglePin(id);
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  count == 1
+                      ? 'Status sematan obrolan diperbarui'
+                      : '$count obrolan disematkan/diperbarui',
+                ),
+                duration: const Duration(seconds: 1),
+              ),
+            );
           },
         ),
         // [ACTION: ARCHIVE_MASSAL] - Ikon untuk arsip masal / multi select
@@ -198,19 +210,21 @@ class _ChatListPageState extends State<ChatListPage>
                     onPressed: () async {
                       Navigator.pop(ctx);
                       // [ACTION: ARCHIVE_EXECUTE_MASSAL] - Perulangan untuk mengarsip pesan yang dipilih
-                      for (var id in _selectedChats) {
+                      final selected = List<String>.from(_selectedChats);
+                      final count = selected.length;
+                      setState(() => _selectedChats.clear());
+                      for (var id in selected) {
                         await chatProvider.toggleArchive(id);
                       }
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              '${_selectedChats.length} chat(s) archived',
+                              '$count chat(s) archived',
                             ),
                             backgroundColor: Colors.blue.shade700,
                           ),
                         );
-                        setState(() => _selectedChats.clear());
                       }
                     },
                     child: const Text(
@@ -2779,7 +2793,37 @@ class _ChatListPageState extends State<ChatListPage>
       ].any((ext) => lower.contains(ext));
     }
 
-    final exactPhotoLabels = ['📷 photo', '📷 foto'];
+    String formatPhotoPreview(String text, {String? caption}) {
+      final cap = (caption ?? '').trim();
+      if (cap.isNotEmpty) {
+        final cleanedCap = cap
+            .replaceAll('📷', '')
+            .replaceAll('🖼️', '')
+            .replaceAll('🖼', '')
+            .replaceAll(RegExp(r'^(Photo|Foto)\s*', caseSensitive: false), '')
+            .trim();
+        return cleanedCap.isNotEmpty ? '📷 $cleanedCap' : '📷 Foto';
+      }
+
+      String t = text.trim();
+      t = t
+          .replaceAll('📷', '')
+          .replaceAll('🖼️', '')
+          .replaceAll('🖼', '')
+          .trim();
+      final match = RegExp(r'^(Photo|Foto)\s*(.*)$', caseSensitive: false).firstMatch(t);
+      if (match != null) {
+        final desc = match.group(2)?.trim() ?? '';
+        return desc.isNotEmpty ? '📷 $desc' : '📷 Foto';
+      }
+      if (t.isNotEmpty && t.toLowerCase() != 'photo' && t.toLowerCase() != 'foto') {
+        return '📷 $t';
+      }
+      return '📷 Foto';
+    }
+
+    final isRawPhotoString = RegExp(r'^(📷|🖼️|🖼)\s*(Photo|Foto)', caseSensitive: false).hasMatch(trimmedMsg);
+    final exactPhotoLabels = ['📷 photo', '📷 foto', '🖼 photo', '🖼 foto'];
     final exactVideoLabels = ['🎥 video', '🎬 video'];
     final exactStickerLabels = ['🌟 sticker', '🎬 sticker'];
 
@@ -2794,8 +2838,12 @@ class _ChatListPageState extends State<ChatListPage>
     } else if (exactStickerLabels.contains(lowerTrimmed) || chat.lastMessageType == '16' || chat.lastMessageType == '17') {
       displayMessage = '🌟 Sticker';
       parsedAsMedia = true;
-    } else if (exactPhotoLabels.contains(lowerTrimmed) || chat.lastMessageType == '3') {
-      displayMessage = '📷 Foto';
+    } else if (isRawPhotoString ||
+        exactPhotoLabels.contains(lowerTrimmed) ||
+        chat.lastMessageType == '3' ||
+        chat.lastMessageType?.toLowerCase() == 'photo' ||
+        chat.lastMessageType?.toLowerCase() == 'image') {
+      displayMessage = formatPhotoPreview(trimmedMsg);
       parsedAsMedia = true;
     } else if (exactVideoLabels.contains(lowerTrimmed) || chat.lastMessageType == '4') {
       displayMessage = '🎬 Video';
@@ -3031,7 +3079,7 @@ class _ChatListPageState extends State<ChatListPage>
             }
             parsedAsMedia = true;
           } else if (isImage) {
-            displayMessage = '📷 Foto${caption.isNotEmpty ? ' $caption' : ''}';
+            displayMessage = formatPhotoPreview('', caption: caption);
             parsedAsMedia = true;
           } else if (isVideo) {
             displayMessage = '🎬 Video${caption.isNotEmpty ? ' $caption' : ''}';
@@ -3050,9 +3098,9 @@ class _ChatListPageState extends State<ChatListPage>
                 overrideType == '2') {
               displayMessage = '🎤 Pesan Suara';
             } else if (overrideType.contains('image') ||
-                overrideType.contains('photo')) {
-              displayMessage =
-                  '📷 Foto${caption.isNotEmpty ? ' $caption' : ''}';
+                overrideType.contains('photo') ||
+                overrideType == '3') {
+              displayMessage = formatPhotoPreview('', caption: caption);
             } else if (overrideType.contains('video')) {
               displayMessage =
                   '🎬 Video${caption.isNotEmpty ? ' $caption' : ''}';
@@ -3157,12 +3205,7 @@ class _ChatListPageState extends State<ChatListPage>
         if (overrideType.contains('image') ||
             overrideType.contains('photo') ||
             overrideType == '3') {
-          final cleaned = displayMessage
-              .replaceAll('📷', '')
-              .replaceAll('Photo', '')
-              .replaceAll('Foto', '')
-              .trim();
-          displayMessage = '📷 Foto${cleaned.isNotEmpty ? ' $cleaned' : ''}';
+          displayMessage = formatPhotoPreview(displayMessage);
         } else if (overrideType.contains('video') || overrideType == '4') {
           final cleaned = displayMessage
               .replaceAll('🎥', '')
@@ -3315,7 +3358,7 @@ class _ChatListPageState extends State<ChatListPage>
           lower.startsWith('img-') ||
           lower.startsWith('img_') ||
           lower.startsWith('photo')) {
-        displayMessage = '📷 Foto';
+        displayMessage = formatPhotoPreview(displayMessage);
         parsedAsMedia = true;
       }
       // Deteksi stiker (WhatsApp webp, atau animasi webm/tgs)
@@ -3367,6 +3410,10 @@ class _ChatListPageState extends State<ChatListPage>
         displayMessage = '📎 Lampiran';
         parsedAsMedia = true;
       }
+    }
+
+    if (RegExp(r'^(📷|🖼️|🖼)\s*(Photo|Foto)', caseSensitive: false).hasMatch(displayMessage)) {
+      displayMessage = formatPhotoPreview(displayMessage);
     }
 
     return Text(
@@ -4150,14 +4197,17 @@ class _ChatListPageState extends State<ChatListPage>
               chat.isPinned ? 'Lepas Pin Chat' : 'Sematkan Chat (Pin)',
             ),
             onTap: () {
-              chatProvider.togglePin(chat.id);
+              final isPinned = chat.isPinned;
+              final sender = chat.sender;
+              final chatId = chat.id;
               Navigator.pop(context);
+              chatProvider.togglePin(chatId);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    chat.isPinned
-                        ? 'Pin ${chat.sender} dilepas'
-                        : '${chat.sender} disematkan di atas',
+                    isPinned
+                        ? 'Pin $sender dilepas'
+                        : '$sender disematkan di atas',
                   ),
                   duration: const Duration(seconds: 1),
                 ),
