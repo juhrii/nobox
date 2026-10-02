@@ -354,6 +354,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         debugPrint(
           'ChatDetail: ⚡ IMMEDIATELY RESTORED ${_messages.length} persistent messages across Hot Restart!',
         );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _handleInitialScroll();
+        });
       }
 
       for (final key in keys) {
@@ -396,6 +399,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //         serta menghitung jumlah pesan baru yang masuk saat pengguna sedang membaca histori obrolan lama.
   bool _showScrollToBottomButton = false;
   int _unreadIncomingCountWhileScrolled = 0;
+  final GlobalKey _firstUnreadKey = GlobalKey();
+  String? _firstUnreadMessageId;
+  int? _firstUnreadDisplayIndex;
+  int _initialUnreadCount = 0;
+  bool _hasPositionedAtUnread = false;
 
   bool get _isNearBottom {
     if (!_scrollController.hasClients) return true;
@@ -550,11 +558,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             _showScrollToBottomButton = shouldShow;
             if (!shouldShow) {
               _unreadIncomingCountWhileScrolled = 0;
+              _firstUnreadMessageId = null;
+              _firstUnreadDisplayIndex = null;
+              _initialUnreadCount = 0;
             }
           });
-        } else if (!shouldShow && _unreadIncomingCountWhileScrolled > 0) {
+        } else if (!shouldShow && (_unreadIncomingCountWhileScrolled > 0 || _firstUnreadMessageId != null)) {
           setState(() {
             _unreadIncomingCountWhileScrolled = 0;
+            _firstUnreadMessageId = null;
+            _firstUnreadDisplayIndex = null;
+            _initialUnreadCount = 0;
           });
         }
       }
@@ -1384,7 +1398,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               if (mounted) {
                 setState(() {});
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _scrollToBottom(animate: false);
+                  if (mounted) _handleInitialScroll();
                 });
               }
             });
@@ -1496,11 +1510,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FITUR 4: Timer polling untuk memperbarui status centang di layar secara berkala.
   // [ACTION: ACK_POLLING] - Proses sinkronisasi status pesan di background
   bool _isSyncingMessages = false;
+  bool _hasPendingSync = false;
 
   // FITUR: Sinkronisasi Pesan Instan & Latar Belakang
   // FUNGSI: Mengambil pesan terbaru dari server secara langsung (dipicu oleh event TerimaSubSpv atau timer polling berkala)
-  Future<void> _fetchLatestMessagesImmediately() async {
-    if (_isSyncingMessages || !mounted) return;
+  Future<void> _fetchLatestMessagesImmediately({int take = 25}) async {
+    if (!mounted) return;
+    if (_isSyncingMessages) {
+      _hasPendingSync = true;
+      return;
+    }
     _isSyncingMessages = true;
     try {
       final isTelegram =
@@ -1513,7 +1532,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       final response = await _chatService.getMessageHistory(
         chat.id,
         currentUserEmail,
-        take: 75,
+        take: take,
         contactId: chat.contactId,
         groupId: chat.groupId,
         ctRealId: chat.ctRealId,
@@ -1757,6 +1776,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             }
           });
 
+          final List<Message> newCustomerIncomingMessages = [];
           for (final msg in sortedList) {
             if (msg.id.isNotEmpty && _deletedMessageIds.contains(msg.id)) {
               continue; // Abaikan pesan yang sudah dihapus oleh pengguna
@@ -1849,6 +1869,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                     debugPrint('   -> Clean Local: "$cleanM"');
                   }
                 }
+              } else {
+                // UPDATE: Cocokkan pesan masuk instan 'temp_sub_' dengan pesan server resmi
+                final cleanNew = msg.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                final matchIdx = _messages.indexWhere((m) {
+                  if (m.isMe || !m.id.startsWith('temp_sub_')) return false;
+                  final cleanM = m.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+                  return cleanM.isNotEmpty && cleanNew.isNotEmpty && cleanM == cleanNew;
+                });
+
+                if (matchIdx != -1) {
+                  _messages[matchIdx] = msg;
+                  matchedPending = true;
+                  updatedCurrentIds.add(msg.id);
+                  debugPrint('ChatSync: ✅ Replaced instant temp_sub message with official server message ID: ${msg.id}');
+                }
               }
               if (matchedPending) continue;
 
@@ -1857,6 +1892,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               );
               _messages.add(msg);
               hasNewMessages = true;
+              if (!msg.isMe) {
+                newCustomerIncomingMessages.add(msg);
+              }
             } else if (msg.id.isNotEmpty) {
               final existingIdx = _messages.indexWhere((m) => m.id == msg.id);
               if (existingIdx != -1) {
@@ -1928,12 +1966,28 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               _syncLastMessageToProvider();
             }
 
-            if (_isNearBottom) {
+            if (newCustomerIncomingMessages.length > 1) {
+              // Jika ada banyak pesan masuk sekaligus dari lawan bicara, jangan langsung gulir ke paling bawah,
+              // melainkan posisikan penanda di awal pesan baru tersebut dan tampilkan tombol scroll ke bawah dengan counter.
+              if (mounted) {
+                setState(() {
+                  _firstUnreadMessageId ??= newCustomerIncomingMessages.first.id;
+                  _initialUnreadCount = (_initialUnreadCount > 0 ? _initialUnreadCount : 0) + newCustomerIncomingMessages.length;
+                  _unreadIncomingCountWhileScrolled += newCustomerIncomingMessages.length;
+                  _showScrollToBottomButton = true;
+                });
+              }
+            } else if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0) {
               _scrollToBottom();
             } else {
               if (mounted) {
                 setState(() {
-                  _unreadIncomingCountWhileScrolled++;
+                  if (newCustomerIncomingMessages.isNotEmpty) {
+                    _unreadIncomingCountWhileScrolled += newCustomerIncomingMessages.length;
+                  } else {
+                    _unreadIncomingCountWhileScrolled++;
+                  }
+                  _showScrollToBottomButton = true;
                 });
               }
             }
@@ -1952,18 +2006,22 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       debugPrint('ChatSync: ❌ Error during sync: $e');
     } finally {
       _isSyncingMessages = false;
+      if (_hasPendingSync && mounted) {
+        _hasPendingSync = false;
+        _fetchLatestMessagesImmediately(take: 25);
+      }
     }
   }
 
   void _startChatSyncPolling() {
     debugPrint('ChatSync: Started polling timer.');
     _ackPollTimer?.cancel();
-    _ackPollTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+    _ackPollTimer = Timer.periodic(const Duration(milliseconds: 2500), (timer) async {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      _fetchLatestMessagesImmediately();
+      _fetchLatestMessagesImmediately(take: 25);
     });
   }
 
@@ -1988,8 +2046,69 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           (incomingRoomId.replaceAll(RegExp(r'[^0-9]'), '') == chat.id.replaceAll(RegExp(r'[^0-9]'), ''));
 
       if (isMatch) {
-        debugPrint('ChatDetailPage: ⚡ Realtime TerimaSubSpv matched for room $incomingRoomId! Fetching immediately...');
-        _fetchLatestMessagesImmediately();
+        debugPrint('ChatDetailPage: ⚡ Realtime TerimaSubSpv matched for room $incomingRoomId! Processing...');
+
+        // 1. INSTANT BUBBLE: Tampilkan pesan masuk seketika (0 ms delay) jika ada pesan baru dari lawan bicara
+        final lastMsg = (roomData['LastMsg'] ?? roomData['lastMsg'] ?? '').toString();
+        final timeMsg = (roomData['TimeMsg'] ?? roomData['timeMsg'] ?? '').toString();
+        final sdrMsg = (roomData['SdrMsg'] ?? roomData['sdrMsg'] ?? '').toString().toLowerCase();
+        final lastIsMe = roomData['LastIsMe'] == true || roomData['lastIsMe'] == true || sdrMsg == 'me';
+        final upBy = roomData['UpBy']?.toString();
+        final isFromCustomer = !lastIsMe && (upBy == null || upBy == '0');
+
+        if (isFromCustomer && lastMsg.isNotEmpty && lastMsg != 'Site.Inbox.DeletedMessage') {
+          final cleanLast = lastMsg.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+          final alreadyPresent = _messages.any((m) {
+            final cleanM = m.content.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+            return cleanM == cleanLast;
+          });
+
+          if (!alreadyPresent && mounted) {
+            DateTime parsedTime = DateTime.now();
+            if (timeMsg.isNotEmpty) {
+              try {
+                String tStr = timeMsg;
+                if (!tStr.endsWith('Z') && !tStr.contains('+') && tStr.length >= 19) tStr += 'Z';
+                parsedTime = DateTime.parse(tStr).toLocal();
+              } catch (_) {}
+            }
+
+            final instantMsg = Message(
+              id: 'temp_sub_${DateTime.now().millisecondsSinceEpoch}',
+              content: lastMsg.contains('[-{=||=}-]') ? '📍 Location' : lastMsg,
+              time: _formatFullTime(parsedTime),
+              rawTime: timeMsg.isNotEmpty ? timeMsg : DateTime.now().toIso8601String(),
+              isMe: false,
+              status: MessageStatus.read,
+              fromId: chat.sender,
+              roomId: chat.id,
+            );
+            setState(() {
+              _addMessageInOrder(instantMsg);
+              if (!_isNearBottom) {
+                _unreadIncomingCountWhileScrolled++;
+              }
+            });
+            if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0) {
+              _scrollToBottom();
+            } else {
+              setState(() {
+                _showScrollToBottomButton = true;
+              });
+            }
+            _syncLastMessageToProvider();
+            debugPrint('ChatDetailPage: ⚡ Rendered instant message bubble from TerimaSubSpv!');
+          }
+        }
+
+        // 2. Sinkronisasi pesan resmi dari server (ID, attachment, metadata)
+        _fetchLatestMessagesImmediately(take: 25);
+        Future.delayed(const Duration(milliseconds: 400), () {
+          if (mounted) _fetchLatestMessagesImmediately(take: 25);
+        });
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (mounted) _fetchLatestMessagesImmediately(take: 25);
+        });
       }
     });
 
@@ -2446,8 +2565,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               _unreadIncomingCountWhileScrolled++;
             }
           });
-          if (_isNearBottom || newMessage.isMe) {
+          if (newMessage.isMe) {
             _scrollToBottom();
+          } else if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0) {
+            _scrollToBottom();
+          } else {
+            setState(() {
+              _showScrollToBottomButton = true;
+            });
           }
           _syncLastMessageToProvider();
         }
@@ -2504,6 +2629,72 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         _scrollController.jumpTo(0.0);
       }
     }
+  }
+
+  // FITUR: Scroll ke Awal Pesan Belum Dibaca
+  // FUNGSI: Ketika membuka ruang obrolan yang memiliki rentetan pesan belum dibaca,
+  //          posisi gulir tidak langsung melompat ke paling bawah, melainkan berfokus
+  //          pada pesan pertama yang belum dibaca agar pengguna dapat membaca secara berurutan.
+  void _handleInitialScroll() {
+    if (!_scrollController.hasClients || _messages.isEmpty) return;
+    if (_hasPositionedAtUnread) return;
+
+    final unreadCount = chat.unreadCount;
+    if (unreadCount > 1) {
+      final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
+
+      int customerUnreadSeen = 0;
+      int firstUnreadDisplayIdx = -1;
+      for (int i = displayMessages.length - 1; i >= 0; i--) {
+        if (!displayMessages[i].isMe) {
+          customerUnreadSeen++;
+          firstUnreadDisplayIdx = i;
+          if (customerUnreadSeen >= unreadCount) {
+            break;
+          }
+        }
+      }
+
+      if (firstUnreadDisplayIdx != -1) {
+        _hasPositionedAtUnread = true;
+        final adjustedIndex = displayMessages.length - 1 - firstUnreadDisplayIdx;
+        setState(() {
+          _firstUnreadMessageId = displayMessages[firstUnreadDisplayIdx].id;
+          _firstUnreadDisplayIndex = firstUnreadDisplayIdx;
+          _initialUnreadCount = unreadCount;
+          _unreadIncomingCountWhileScrolled = unreadCount;
+          _showScrollToBottomButton = true;
+        });
+
+        // Hitung estimasi offset: setiap pesan ~85 piksel
+        final targetOffset = (adjustedIndex * 85.0).clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        );
+
+        debugPrint(
+          'ChatDetail: 📍 Positioning at first unread message (displayIdx=$firstUnreadDisplayIdx, adjustedIndex=$adjustedIndex, targetOffset=$targetOffset)',
+        );
+
+        if (targetOffset > 30.0) {
+          _scrollController.jumpTo(targetOffset);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            if (_firstUnreadKey.currentContext != null) {
+              Scrollable.ensureVisible(
+                _firstUnreadKey.currentContext!,
+                alignment: 0.85,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+          return;
+        }
+      }
+    }
+
+    _scrollToBottom(animate: false);
   }
 
   // FITUR: Memuat Pesan Terdahulu (Pagination)
@@ -4193,6 +4384,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           onTap: () {
             setState(() {
               _unreadIncomingCountWhileScrolled = 0;
+              _firstUnreadMessageId = null;
+              _firstUnreadDisplayIndex = null;
+              _initialUnreadCount = 0;
             });
             _scrollToBottom();
           },
@@ -5417,10 +5611,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           final msgKey = _getMessageKey(message);
           final isSelected = _selectedMessageKeys.contains(msgKey);
 
+          final isFirstUnread = (_firstUnreadMessageId != null &&
+                  _firstUnreadMessageId!.isNotEmpty &&
+                  message.id == _firstUnreadMessageId) ||
+              (_firstUnreadDisplayIndex != null &&
+                  displayIndex == _firstUnreadDisplayIndex);
+
           return Column(
-            key: ValueKey('col_$msgKey'),
+            key: isFirstUnread ? _firstUnreadKey : ValueKey('col_$msgKey'),
             children: [
               if (dateSeparator != null) dateSeparator,
+              if (isFirstUnread && _initialUnreadCount > 0)
+                _buildUnreadMessagesDivider(_initialUnreadCount, isDark),
               Container(
                 color: isSelected
                     ? (isDark
@@ -5615,6 +5817,78 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // FITUR: Pembatas Pesan Belum Dibaca (Unread Messages Divider)
+  // FUNGSI: Menampilkan penanda visual dengan garis dan badge pill di atas pesan pertama yang belum dibaca
+  Widget _buildUnreadMessagesDivider(int count, bool isDark) {
+    final text = count > 1 ? '$count PESAN BELUM DIBACA' : 'PESAN BELUM DIBACA';
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 1,
+              color: isDark
+                  ? Colors.blue.withOpacity(0.3)
+                  : Colors.blue.withOpacity(0.2),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            margin: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark
+                    ? Colors.blue.shade700.withOpacity(0.5)
+                    : Colors.blue.shade200,
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.mark_email_unread_rounded,
+                  size: 14,
+                  color: isDark ? Colors.blue.shade300 : const Color(0xFF2563EB),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: isDark
+                        ? Colors.blue.shade300
+                        : const Color(0xFF1D4ED8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Container(
+              height: 1,
+              color: isDark
+                  ? Colors.blue.withOpacity(0.3)
+                  : Colors.blue.withOpacity(0.2),
+            ),
+          ),
+        ],
       ),
     );
   }

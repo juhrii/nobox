@@ -1066,7 +1066,7 @@ class ChatService {
       final int? numericRoomId = int.tryParse(cleanRoomStr.replaceAll(RegExp(r'[^0-9\-]'), ''));
 
       final payload = {
-        'Take': isTelegram ? 9999 : take,
+        'Take': take,
         'Skip': skip,
         'Sort': ['In DESC'],
         'EqualityFilter': {
