@@ -413,6 +413,40 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     return _scrollController.position.pixels <= 150;
   }
 
+  /// Menghitung jumlah pesan belum dibaca yang sebenarnya berada di bawah garis pembatas (divider)
+  int get _actualUnreadCount {
+    if (_firstUnreadMessageId != null && _firstUnreadMessageId!.isNotEmpty) {
+      final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
+      final firstIdx = displayMessages.indexWhere(
+        (m) =>
+            m.id == _firstUnreadMessageId ||
+            (m.idAlias != null && m.idAlias == _firstUnreadMessageId),
+      );
+      if (firstIdx != -1) {
+        int count = 0;
+        for (int i = firstIdx; i < displayMessages.length; i++) {
+          if (!displayMessages[i].isMe) count++;
+        }
+        if (count > 0) return count;
+      }
+    }
+    if (_firstUnreadDisplayIndex != null) {
+      final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
+      if (_firstUnreadDisplayIndex! >= 0 &&
+          _firstUnreadDisplayIndex! < displayMessages.length) {
+        int count = 0;
+        for (int i = _firstUnreadDisplayIndex!; i < displayMessages.length; i++) {
+          if (!displayMessages[i].isMe) count++;
+        }
+        if (count > 0) return count;
+      }
+    }
+    if (_unreadIncomingCountWhileScrolled > 0) {
+      return _unreadIncomingCountWhileScrolled;
+    }
+    return _initialUnreadCount;
+  }
+
   // FITUR: Mode Seleksi Pesan (Multiple Selection)
   // FUNGSI: Digunakan saat pengguna menahan pesan untuk memilih beberapa pesan (misal untuk forward/delete).
   bool _isSelectionMode = false;
@@ -2021,8 +2055,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 setState(() {
                   if (newCustomerIncomingMessages.isNotEmpty) {
                     _unreadIncomingCountWhileScrolled += newCustomerIncomingMessages.length;
+                    if (_firstUnreadMessageId != null) {
+                      _initialUnreadCount += newCustomerIncomingMessages.length;
+                    }
                   } else {
                     _unreadIncomingCountWhileScrolled++;
+                    if (_firstUnreadMessageId != null) {
+                      _initialUnreadCount++;
+                    }
                   }
                   _showScrollToBottomButton = true;
                 });
@@ -2124,6 +2164,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               _addMessageInOrder(instantMsg);
               if (!_isNearBottom) {
                 _unreadIncomingCountWhileScrolled++;
+                if (_firstUnreadMessageId != null) {
+                  _initialUnreadCount++;
+                }
               }
             });
             if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0) {
@@ -2601,6 +2644,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             _addMessageInOrder(newMessage);
             if (!_isNearBottom && !newMessage.isMe) {
               _unreadIncomingCountWhileScrolled++;
+              if (_firstUnreadMessageId != null) {
+                _initialUnreadCount++;
+              }
             }
           });
           if (newMessage.isMe) {
@@ -2681,26 +2727,47 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     if (unreadCount > 1) {
       final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
 
+      // Hitung rangkaian pesan masuk berturut-turut dari lawan bicara (customer) di akhir obrolan
+      int trailingCustomerCount = 0;
+      for (int i = displayMessages.length - 1; i >= 0; i--) {
+        if (!displayMessages[i].isMe) {
+          trailingCustomerCount++;
+        } else {
+          break; // Berhenti jika menemukan pesan dari kita/agen
+        }
+      }
+
+      // Jika jumlah pesan lawan bicara di paling bawah lebih banyak dari unreadCount
+      // (misal: ada pesan baru masuk tepat saat membuka room, atau room list tertinggal sinkronisasinya),
+      // gunakan batas awal dari rangkaian pesan baru tersebut agar tidak ada pesan unread yang terlewat.
+      int effectiveUnreadCount = unreadCount;
+      if (trailingCustomerCount > unreadCount && (trailingCustomerCount - unreadCount) <= 5) {
+        effectiveUnreadCount = trailingCustomerCount;
+      }
+
       int customerUnreadSeen = 0;
       int firstUnreadDisplayIdx = -1;
       for (int i = displayMessages.length - 1; i >= 0; i--) {
         if (!displayMessages[i].isMe) {
           customerUnreadSeen++;
           firstUnreadDisplayIdx = i;
-          if (customerUnreadSeen >= unreadCount) {
+          if (customerUnreadSeen >= effectiveUnreadCount) {
             break;
           }
+        } else {
+          break;
         }
       }
 
       if (firstUnreadDisplayIdx != -1) {
         _hasPositionedAtUnread = true;
+        final actualCount = customerUnreadSeen;
         final adjustedIndex = displayMessages.length - 1 - firstUnreadDisplayIdx;
         setState(() {
           _firstUnreadMessageId = displayMessages[firstUnreadDisplayIdx].id;
           _firstUnreadDisplayIndex = firstUnreadDisplayIdx;
-          _initialUnreadCount = unreadCount;
-          _unreadIncomingCountWhileScrolled = unreadCount;
+          _initialUnreadCount = actualCount;
+          _unreadIncomingCountWhileScrolled = actualCount;
           _showScrollToBottomButton = true;
         });
 
@@ -4419,6 +4486,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //          yang masuk dan mengembalikan posisi scroll ke bawah dalam satu ketukan.]
   // =====================================================================
   Widget _buildScrollToBottomButton(bool isDark) {
+    final unreadBadgeCount = _actualUnreadCount > 0
+        ? _actualUnreadCount
+        : _unreadIncomingCountWhileScrolled;
+
     return AnimatedScale(
       scale: _showScrollToBottomButton ? 1.0 : 0.0,
       duration: const Duration(milliseconds: 200),
@@ -4465,7 +4536,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   size: 24,
                   color: isDark ? Colors.white : AppTheme.textPrimary,
                 ),
-                if (_unreadIncomingCountWhileScrolled > 0)
+                if (unreadBadgeCount > 0)
                   Positioned(
                     top: -4,
                     right: -4,
@@ -4488,9 +4559,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       ),
                       child: Center(
                         child: Text(
-                          _unreadIncomingCountWhileScrolled > 99
+                          unreadBadgeCount > 99
                               ? '99+'
-                              : '$_unreadIncomingCountWhileScrolled',
+                              : '$unreadBadgeCount',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -5657,17 +5728,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           final isSelected = _selectedMessageKeys.contains(msgKey);
 
           final isFirstUnread = (_firstUnreadMessageId != null &&
-                  _firstUnreadMessageId!.isNotEmpty &&
-                  message.id == _firstUnreadMessageId) ||
-              (_firstUnreadDisplayIndex != null &&
+                  _firstUnreadMessageId!.isNotEmpty)
+              ? (message.id == _firstUnreadMessageId ||
+                  (message.idAlias != null &&
+                      message.idAlias == _firstUnreadMessageId))
+              : (_firstUnreadDisplayIndex != null &&
                   displayIndex == _firstUnreadDisplayIndex);
+
+          final actualUnread = _actualUnreadCount;
 
           return Column(
             key: isFirstUnread ? _firstUnreadKey : ValueKey('col_$msgKey'),
             children: [
               if (dateSeparator != null) dateSeparator,
-              if (isFirstUnread && _initialUnreadCount > 0)
-                _buildUnreadMessagesDivider(_initialUnreadCount, isDark),
+              if (isFirstUnread && actualUnread > 0)
+                _buildUnreadMessagesDivider(actualUnread, isDark),
               Container(
                 color: isSelected
                     ? (isDark
