@@ -386,6 +386,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   bool _isLoadingMessages = true;
   Message? _repliedMessage;
   ChatStatusProvider? _statusProvider;
+  ChatProvider? _chatProvider;
+  AuthProvider? _authProvider;
+  String _currentUserEmail = '';
   StreamSubscription<Map<String, dynamic>>? _signalRSubscription;
   StreamSubscription<Map<String, dynamic>>? _subSpvSubscription;
   final ScrollController _scrollController = ScrollController();
@@ -448,6 +451,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _chatProvider = Provider.of<ChatProvider>(context, listen: false);
+    _authProvider = Provider.of<AuthProvider>(context, listen: false);
+    _currentUserEmail = _authProvider?.currentUser ?? '';
+    _statusProvider = Provider.of<ChatStatusProvider>(context, listen: false);
     if (!_isInit) {
       if (widget.chat != null) {
         chat = widget.chat!;
@@ -512,7 +519,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   Timer? _ackPollTimer;
 
   @override
+  void deactivate() {
+    _ackPollTimer?.cancel();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
+    _ackPollTimer?.cancel();
+    _savePersistentDebounce?.cancel();
+    _recordingTimer?.cancel();
+    _quickReplyDebounce?.cancel();
+    _signalRSubscription?.cancel();
+    _subSpvSubscription?.cancel();
+    SignalRService().leaveConversation(chat.id);
     _syncLastMessageToProvider();
     // Reset notification suppression when leaving chat
     if (_isInit) {
@@ -523,18 +543,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         provider?.setLastSeen(sender);
       });
     }
-    _signalRSubscription?.cancel();
-    _subSpvSubscription?.cancel();
-    SignalRService().leaveConversation(chat.id);
     _messageController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
     _audioRecorder.dispose();
     _audioPlayer.dispose();
-    _recordingTimer?.cancel();
-    _quickReplyDebounce?.cancel();
-    _ackPollTimer?.cancel();
-    _savePersistentDebounce?.cancel();
     super.dispose();
   }
 
@@ -818,8 +831,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void _loadInitialMessages() async {
     await _restorePersistentMessages();
     if (!mounted) return;
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final currentUserEmail = authProvider.currentUser ?? '';
+    final currentUserEmail = _currentUserEmail.isNotEmpty
+        ? _currentUserEmail
+        : (_authProvider?.currentUser ?? (mounted ? Provider.of<AuthProvider>(context, listen: false).currentUser : '') ?? '');
 
     setState(() {
       _isLoadingMessages = true;
@@ -1418,7 +1432,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   /// Sinkronisasi pesan terakhir secara akurat ke ChatProvider (Chat List)
   void _syncLastMessageToProvider() {
-    if (!mounted || _messages.isEmpty) return;
+    if (_messages.isEmpty) return;
+    final chatProv = _chatProvider ?? (mounted ? Provider.of<ChatProvider>(context, listen: false) : null);
+    if (chatProv == null) return;
+
     final realMessages = _messages.where((m) {
       if (m.isSystemMessage || m.content == 'Site.Inbox.DeletedMessage') {
         return false;
@@ -1483,10 +1500,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         return; // Sudah up to date, lewati update provider redundan
       }
 
-      Provider.of<ChatProvider>(
-        context,
-        listen: false,
-      ).updateLocalLastMessage(
+      chatProv.updateLocalLastMessage(
         chat.id,
         newContent,
         lastMessageType: typeStr,
@@ -1496,10 +1510,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         isDeletion: _deletedMessageIds.isNotEmpty,
       );
     } else {
-      Provider.of<ChatProvider>(
-        context,
-        listen: false,
-      ).updateLocalLastMessage(
+      chatProv.updateLocalLastMessage(
         chat.id,
         '',
         lastMessageType: '1',
@@ -1531,8 +1542,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           chat.channelType.toLowerCase().contains('telegram') ||
           chat.channelName.toLowerCase().contains('telegram');
 
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final currentUserEmail = authProvider.currentUser ?? '';
+      final currentUserEmail = _currentUserEmail.isNotEmpty
+          ? _currentUserEmail
+          : (_authProvider?.currentUser ?? (mounted ? Provider.of<AuthProvider>(context, listen: false).currentUser : '') ?? '');
       final response = await _chatService.getMessageHistory(
         chat.id,
         currentUserEmail,
@@ -2461,8 +2473,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       // FIX: Jangan merakit objek Message secara manual karena akan menghilangkan semua attachment media (Voice Note, Gambar, dll).
       // Gunakan Message.fromJson agar semua parsing tipe pesan berjalan sempurna!
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final currentUserEmail = authProvider.currentUser ?? '';
+      final currentUserEmail = _currentUserEmail.isNotEmpty
+          ? _currentUserEmail
+          : (_authProvider?.currentUser ?? (mounted ? Provider.of<AuthProvider>(context, listen: false).currentUser : '') ?? '');
 
       try {
         var parsedMessage = Message.fromJson(
@@ -2729,8 +2742,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
     setState(() => _isLoadingOlderMessages = true);
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final currentUserEmail = authProvider.currentUser ?? '';
+    final currentUserEmail = _currentUserEmail.isNotEmpty
+        ? _currentUserEmail
+        : (_authProvider?.currentUser ?? (mounted ? Provider.of<AuthProvider>(context, listen: false).currentUser : '') ?? '');
 
     final response = await _chatService.getMessageHistory(
       chat.id,
@@ -2794,6 +2808,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         chat = widget.chat!;
       } else {
         chat = ModalRoute.of(context)!.settings.arguments as ChatModel;
+      }
+      _chatProvider ??= Provider.of<ChatProvider>(context, listen: false);
+      _authProvider ??= Provider.of<AuthProvider>(context, listen: false);
+      if (_currentUserEmail.isEmpty) {
+        _currentUserEmail = _authProvider?.currentUser ?? '';
       }
       _statusProvider = Provider.of<ChatStatusProvider>(context, listen: false);
       _loadInitialMessages();

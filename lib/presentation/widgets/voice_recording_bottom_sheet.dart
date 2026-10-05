@@ -103,8 +103,14 @@ class _VoiceRecordingBottomSheetState extends State<VoiceRecordingBottomSheet>
     });
     _durSub = widget.audioPlayer.onDurationChanged.listen((d) {
       if (mounted && d > Duration.zero) {
-        if (_duration > d && (_duration - d).inSeconds >= 2) return;
-        setState(() => _duration = d);
+        Duration resolved = d;
+        if (_seconds > 0) {
+          final diffMs = (_seconds * 1000 - d.inMilliseconds).abs();
+          if (diffMs <= 1500) {
+            resolved = Duration(seconds: _seconds);
+          }
+        }
+        setState(() => _duration = resolved);
       }
     });
     _compSub = widget.audioPlayer.onPlayerComplete.listen((_) {
@@ -143,6 +149,7 @@ class _VoiceRecordingBottomSheetState extends State<VoiceRecordingBottomSheet>
         _isRecording = false;
         _isReady = true;
         _recordedPath = path;
+        _duration = Duration(seconds: _seconds);
       });
     }
   }
@@ -304,7 +311,7 @@ class _VoiceRecordingBottomSheetState extends State<VoiceRecordingBottomSheet>
                     ),
                   ),
                   Text(
-                    _formatDuration((_duration.inSeconds - _position.inSeconds).clamp(0, 999)),
+                    _formatDuration(((_seconds > 0 ? _seconds : _duration.inSeconds) - _position.inSeconds).clamp(0, 999)),
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                   ),
                 ],

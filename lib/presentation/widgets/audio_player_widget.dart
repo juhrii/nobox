@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
@@ -45,6 +46,41 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   bool _hasError = false;
   String? _localFilePath; // Cache downloaded file path
 
+  Timer? _playbackTicker;
+  DateTime? _playbackStartTime;
+  Duration _playbackStartPosition = Duration.zero;
+
+  void _startPlaybackTicker() {
+    _playbackTicker?.cancel();
+    _playbackStartTime = DateTime.now();
+    _playbackStartPosition = _position;
+    _playbackTicker = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted || !_isPlaying) {
+        timer.cancel();
+        return;
+      }
+      if (_playbackStartTime != null) {
+        final elapsed = DateTime.now().difference(_playbackStartTime!);
+        final estimated = _playbackStartPosition + elapsed;
+        final maxDur = _duration > Duration.zero
+            ? _duration
+            : (widget.initialDuration ?? const Duration(seconds: 3600));
+        if (estimated < maxDur) {
+          setState(() {
+            _position = estimated;
+            _isLoading = false;
+          });
+        }
+      }
+    });
+  }
+
+  void _stopPlaybackTicker() {
+    _playbackTicker?.cancel();
+    _playbackTicker = null;
+    _playbackStartTime = null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -90,6 +126,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   @override
   void dispose() {
+    _stopPlaybackTicker();
     if (_activePlayer == this) {
       _activePlayer = null;
     }
@@ -101,21 +138,22 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     // Listen to player state changes
     _audioPlayer.onPlayerStateChanged.listen((PlayerState state) {
       if (mounted) {
+        final playing = state == PlayerState.playing;
         setState(() {
-          _isPlaying = state == PlayerState.playing;
-          _isLoading = state == PlayerState.playing && _position == Duration.zero;
+          _isPlaying = playing;
+          _isLoading = playing && _position == Duration.zero;
         });
+        if (playing) {
+          _startPlaybackTicker();
+        } else {
+          _stopPlaybackTicker();
+        }
       }
     });
 
     // Listen to duration changes
     _audioPlayer.onDurationChanged.listen((Duration duration) {
       if (mounted && duration > Duration.zero) {
-        // Jangan timpa jika durasi awal dari message/rekaman lebih panjang dan durasi player terpotong
-        if (_duration > duration && (_duration - duration).inSeconds >= 2) {
-          debugPrint('⚠️ AudioPlayer: Mengabaikan durasi terpotong ($duration), mempertahankan $_duration');
-          return;
-        }
         _durationCache[widget.audioUrl] = duration;
         setState(() {
           _duration = duration;
@@ -128,6 +166,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
       if (mounted) {
         // Jika posisi sudah mencapai atau melebihi total durasi, selesaikan pemutaran
         if (_duration > Duration.zero && position >= _duration) {
+          _stopPlaybackTicker();
           _audioPlayer.pause();
           setState(() {
             _position = Duration.zero;
@@ -138,8 +177,14 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
           return;
         }
 
-        setState(() {
+        // Kalibrasi ulang estimasi ticker jika ada deviasi posisi dari native player
+        if (position > _position || (_position - position).abs().inMilliseconds > 400) {
           _position = position;
+          _playbackStartTime = DateTime.now();
+          _playbackStartPosition = position;
+        }
+
+        setState(() {
           _isLoading = false;
         });
       }
@@ -147,17 +192,12 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
     // Listen to completion
     _audioPlayer.onPlayerComplete.listen((event) {
+      _stopPlaybackTicker();
       if (mounted) {
-        // PERLINDUNGAN: Cegah reset prematur jika player mengklaim complete padahal posisi masih jauh dari total durasi
-        if (_duration > const Duration(seconds: 2) &&
-            _position < _duration - const Duration(milliseconds: 1200)) {
-          debugPrint('⚠️ AudioPlayer: Premature onPlayerComplete diabaikan (posisi $_position dari total $_duration)');
-          return;
-        }
-
         setState(() {
           _isPlaying = false;
           _position = Duration.zero;
+          _isLoading = false;
         });
       }
       if (_activePlayer == this) {
@@ -389,6 +429,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   }
 
   Future<void> _stopPlayback() async {
+    _stopPlaybackTicker();
     try {
       await _audioPlayer.stop();
       if (mounted) {
@@ -404,6 +445,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   Future<void> _togglePlayPause() async {
     try {
       if (_isPlaying) {
+        _stopPlaybackTicker();
         await _audioPlayer.pause();
         setState(() => _isPlaying = false);
       } else {
@@ -425,6 +467,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
         // Jika sebelumnya sudah ada posisi berjalan (> 0) dan belum selesai, gunakan resume agar tidak mengulang dari awal
         if (_position > Duration.zero && _duration > Duration.zero && _position < _duration) {
+          _startPlaybackTicker();
           await _audioPlayer.resume();
           setState(() {
             _isPlaying = true;
@@ -436,8 +479,10 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         if (audioUrl.startsWith('http')) {
           // Download file first to avoid MPEG4 streaming issues (MOOV atom at end)
           final localPath = await _ensureDownloaded(audioUrl);
+          _startPlaybackTicker();
           await _audioPlayer.play(DeviceFileSource(localPath));
         } else {
+          _startPlaybackTicker();
           await _audioPlayer.play(DeviceFileSource(audioUrl));
         }
       }
@@ -470,21 +515,46 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   }
 
   Future<void> _seekTo(double value) async {
-    final position = Duration(milliseconds: (value * _duration.inMilliseconds).round());
+    final totalMs = _duration.inMilliseconds > 0
+        ? _duration.inMilliseconds
+        : (widget.initialDuration != null ? widget.initialDuration!.inMilliseconds : 1000);
+    final position = Duration(milliseconds: (value * totalMs).round());
+    _playbackStartTime = DateTime.now();
+    _playbackStartPosition = position;
+    setState(() {
+      _position = position;
+    });
     await _audioPlayer.seek(position);
   }
 
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes;
-    final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+  String _formatSeconds(int totalSeconds) {
+    final minutes = totalSeconds ~/ 60;
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final displayDuration = _formatDuration(_duration);
-    final displayPosition = _formatDuration(_position);
+
+    // Total durasi audio aktual dalam detik (berdasarkan file audio riil jika sudah termuat)
+    final totalSeconds = _duration > Duration.zero
+        ? (_duration.inMilliseconds / 1000).round()
+        : (widget.initialDuration != null && widget.initialDuration! > Duration.zero
+            ? widget.initialDuration!.inSeconds
+            : 0);
+
+    // Posisi berjalan saat ini (detik bulat), dibatasi totalSeconds
+    final elapsedSeconds = _position.inSeconds.clamp(0, totalSeconds > 0 ? totalSeconds : 0);
+
+    // Sisa durasi (countdown): selalu sinkron di mana elapsedSeconds + remainingSeconds == totalSeconds
+    final remainingSeconds = totalSeconds > 0
+        ? (totalSeconds - elapsedSeconds).clamp(0, totalSeconds)
+        : 0;
+
+    final displayDuration = _formatSeconds(totalSeconds);
+    final displayPosition = _formatSeconds(elapsedSeconds);
+    final displayRemaining = '-${_formatSeconds(remainingSeconds)}';
     final durationText = '$displayPosition / $displayDuration';
 
     return Column(
@@ -558,10 +628,10 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                           child: SizedBox(
                             height: 20,
                             child: Slider(
-                              value: _duration.inMilliseconds > 0
-                                  ? (_position.inMilliseconds / _duration.inMilliseconds).clamp(0.0, 1.0)
+                              value: totalSeconds > 0
+                                  ? (_position.inMilliseconds / (totalSeconds * 1000)).clamp(0.0, 1.0)
                                   : 0.0,
-                              onChanged: _duration.inMilliseconds > 0 ? _seekTo : null,
+                              onChanged: totalSeconds > 0 ? _seekTo : null,
                             ),
                           ),
                         ),
@@ -597,8 +667,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    _isPlaying
-                                        ? '-${_formatDuration((_duration - _position).isNegative ? Duration.zero : _duration - _position)}'
+                                    (_isPlaying || _position > Duration.zero)
+                                        ? displayRemaining
                                         : 'Voice Note',
                                     style: TextStyle(
                                       fontSize: 11,
