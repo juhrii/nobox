@@ -111,6 +111,11 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     // Listen to duration changes
     _audioPlayer.onDurationChanged.listen((Duration duration) {
       if (mounted && duration > Duration.zero) {
+        // Jangan timpa jika durasi awal dari message/rekaman lebih panjang dan durasi player terpotong
+        if (_duration > duration && (_duration - duration).inSeconds >= 2) {
+          debugPrint('⚠️ AudioPlayer: Mengabaikan durasi terpotong ($duration), mempertahankan $_duration');
+          return;
+        }
         _durationCache[widget.audioUrl] = duration;
         setState(() {
           _duration = duration;
@@ -121,6 +126,18 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     // Listen to position changes
     _audioPlayer.onPositionChanged.listen((Duration position) {
       if (mounted) {
+        // Jika posisi sudah mencapai atau melebihi total durasi, selesaikan pemutaran
+        if (_duration > Duration.zero && position >= _duration) {
+          _audioPlayer.pause();
+          setState(() {
+            _position = Duration.zero;
+            _isPlaying = false;
+            _isLoading = false;
+          });
+          if (_activePlayer == this) _activePlayer = null;
+          return;
+        }
+
         setState(() {
           _position = position;
           _isLoading = false;
@@ -131,6 +148,13 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     // Listen to completion
     _audioPlayer.onPlayerComplete.listen((event) {
       if (mounted) {
+        // PERLINDUNGAN: Cegah reset prematur jika player mengklaim complete padahal posisi masih jauh dari total durasi
+        if (_duration > const Duration(seconds: 2) &&
+            _position < _duration - const Duration(milliseconds: 1200)) {
+          debugPrint('⚠️ AudioPlayer: Premature onPlayerComplete diabaikan (posisi $_position dari total $_duration)');
+          return;
+        }
+
         setState(() {
           _isPlaying = false;
           _position = Duration.zero;
@@ -398,6 +422,16 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
         // Ensure volume is at max
         await _audioPlayer.setVolume(1.0);
+
+        // Jika sebelumnya sudah ada posisi berjalan (> 0) dan belum selesai, gunakan resume agar tidak mengulang dari awal
+        if (_position > Duration.zero && _duration > Duration.zero && _position < _duration) {
+          await _audioPlayer.resume();
+          setState(() {
+            _isPlaying = true;
+            _isLoading = false;
+          });
+          return;
+        }
 
         if (audioUrl.startsWith('http')) {
           // Download file first to avoid MPEG4 streaming issues (MOOV atom at end)

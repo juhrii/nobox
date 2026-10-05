@@ -417,6 +417,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   final Set<String> _deletedMessageIds = {};
 
   String _getMessageKey(Message m) {
+    if (m.messageType == MessageType.voice && m.audioPath != null && m.audioPath!.isNotEmpty) {
+      final cleanAudio = m.audioPath!.split('?').first.split('/').last;
+      return 'voice_$cleanAudio';
+    }
     if (m.id.isNotEmpty) return 'id_${m.id}';
     return 'local_${m.time}_${m.content}_${m.messageType}';
   }
@@ -1832,18 +1836,39 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   
                   if (msg.messageType != MessageType.text && m.messageType == msg.messageType) {
                     if (m.time == msg.time) return true;
+                    // FIX: Cocokkan voice note berdasarkan nama file audio
+                    if (m.messageType == MessageType.voice && m.audioPath != null && msg.audioPath != null) {
+                      final nameLocal = m.audioPath!.split('?').first.split('/').last;
+                      final nameServer = msg.audioPath!.split('?').first.split('/').last;
+                      if (nameLocal.isNotEmpty && nameServer.isNotEmpty &&
+                          (nameLocal == nameServer || nameServer.contains(nameLocal) || nameLocal.contains(nameServer))) {
+                        return true;
+                      }
+                    }
                   }
                   
                   return false;
                 });
 
                 if (matchIdx != -1) {
+                  final existingMsg = _messages[matchIdx];
+                  final keepAudioPath = existingMsg.messageType == MessageType.voice &&
+                      existingMsg.audioPath != null &&
+                      existingMsg.audioPath!.isNotEmpty &&
+                      File(existingMsg.audioPath!).existsSync()
+                          ? existingMsg.audioPath
+                          : (msg.audioPath ?? existingMsg.audioPath);
+
                   _messages[matchIdx] = _messages[matchIdx].copyWith(
                     id: msg.id,
                     ack: msg.ack,
                     status: msg.ack >= 3
                         ? MessageStatus.delivered
                         : MessageStatus.sent,
+                    audioPath: keepAudioPath,
+                    audioDuration: existingMsg.audioDuration > 0
+                        ? existingMsg.audioDuration
+                        : msg.audioDuration,
                   );
                   matchedPending = true;
                   updatedCurrentIds.add(
@@ -3904,15 +3929,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       if (await _audioRecorder.hasPermission()) {
         final dir = await getTemporaryDirectory();
         final path =
-            '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.ogg';
+            '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
         debugPrint('Recording: Starting recording to $path');
 
         await _audioRecorder.start(
           const RecordConfig(
-            encoder: AudioEncoder.opus,
+            encoder: AudioEncoder.aacLc,
             bitRate: 128000,
-            sampleRate: 48000, // Opus usually uses 48kHz
+            sampleRate: 44100,
           ),
           path: path,
         );
@@ -3996,6 +4021,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       // Add voice message to chat immediately (with 'sent' status = uploading)
       final voiceMessage = Message(
+        id: 'temp_voice_${DateTime.now().millisecondsSinceEpoch}',
         content: '',
         isMe: true,
         time: timeString,

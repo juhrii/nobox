@@ -1289,6 +1289,7 @@ class _MessageBubbleWidgetState extends State<MessageBubbleWidget>
           isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         AudioPlayerWidget(
+          key: ValueKey('audio_${audioUrl.split('?').first.split('/').last}'),
           audioUrl: audioUrl,
           isMe: isMe,
           initialDuration: widget.message.audioDuration > 0

@@ -89,13 +89,30 @@ class _VoiceRecordingBottomSheetState extends State<VoiceRecordingBottomSheet>
     widget.audioPlayer.setVolume(1.0);
 
     _posSub = widget.audioPlayer.onPositionChanged.listen((p) {
-      if (mounted) setState(() => _position = p);
+      if (mounted) {
+        if (_duration > Duration.zero && p >= _duration) {
+          widget.audioPlayer.pause();
+          setState(() {
+            _position = Duration.zero;
+            _isPlaying = false;
+          });
+          return;
+        }
+        setState(() => _position = p);
+      }
     });
     _durSub = widget.audioPlayer.onDurationChanged.listen((d) {
-      if (mounted) setState(() => _duration = d);
+      if (mounted && d > Duration.zero) {
+        if (_duration > d && (_duration - d).inSeconds >= 2) return;
+        setState(() => _duration = d);
+      }
     });
     _compSub = widget.audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) {
+        if (_duration > const Duration(seconds: 2) &&
+            _position < _duration - const Duration(milliseconds: 1000)) {
+          return;
+        }
         setState(() {
           _isPlaying = false;
           _position = Duration.zero;
