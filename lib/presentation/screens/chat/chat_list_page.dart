@@ -822,10 +822,10 @@ class _ChatListPageState extends State<ChatListPage>
             if (unreadCount > 0 && tabName == 'Unassigned') ...[
               const SizedBox(width: 6),
               Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
                   color: Colors.redAccent,
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 constraints: const BoxConstraints(
                   minWidth: 16,
@@ -833,7 +833,7 @@ class _ChatListPageState extends State<ChatListPage>
                 ),
                 child: Center(
                   child: Text(
-                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    unreadCount > 100 ? '100' : unreadCount.toString(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
@@ -2689,8 +2689,8 @@ class _ChatListPageState extends State<ChatListPage>
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
-                                    chat.unreadCount > 99
-                                        ? '99+'
+                                    chat.unreadCount > 100
+                                        ? '100'
                                         : chat.unreadCount.toString(),
                                     style: const TextStyle(
                                       color: Colors.white,

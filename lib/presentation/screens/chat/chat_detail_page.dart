@@ -419,6 +419,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   /// Menghitung jumlah pesan belum dibaca yang sebenarnya berada di bawah garis pembatas (divider)
   int get _actualUnreadCount {
+    int loadedCount = 0;
     if (_firstUnreadMessageId != null && _firstUnreadMessageId!.isNotEmpty) {
       final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
       final firstIdx = displayMessages.indexWhere(
@@ -427,57 +428,40 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             (m.idAlias != null && m.idAlias == _firstUnreadMessageId),
       );
       if (firstIdx != -1) {
-        int count = 0;
         for (int i = firstIdx; i < displayMessages.length; i++) {
-          if (!displayMessages[i].isMe) count++;
+          if (!displayMessages[i].isMe) loadedCount++;
         }
-        if (count > 0) return count;
       }
     }
-    if (_firstUnreadDisplayIndex != null) {
+    if (loadedCount == 0 && _firstUnreadDisplayIndex != null) {
       final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
       if (_firstUnreadDisplayIndex! >= 0 &&
           _firstUnreadDisplayIndex! < displayMessages.length) {
-        int count = 0;
         for (int i = _firstUnreadDisplayIndex!; i < displayMessages.length; i++) {
-          if (!displayMessages[i].isMe) count++;
+          if (!displayMessages[i].isMe) loadedCount++;
         }
-        if (count > 0) return count;
       }
     }
+    if (_initialUnreadCount > loadedCount) {
+      return _initialUnreadCount;
+    }
+    if (loadedCount > 0) return loadedCount;
     if (_unreadIncomingCountWhileScrolled > 0) {
       return _unreadIncomingCountWhileScrolled;
     }
-    return _initialUnreadCount;
+    return chat.unreadCount;
   }
 
   /// Menghitung sisa pesan belum dibaca yang BELUM dilewati saat user scroll ke bawah.
   /// Jika user scroll kembali ke atas, nilai ini tidak akan berkurang/bertambah.
   int get _remainingUnreadBadgeCount {
-    if (_firstUnreadMessageId != null && _firstUnreadMessageId!.isNotEmpty) {
-      final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
-      final firstIdx = displayMessages.indexWhere(
-        (m) =>
-            m.id == _firstUnreadMessageId ||
-            (m.idAlias != null && m.idAlias == _firstUnreadMessageId),
-      );
-      if (firstIdx != -1) {
-        int count = 0;
-        for (int i = firstIdx; i < displayMessages.length; i++) {
-          final m = displayMessages[i];
-          if (!m.isMe) {
-            final effectiveId =
-                m.id.isNotEmpty ? m.id : (m.idAlias ?? 'msg_${m.hashCode}');
-            if (!_passedUnreadMessageIds.contains(effectiveId)) {
-              count++;
-            }
-          }
-        }
-        return count;
-      }
-    }
-    final remaining =
-        _unreadIncomingCountWhileScrolled - _passedUnreadMessageIds.length;
+    final baseCount = _initialUnreadCount > 0
+        ? _initialUnreadCount
+        : (_actualUnreadCount > 0
+            ? _actualUnreadCount
+            : _unreadIncomingCountWhileScrolled);
+
+    final remaining = baseCount - _passedUnreadMessageIds.length;
     return remaining > 0 ? remaining : 0;
   }
 
@@ -1078,10 +1062,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       debugPrint('chat.chId     : ${chat.chId}');
       debugPrint('chat.accountId: ${chat.accountId}');
       debugPrint('isTelegram    : $isTelegram');
+      final initialTake = (chat.unreadCount > 75)
+          ? (chat.unreadCount >= 100 ? 100 : (chat.unreadCount + 10)).clamp(75, 100)
+          : 75;
       final response = await _chatService.getMessageHistory(
         chat.id,
         currentUserEmail,
-        take: 75,
+        take: initialTake,
         contactId: chat.contactId,
         groupId: chat.groupId,
         ctRealId: chat.ctRealId,
@@ -1108,6 +1095,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   );
                 }
               } else {
+                _messageSkip = response.data!.length;
                 _debugApiState =
                     'Berhasil mengambil ${response.data!.length} pesan.';
 
@@ -2925,7 +2913,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       if (firstUnreadDisplayIdx != -1) {
         _hasPositionedAtUnread = true;
-        final actualCount = customerUnreadSeen;
+        final rawCount = effectiveUnreadCount > customerUnreadSeen
+            ? effectiveUnreadCount
+            : customerUnreadSeen;
+        final actualCount = rawCount > 100 ? 100 : rawCount;
         final adjustedIndex = displayMessages.length - 1 - firstUnreadDisplayIdx;
 
         // Hitung estimasi offset: setiap pesan ~85 piksel + 40 piksel divider
@@ -4735,8 +4726,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       ),
                       child: Center(
                         child: Text(
-                          unreadBadgeCount > 99
-                              ? '99+'
+                          unreadBadgeCount > 100
+                              ? '100'
                               : '$unreadBadgeCount',
                           style: const TextStyle(
                             color: Colors.white,
@@ -6133,7 +6124,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FITUR: Pembatas Pesan Belum Dibaca (Unread Messages Divider)
   // FUNGSI: Menampilkan penanda visual dengan garis dan badge pill di atas pesan pertama yang belum dibaca
   Widget _buildUnreadMessagesDivider(int count, bool isDark) {
-    final text = count > 1 ? '$count PESAN BELUM DIBACA' : 'PESAN BELUM DIBACA';
+    final text = count >= 100
+        ? '100 PESAN BELUM DIBACA'
+        : (count > 1 ? '$count PESAN BELUM DIBACA' : 'PESAN BELUM DIBACA');
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
