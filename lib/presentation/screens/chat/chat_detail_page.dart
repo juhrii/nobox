@@ -2880,23 +2880,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       return;
     }
 
-    // Hitung rangkaian pesan masuk berturut-turut dari lawan bicara (customer) di akhir obrolan
-    int trailingCustomerCount = 0;
-    for (int i = displayMessages.length - 1; i >= 0; i--) {
-      if (!displayMessages[i].isMe) {
-        trailingCustomerCount++;
-      } else {
-        break; // Berhenti jika menemukan pesan dari kita/agen
-      }
-    }
-
     final unreadCount = chat.unreadCount;
-    int effectiveUnreadCount = unreadCount;
-    if (trailingCustomerCount > effectiveUnreadCount && (trailingCustomerCount - effectiveUnreadCount) <= 5) {
-      effectiveUnreadCount = trailingCustomerCount;
-    }
+    final effectiveUnreadCount = unreadCount > 100 ? 100 : unreadCount;
 
-    if (effectiveUnreadCount > 1) {
+    if (effectiveUnreadCount >= 1) {
       int customerUnreadSeen = 0;
       int firstUnreadDisplayIdx = -1;
       for (int i = displayMessages.length - 1; i >= 0; i--) {
@@ -2920,7 +2907,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         final adjustedIndex = displayMessages.length - 1 - firstUnreadDisplayIdx;
 
         // Hitung estimasi offset: setiap pesan ~85 piksel + 40 piksel divider
-        final estimatedOffset = (adjustedIndex * 85.0) + 40.0;
+        final estimatedOffset = adjustedIndex > 0
+            ? ((adjustedIndex * 85.0) + 40.0)
+            : 0.0;
         final maxExtent = _scrollController.position.maxScrollExtent;
         final targetOffset = maxExtent > 0
             ? estimatedOffset.clamp(0.0, maxExtent)
@@ -2934,7 +2923,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           _unreadIncomingCountWhileScrolled = actualCount;
           _passedUnreadMessageIds.clear();
           _unreadMessageKeys.clear();
-          _showScrollToBottomButton = true;
+          _showScrollToBottomButton = targetOffset > 30.0;
         });
 
         debugPrint(
@@ -2949,17 +2938,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
         // Jika layout belum selesai mengukur seluruh list (maxExtent masih berkembang),
         // lakukan penyesuaian posisi sekali lagi di frame berikutnya tanpa animasi.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || !_scrollController.hasClients) return;
-          final updatedMax = _scrollController.position.maxScrollExtent;
-          if (updatedMax > 0) {
-            final refinedTarget = estimatedOffset.clamp(0.0, updatedMax);
-            if ((_scrollController.position.pixels - refinedTarget).abs() > 20.0) {
-              _scrollController.jumpTo(refinedTarget);
+        if (targetOffset > 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !_scrollController.hasClients) return;
+            final updatedMax = _scrollController.position.maxScrollExtent;
+            if (updatedMax > 0) {
+              final refinedTarget = estimatedOffset.clamp(0.0, updatedMax);
+              if ((_scrollController.position.pixels - refinedTarget).abs() > 20.0) {
+                _scrollController.jumpTo(refinedTarget);
+              }
+              _initialUnreadOffset = refinedTarget;
             }
-            _initialUnreadOffset = refinedTarget;
-          }
-        });
+          });
+        }
 
         return; // SELESAI: Jangan biarkan mengeksekusi _scrollToBottom()!
       }
