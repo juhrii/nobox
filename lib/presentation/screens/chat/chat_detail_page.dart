@@ -402,15 +402,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //         serta menghitung jumlah pesan baru yang masuk saat pengguna sedang membaca histori obrolan lama.
   bool _showScrollToBottomButton = false;
   int _unreadIncomingCountWhileScrolled = 0;
+  final GlobalKey _messageListKey = GlobalKey();
   final GlobalKey _firstUnreadKey = GlobalKey();
+  final Map<String, GlobalKey> _unreadMessageKeys = {};
+  final Set<String> _passedUnreadMessageIds = {};
   String? _firstUnreadMessageId;
   int? _firstUnreadDisplayIndex;
   int _initialUnreadCount = 0;
+  double _initialUnreadOffset = 0.0;
   bool _hasPositionedAtUnread = false;
 
   bool get _isNearBottom {
     if (!_scrollController.hasClients) return true;
-    return _scrollController.position.pixels <= 150;
+    return _scrollController.position.pixels <= 30.0;
   }
 
   /// Menghitung jumlah pesan belum dibaca yang sebenarnya berada di bawah garis pembatas (divider)
@@ -445,6 +449,36 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       return _unreadIncomingCountWhileScrolled;
     }
     return _initialUnreadCount;
+  }
+
+  /// Menghitung sisa pesan belum dibaca yang BELUM dilewati saat user scroll ke bawah.
+  /// Jika user scroll kembali ke atas, nilai ini tidak akan berkurang/bertambah.
+  int get _remainingUnreadBadgeCount {
+    if (_firstUnreadMessageId != null && _firstUnreadMessageId!.isNotEmpty) {
+      final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
+      final firstIdx = displayMessages.indexWhere(
+        (m) =>
+            m.id == _firstUnreadMessageId ||
+            (m.idAlias != null && m.idAlias == _firstUnreadMessageId),
+      );
+      if (firstIdx != -1) {
+        int count = 0;
+        for (int i = firstIdx; i < displayMessages.length; i++) {
+          final m = displayMessages[i];
+          if (!m.isMe) {
+            final effectiveId =
+                m.id.isNotEmpty ? m.id : (m.idAlias ?? 'msg_${m.hashCode}');
+            if (!_passedUnreadMessageIds.contains(effectiveId)) {
+              count++;
+            }
+          }
+        }
+        return count;
+      }
+    }
+    final remaining =
+        _unreadIncomingCountWhileScrolled - _passedUnreadMessageIds.length;
+    return remaining > 0 ? remaining : 0;
   }
 
   // FITUR: Mode Seleksi Pesan (Multiple Selection)
@@ -602,25 +636,37 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           _loadOlderMessages();
         }
 
-        // Tampilkan tombol scroll ke bawah jika user menggulir ke atas (> 150px dari bawah)
-        final shouldShow = _scrollController.position.pixels > 150;
-        if (shouldShow != _showScrollToBottomButton) {
-          setState(() {
-            _showScrollToBottomButton = shouldShow;
-            if (!shouldShow) {
-              _unreadIncomingCountWhileScrolled = 0;
-              _firstUnreadMessageId = null;
-              _firstUnreadDisplayIndex = null;
-              _initialUnreadCount = 0;
-            }
-          });
-        } else if (!shouldShow && (_unreadIncomingCountWhileScrolled > 0 || _firstUnreadMessageId != null)) {
+        final pixels = _scrollController.position.pixels;
+        final isAtBottom = pixels <= 30.0;
+        final hasUnreadState = _firstUnreadMessageId != null || _unreadIncomingCountWhileScrolled > 0;
+
+        if (isAtBottom && hasUnreadState) {
           setState(() {
             _unreadIncomingCountWhileScrolled = 0;
             _firstUnreadMessageId = null;
             _firstUnreadDisplayIndex = null;
             _initialUnreadCount = 0;
+            _initialUnreadOffset = 0.0;
+            _passedUnreadMessageIds.clear();
+            _unreadMessageKeys.clear();
+            _showScrollToBottomButton = false;
           });
+        } else {
+          final shouldShow = !isAtBottom && (
+            (hasUnreadState && (_remainingUnreadBadgeCount > 0 || pixels > 80.0)) ||
+            (!hasUnreadState && pixels > 150.0)
+          );
+
+          if (shouldShow != _showScrollToBottomButton) {
+            setState(() {
+              _showScrollToBottomButton = shouldShow;
+            });
+          }
+        }
+
+        // Periksa pesan belum dibaca yang telah dilewati saat scroll ke bawah
+        if (_firstUnreadMessageId != null) {
+          _checkUnreadMessagesPassed();
         }
       }
     });
@@ -2048,7 +2094,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   _showScrollToBottomButton = true;
                 });
               }
-            } else if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0) {
+            } else if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0 && _firstUnreadMessageId == null) {
               _scrollToBottom();
             } else {
               if (mounted) {
@@ -2169,7 +2215,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 }
               }
             });
-            if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0) {
+            if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0 && _firstUnreadMessageId == null) {
               _scrollToBottom();
             } else {
               setState(() {
@@ -2651,7 +2697,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           });
           if (newMessage.isMe) {
             _scrollToBottom();
-          } else if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0) {
+          } else if (_isNearBottom && _unreadIncomingCountWhileScrolled == 0 && _firstUnreadMessageId == null) {
             _scrollToBottom();
           } else {
             setState(() {
@@ -2715,6 +2761,123 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
+  // FITUR: Deteksi Pesan Belum Dibaca yang Terlewati Saat Scroll ke Bawah
+  // FUNGSI: Mengurangi counter pada tombol scroll-to-bottom saat pesan unread dilewati ke bawah,
+  //          dan mengunci angka agar tidak berkurang ketika user scroll kembali ke atas.
+  void _checkUnreadMessagesPassed() {
+    if (_firstUnreadMessageId == null || _firstUnreadMessageId!.isEmpty) return;
+    if (!_scrollController.hasClients) return;
+
+    final displayMessages =
+        _messages.where((m) => !m.isSystemMessage).toList();
+    final firstIdx = displayMessages.indexWhere(
+      (m) =>
+          m.id == _firstUnreadMessageId ||
+          (m.idAlias != null && m.idAlias == _firstUnreadMessageId),
+    );
+    if (firstIdx == -1) return;
+
+    final unreadList = <Message>[];
+    for (int i = firstIdx; i < displayMessages.length; i++) {
+      if (!displayMessages[i].isMe) {
+        unreadList.add(displayMessages[i]);
+      }
+    }
+
+    if (unreadList.isEmpty) return;
+
+    final currentPixels = _scrollController.position.pixels;
+
+    // Jika user sudah berada di bagian paling bawah obrolan (<= 30px),
+    // tandai semua pesan unread sebagai sudah dilewati/terbaca.
+    if (currentPixels <= 30.0) {
+      bool changed = false;
+      for (final m in unreadList) {
+        final effectiveId =
+            m.id.isNotEmpty ? m.id : (m.idAlias ?? 'msg_${m.hashCode}');
+        if (_passedUnreadMessageIds.add(effectiveId)) {
+          changed = true;
+        }
+      }
+      if (changed && mounted) {
+        setState(() {});
+      }
+      return;
+    }
+
+    final listRenderBox =
+        _messageListKey.currentContext?.findRenderObject() as RenderBox?;
+    final listTop = (listRenderBox != null && listRenderBox.hasSize)
+        ? listRenderBox.localToGlobal(Offset.zero).dy
+        : null;
+    final viewportHeight = (listRenderBox != null && listRenderBox.hasSize)
+        ? listRenderBox.size.height
+        : 600.0;
+
+    // Titik fokus baca: Ketika bagian tengah pesan sudah naik melewati 35% atas layar obrolan
+    final focusLine = listTop != null
+        ? (listTop + (viewportHeight * 0.35).clamp(120.0, 220.0))
+        : null;
+
+    // Hitung juga berbasis rasio penurunan scroll offset dari posisi awal
+    final totalDistance = _initialUnreadOffset > 30.0 ? _initialUnreadOffset : 0.0;
+    final scrolledDistance = totalDistance > 0
+        ? (totalDistance - currentPixels).clamp(0.0, totalDistance)
+        : 0.0;
+    final slice = totalDistance > 0 ? (totalDistance / unreadList.length) : 0.0;
+
+    bool hasChanges = false;
+
+    for (int i = 0; i < unreadList.length; i++) {
+      final msg = unreadList[i];
+      final effectiveId =
+          msg.id.isNotEmpty ? msg.id : (msg.idAlias ?? 'msg_${msg.hashCode}');
+      if (_passedUnreadMessageIds.contains(effectiveId)) continue;
+
+      bool passed = false;
+
+      // 1. Cek posisi fisik gelembung pesan di layar
+      final key = (i == 0) ? _firstUnreadKey : _unreadMessageKeys[effectiveId];
+      final box = key?.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize && focusLine != null && listTop != null) {
+        final pos = box.localToGlobal(Offset.zero);
+        final bubbleCenterY = pos.dy + (box.size.height * 0.5);
+        final bubbleTopY = pos.dy;
+
+        // Pesan dianggap sudah terbaca jika:
+        // - Tengah pesan sudah melewati garis fokus baca (fokus bergeser ke pesan di bawahnya), ATAU
+        // - Bagian atas pesan sudah mendekati batas atas layar obrolan (listTop + 40px)
+        if (bubbleCenterY <= focusLine || bubbleTopY <= listTop + 40.0) {
+          passed = true;
+        }
+      }
+
+      // 2. Cek rasio progres scroll (fallback akurat jika widget belum/sudah keluar render tree)
+      if (!passed && slice > 0) {
+        if (scrolledDistance >= slice * (i + 0.5)) {
+          passed = true;
+        }
+      }
+
+      if (passed) {
+        // Tandai pesan ini dan semua pesan sebelumnya sebagai sudah dilewati
+        for (int j = 0; j <= i; j++) {
+          final prior = unreadList[j];
+          final priorId = prior.id.isNotEmpty
+              ? prior.id
+              : (prior.idAlias ?? 'msg_${prior.hashCode}');
+          if (_passedUnreadMessageIds.add(priorId)) {
+            hasChanges = true;
+          }
+        }
+      }
+    }
+
+    if (hasChanges && mounted) {
+      setState(() {});
+    }
+  }
+
   // FITUR: Scroll ke Awal Pesan Belum Dibaca
   // FUNGSI: Ketika membuka ruang obrolan yang memiliki rentetan pesan belum dibaca,
   //          posisi gulir tidak langsung melompat ke paling bawah, melainkan berfokus
@@ -2723,28 +2886,29 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     if (!_scrollController.hasClients || _messages.isEmpty) return;
     if (_hasPositionedAtUnread) return;
 
+    final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
+    if (displayMessages.isEmpty) {
+      _scrollToBottom(animate: false);
+      return;
+    }
+
+    // Hitung rangkaian pesan masuk berturut-turut dari lawan bicara (customer) di akhir obrolan
+    int trailingCustomerCount = 0;
+    for (int i = displayMessages.length - 1; i >= 0; i--) {
+      if (!displayMessages[i].isMe) {
+        trailingCustomerCount++;
+      } else {
+        break; // Berhenti jika menemukan pesan dari kita/agen
+      }
+    }
+
     final unreadCount = chat.unreadCount;
-    if (unreadCount > 1) {
-      final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
+    int effectiveUnreadCount = unreadCount;
+    if (trailingCustomerCount > effectiveUnreadCount && (trailingCustomerCount - effectiveUnreadCount) <= 5) {
+      effectiveUnreadCount = trailingCustomerCount;
+    }
 
-      // Hitung rangkaian pesan masuk berturut-turut dari lawan bicara (customer) di akhir obrolan
-      int trailingCustomerCount = 0;
-      for (int i = displayMessages.length - 1; i >= 0; i--) {
-        if (!displayMessages[i].isMe) {
-          trailingCustomerCount++;
-        } else {
-          break; // Berhenti jika menemukan pesan dari kita/agen
-        }
-      }
-
-      // Jika jumlah pesan lawan bicara di paling bawah lebih banyak dari unreadCount
-      // (misal: ada pesan baru masuk tepat saat membuka room, atau room list tertinggal sinkronisasinya),
-      // gunakan batas awal dari rangkaian pesan baru tersebut agar tidak ada pesan unread yang terlewat.
-      int effectiveUnreadCount = unreadCount;
-      if (trailingCustomerCount > unreadCount && (trailingCustomerCount - unreadCount) <= 5) {
-        effectiveUnreadCount = trailingCustomerCount;
-      }
-
+    if (effectiveUnreadCount > 1) {
       int customerUnreadSeen = 0;
       int firstUnreadDisplayIdx = -1;
       for (int i = displayMessages.length - 1; i >= 0; i--) {
@@ -2763,39 +2927,50 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         _hasPositionedAtUnread = true;
         final actualCount = customerUnreadSeen;
         final adjustedIndex = displayMessages.length - 1 - firstUnreadDisplayIdx;
+
+        // Hitung estimasi offset: setiap pesan ~85 piksel + 40 piksel divider
+        final estimatedOffset = (adjustedIndex * 85.0) + 40.0;
+        final maxExtent = _scrollController.position.maxScrollExtent;
+        final targetOffset = maxExtent > 0
+            ? estimatedOffset.clamp(0.0, maxExtent)
+            : estimatedOffset;
+
         setState(() {
           _firstUnreadMessageId = displayMessages[firstUnreadDisplayIdx].id;
           _firstUnreadDisplayIndex = firstUnreadDisplayIdx;
           _initialUnreadCount = actualCount;
+          _initialUnreadOffset = targetOffset;
           _unreadIncomingCountWhileScrolled = actualCount;
+          _passedUnreadMessageIds.clear();
+          _unreadMessageKeys.clear();
           _showScrollToBottomButton = true;
         });
 
-        // Hitung estimasi offset: setiap pesan ~85 piksel
-        final targetOffset = (adjustedIndex * 85.0).clamp(
-          0.0,
-          _scrollController.position.maxScrollExtent,
-        );
-
         debugPrint(
-          'ChatDetail: 📍 Positioning at first unread message (displayIdx=$firstUnreadDisplayIdx, adjustedIndex=$adjustedIndex, targetOffset=$targetOffset)',
+          'ChatDetail: 📍 Positioning at first unread message (displayIdx=$firstUnreadDisplayIdx, adjustedIndex=$adjustedIndex, estimatedOffset=$estimatedOffset, targetOffset=$targetOffset, maxExtent=$maxExtent)',
         );
 
-        if (targetOffset > 30.0) {
-          _scrollController.jumpTo(targetOffset);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            if (_firstUnreadKey.currentContext != null) {
-              Scrollable.ensureVisible(
-                _firstUnreadKey.currentContext!,
-                alignment: 0.85,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOut,
-              );
-            }
-          });
-          return;
+        if (_scrollController.hasClients && targetOffset > 0) {
+          try {
+            _scrollController.jumpTo(targetOffset);
+          } catch (_) {}
         }
+
+        // Jika layout belum selesai mengukur seluruh list (maxExtent masih berkembang),
+        // lakukan penyesuaian posisi sekali lagi di frame berikutnya tanpa animasi.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_scrollController.hasClients) return;
+          final updatedMax = _scrollController.position.maxScrollExtent;
+          if (updatedMax > 0) {
+            final refinedTarget = estimatedOffset.clamp(0.0, updatedMax);
+            if ((_scrollController.position.pixels - refinedTarget).abs() > 20.0) {
+              _scrollController.jumpTo(refinedTarget);
+            }
+            _initialUnreadOffset = refinedTarget;
+          }
+        });
+
+        return; // SELESAI: Jangan biarkan mengeksekusi _scrollToBottom()!
       }
     }
 
@@ -4486,9 +4661,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   //          yang masuk dan mengembalikan posisi scroll ke bawah dalam satu ketukan.]
   // =====================================================================
   Widget _buildScrollToBottomButton(bool isDark) {
-    final unreadBadgeCount = _actualUnreadCount > 0
-        ? _actualUnreadCount
-        : _unreadIncomingCountWhileScrolled;
+    final unreadBadgeCount = _remainingUnreadBadgeCount;
 
     return AnimatedScale(
       scale: _showScrollToBottomButton ? 1.0 : 0.0,
@@ -4503,6 +4676,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
               _firstUnreadMessageId = null;
               _firstUnreadDisplayIndex = null;
               _initialUnreadCount = 0;
+              _initialUnreadOffset = 0.0;
+              _passedUnreadMessageIds.clear();
+              _unreadMessageKeys.clear();
             });
             _scrollToBottom();
           },
@@ -5671,6 +5847,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     // Align.topCenter + shrinkWrap ensures messages start from top when few,
     // while reverse: true keeps newest messages at bottom and auto-scroll works.
     return Align(
+      key: _messageListKey,
       alignment: Alignment.topCenter,
       child: ListView.builder(
         controller: _scrollController,
@@ -5737,13 +5914,25 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
           final actualUnread = _actualUnreadCount;
 
+          GlobalKey? unreadKey;
+          if (isFirstUnread) {
+            unreadKey = _firstUnreadKey;
+          } else if (_firstUnreadMessageId != null && !message.isMe) {
+            final effectiveId = message.id.isNotEmpty
+                ? message.id
+                : (message.idAlias ?? 'msg_${message.hashCode}');
+            unreadKey =
+                _unreadMessageKeys.putIfAbsent(effectiveId, () => GlobalKey());
+          }
+
           return Column(
-            key: isFirstUnread ? _firstUnreadKey : ValueKey('col_$msgKey'),
+            key: ValueKey('col_$msgKey'),
             children: [
               if (dateSeparator != null) dateSeparator,
               if (isFirstUnread && actualUnread > 0)
                 _buildUnreadMessagesDivider(actualUnread, isDark),
               Container(
+                key: unreadKey,
                 color: isSelected
                     ? (isDark
                           ? Colors.blue.withOpacity(0.15)
