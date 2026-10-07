@@ -263,8 +263,6 @@ class ChatService {
   Future<ApiResponse<List<Map<String, dynamic>>>> getGroups() async {
     try {
       final requestData = {
-        'IncludeColumns': ['Id', 'Name', 'DisplayName', 'Title', 'Nm'],
-        'ColumnSelection': 1,
         'Take': 100,
         'Skip': 0,
       };

@@ -411,6 +411,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   int _initialUnreadCount = 0;
   double _initialUnreadOffset = 0.0;
   bool _hasPositionedAtUnread = false;
+  bool _allInitialUnreadSeen = false;
 
   bool get _isNearBottom {
     if (!_scrollController.hasClients) return true;
@@ -419,6 +420,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   /// Menghitung jumlah pesan belum dibaca yang sebenarnya berada di bawah garis pembatas (divider)
   int get _actualUnreadCount {
+    if (_allInitialUnreadSeen) {
+      return _unreadIncomingCountWhileScrolled;
+    }
     int loadedCount = 0;
     if (_firstUnreadMessageId != null && _firstUnreadMessageId!.isNotEmpty) {
       final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
@@ -449,20 +453,25 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     if (_unreadIncomingCountWhileScrolled > 0) {
       return _unreadIncomingCountWhileScrolled;
     }
-    return chat.unreadCount;
+    return 0;
   }
 
   /// Menghitung sisa pesan belum dibaca yang BELUM dilewati saat user scroll ke bawah.
-  /// Jika user scroll kembali ke atas, nilai ini tidak akan berkurang/bertambah.
+  /// Jika user scroll kembali ke atas setelah semua pesan dibaca, tidak ada lagi badge unread.
   int get _remainingUnreadBadgeCount {
-    final baseCount = _initialUnreadCount > 0
-        ? _initialUnreadCount
-        : (_actualUnreadCount > 0
-            ? _actualUnreadCount
-            : _unreadIncomingCountWhileScrolled);
+    if (_allInitialUnreadSeen) {
+      return _unreadIncomingCountWhileScrolled;
+    }
 
-    final remaining = baseCount - _passedUnreadMessageIds.length;
-    return remaining > 0 ? remaining : 0;
+    if (_firstUnreadMessageId != null && _initialUnreadCount > 0) {
+      final remaining = _initialUnreadCount - _passedUnreadMessageIds.length;
+      if (remaining <= 0) {
+        return _unreadIncomingCountWhileScrolled;
+      }
+      return remaining + _unreadIncomingCountWhileScrolled;
+    }
+
+    return _unreadIncomingCountWhileScrolled;
   }
 
   // FITUR: Mode Seleksi Pesan (Multiple Selection)
@@ -540,8 +549,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       debugPrint('Link: ${chat.link}');
       debugPrint('GroupId: ${chat.groupId}');
       debugPrint('ChannelType: ${chat.channelType}');
-      debugPrint('===========================');
       _isInit = true;
+      if (chat.unreadCount <= 0) {
+        _allInitialUnreadSeen = true;
+      }
 
       if (chat.id.isNotEmpty) {
         // Suppress notifications while chatting in this room
@@ -624,8 +635,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         final isAtBottom = pixels <= 30.0;
         final hasUnreadState = _firstUnreadMessageId != null || _unreadIncomingCountWhileScrolled > 0;
 
+        if (isAtBottom) {
+          _allInitialUnreadSeen = true;
+        }
+
         if (isAtBottom && hasUnreadState) {
           setState(() {
+            _allInitialUnreadSeen = true;
             _unreadIncomingCountWhileScrolled = 0;
             _firstUnreadMessageId = null;
             _firstUnreadDisplayIndex = null;
@@ -2779,6 +2795,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     // Jika user sudah berada di bagian paling bawah obrolan (<= 30px),
     // tandai semua pesan unread sebagai sudah dilewati/terbaca.
     if (currentPixels <= 30.0) {
+      _allInitialUnreadSeen = true;
       bool changed = false;
       for (final m in unreadList) {
         final effectiveId =
@@ -2861,6 +2878,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       }
     }
 
+    if (_passedUnreadMessageIds.length >= unreadList.length) {
+      _allInitialUnreadSeen = true;
+    }
+
     if (hasChanges && mounted) {
       setState(() {});
     }
@@ -2923,6 +2944,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           _unreadIncomingCountWhileScrolled = actualCount;
           _passedUnreadMessageIds.clear();
           _unreadMessageKeys.clear();
+          _allInitialUnreadSeen = targetOffset <= 30.0;
           _showScrollToBottomButton = targetOffset > 30.0;
         });
 
@@ -2956,6 +2978,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       }
     }
 
+    _allInitialUnreadSeen = true;
     _scrollToBottom(animate: false);
   }
 
@@ -4654,6 +4677,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         child: InkWell(
           onTap: () {
             setState(() {
+              _allInitialUnreadSeen = true;
               _unreadIncomingCountWhileScrolled = 0;
               _firstUnreadMessageId = null;
               _firstUnreadDisplayIndex = null;

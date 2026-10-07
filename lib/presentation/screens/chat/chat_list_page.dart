@@ -1305,18 +1305,86 @@ class _ChatListPageState extends State<ChatListPage>
               'ChannelName',
             ]);
             List<Map<String, dynamic>> filteredAccounts = accounts;
+            String? selectedChannelId;
+            bool isSelectedChannelTelegram = false;
+            bool isSelectedChannelWhatsApp = false;
+
             if (selectedChannel != null) {
               final selectedChannelIndex = channelNames.indexOf(selectedChannel!);
               if (selectedChannelIndex != -1) {
                 final channelObj = channels[selectedChannelIndex];
-                final channelId = channelObj['Id']?.toString() ?? channelObj['ChId']?.toString();
-                if (channelId != null) {
+                selectedChannelId = channelObj['Id']?.toString() ?? channelObj['ChId']?.toString();
+                final chNm = (channelObj['Nm'] ?? channelObj['Name'] ?? channelObj['ChannelName'] ?? selectedChannel!).toString().toLowerCase();
+                isSelectedChannelTelegram = selectedChannelId == '2' || chNm.contains('telegram') || chNm.contains('tg');
+                isSelectedChannelWhatsApp = selectedChannelId == '1' || selectedChannelId == '1557' || selectedChannelId == '1561' || chNm.contains('whatsapp') || chNm == 'wa' || chNm.startsWith('wa ') || chNm.endsWith(' wa');
+                if (selectedChannelId != null) {
                   filteredAccounts = accounts.where((acc) {
                     final accChannel = acc['Channel']?.toString() ?? acc['ChId']?.toString() ?? acc['ChannelId']?.toString();
-                    return accChannel == channelId;
+                    return accChannel == selectedChannelId;
                   }).toList();
                 }
               }
+            }
+
+            // FILTER KHUSUS GRUP BERDASARKAN CHANNEL YANG DIPILIH:
+            // Grup WA hanya untuk Channel WhatsApp, dan Grup Telegram hanya untuk Channel Telegram.
+            List<Map<String, dynamic>> filteredGroups = [];
+            if (selectedChannel != null) {
+              final filteredAccountIds = filteredAccounts
+                  .map((a) => (a['Id'] ?? a['id'] ?? a['AccountId'] ?? a['acc_id'])?.toString())
+                  .where((id) => id != null && id.isNotEmpty)
+                  .toSet();
+
+              filteredGroups = groups.where((grp) {
+                // 1. Cek Channel ID langsung dari data grup jika ada
+                final grpChId = (grp['Channel'] ?? grp['ChId'] ?? grp['ChannelId'] ?? grp['channel_id'])?.toString();
+                if (grpChId != null && grpChId.isNotEmpty && selectedChannelId != null) {
+                  if (grpChId == selectedChannelId) return true;
+                }
+
+                // 2. Cek apakah grup terikat ke salah satu akun dari channel yang dipilih
+                final grpAccId = (grp['AccountId'] ?? grp['Account'] ?? grp['AccId'] ?? grp['account_id'])?.toString();
+                if (grpAccId != null && grpAccId.isNotEmpty && filteredAccountIds.isNotEmpty) {
+                  if (filteredAccountIds.contains(grpAccId)) return true;
+                }
+
+                // 3. Cek pola unik identifier / LinkTmp / JID / GroupId / Nama
+                final idStr = (grp['Id'] ?? grp['id'] ?? grp['GroupId'] ?? grp['grp_id'])?.toString() ?? '';
+                final linkStr = (grp['LinkTmp'] ?? grp['Link'] ?? grp['link'] ?? grp['CtRealId'] ?? grp['Jid'] ?? '')?.toString().toLowerCase() ?? '';
+                final grpName = (grp['Name'] ?? grp['DisplayName'] ?? grp['Title'] ?? grp['Nm'] ?? '')?.toString().toLowerCase() ?? '';
+                final combined = '$idStr $linkStr $grpName';
+
+                final isTelegramGroup = idStr.trim().startsWith('-') ||
+                    linkStr.trim().startsWith('-') ||
+                    linkStr.contains('t.me') ||
+                    linkStr.contains('telegram') ||
+                    grpName.contains('telegram') ||
+                    grpChId == '2';
+
+                final isWhatsAppGroup = combined.contains('@g.us') ||
+                    combined.contains('@group') ||
+                    linkStr.contains('whatsapp') ||
+                    grpName.contains('whatsapp') ||
+                    grpChId == '1' ||
+                    grpChId == '1557' ||
+                    grpChId == '1561';
+
+                if (isSelectedChannelTelegram) {
+                  if (isWhatsAppGroup) return false;
+                  if (isTelegramGroup) return true;
+                  return !combined.contains('@g.us');
+                } else if (isSelectedChannelWhatsApp) {
+                  if (isTelegramGroup) return false;
+                  if (isWhatsAppGroup) return true;
+                  return !idStr.trim().startsWith('-') && !linkStr.trim().startsWith('-');
+                }
+
+                if (selectedChannelId != null && grpChId != null) {
+                  return grpChId == selectedChannelId;
+                }
+
+                return true;
+              }).toList();
             }
 
             final accountNames = _toUniqueNames(filteredAccounts, [
@@ -1339,7 +1407,7 @@ class _ChatListPageState extends State<ChatListPage>
               'nm',
               'DisplayName',
             ]);
-            final groupNames = _toUniqueNames(groups, [
+            final groupNames = _toUniqueNames(filteredGroups, [
               'Name',
               'DisplayName',
               'Title',
@@ -1467,6 +1535,7 @@ class _ChatListPageState extends State<ChatListPage>
                             setDialogState(() {
                               selectedChannel = val;
                               selectedAccount = null;
+                              selectedGroup = null;
                             });
                           },
                         ),
@@ -1609,7 +1678,10 @@ class _ChatListPageState extends State<ChatListPage>
                             (val) {
                               setDialogState(() => selectedGroup = val);
                             },
-                            hintText: groupNames.isEmpty ? 'Tidak ada grup' : '--select--',
+                            enabled: selectedChannel != null,
+                            hintText: selectedChannel == null
+                                ? 'Pilih Channel dulu'
+                                : (groupNames.isEmpty ? 'Tidak ada grup untuk channel ini' : '--select--'),
                           )
                         else if (selectedChat != 'Group' && selectedTo == 'Contact')
                           buildDropdownRow(
@@ -1815,10 +1887,10 @@ class _ChatListPageState extends State<ChatListPage>
                                     final idx = accountNames.indexOf(
                                       selectedAccount!,
                                     );
-                                    if (idx >= 0 && idx < accounts.length) {
+                                    if (idx >= 0 && idx < filteredAccounts.length) {
                                       accountIdInt =
                                           int.tryParse(
-                                            (accounts[idx]['Id'] ?? accounts[idx]['id'])?.toString() ??
+                                            (filteredAccounts[idx]['Id'] ?? filteredAccounts[idx]['id'])?.toString() ??
                                                 '',
                                           ) ??
                                           0;
@@ -1852,8 +1924,8 @@ class _ChatListPageState extends State<ChatListPage>
                                   if (isGroup) {
                                     if (selectedTo == 'Group' && selectedGroup != null) {
                                       final idx = groupNames.indexOf(selectedGroup!);
-                                      if (idx >= 0 && idx < groups.length) {
-                                        final grp = groups[idx];
+                                      if (idx >= 0 && idx < filteredGroups.length) {
+                                        final grp = filteredGroups[idx];
                                         debugPrint('ChatList: Selected Group RAW: $grp');
                                         final rawGrpId = (grp['Id'] ?? grp['id'] ?? grp['GroupId'] ?? grp['GrpId'])?.toString();
                                         groupId = int.tryParse(rawGrpId ?? '');
