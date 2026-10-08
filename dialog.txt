@@ -1409,7 +1409,7 @@ void _showDealDialog() async {
                   });
                   ScaffoldMessenger.of(this.context).showSnackBar(
                     SnackBar(
-                      content: Text(isCurrentlyBlocked ? 'unblock sukses' : 'block sukses'),
+                      content: Text(isCurrentlyBlocked ? 'Unblock sukses' : 'Block sukses'),
                       backgroundColor: Colors.green.withOpacity(0.8),
                       behavior: SnackBarBehavior.floating,
                     ),

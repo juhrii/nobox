@@ -2557,7 +2557,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
               onPressed: () async {
                 Navigator.pop(context);
                 
-                // Show loading indicator
+                // Show loading dialog (fast with SignalR)
                 showDialog(
                   context: this.context,
                   barrierDismissible: false,
@@ -2576,20 +2576,16 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
                   setState(() {
                     _isBlocked = newBlockedState;
                   });
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(
-                      content: Text(isCurrentlyBlocked ? 'unblock sukses' : 'block sukses'),
-                      backgroundColor: Colors.green.withOpacity(0.8),
-                      behavior: SnackBarBehavior.floating,
-                    ),
+                  _showCenterSnackBar(
+                    context: this.context,
+                    message: isCurrentlyBlocked ? 'Unblock sukses' : 'Block sukses',
+                    backgroundColor: Colors.green.withOpacity(0.9),
                   );
                 } else {
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to $actionName contact'),
-                      backgroundColor: Colors.red.shade600,
-                      behavior: SnackBarBehavior.floating,
-                    ),
+                  _showCenterSnackBar(
+                    context: this.context,
+                    message: 'Gagal $actionName contact',
+                    backgroundColor: Colors.red.shade600,
                   );
                 }
               },
@@ -2692,6 +2688,33 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
           ),
         );
       },
+    );
+  // Helper: Show SnackBar di tengah layar (center)
+  void _showCenterSnackBar({
+    required BuildContext context,
+    required String message,
+    required Color backgroundColor,
+    Duration duration = const Duration(seconds: 2),
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          textAlign: TextAlign.center,
+        ),
+        backgroundColor: backgroundColor,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).size.height * 0.45,
+          left: 24,
+          right: 24,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: duration,
+        elevation: 8,
+      ),
     );
   }
 }

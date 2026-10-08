@@ -3064,16 +3064,46 @@ class ChatProvider with ChangeNotifier {
 
     final index = _chats.indexWhere((chat) => chat.id == roomId);
     if (index != -1) {
+      final chat = _chats[index];
       // Optimistic update
-      _chats[index] = _chats[index].copyWith(isBlocked: isBlocked);
+      _chats[index] = chat.copyWith(isBlocked: isBlocked);
       notifyListeners();
 
-      // Send to server via REST API (updateContactInfo) instead of SignalR to prevent server crash
-      final updateResponse = await _chatService.updateContactInfo(roomId, {
-        'CtIsBlock': isBlocked ? 1 : 0,
-        'IsBlock': isBlocked ? 1 : 0,
-      });
-      final success = !updateResponse.isError;
+      // Get chat status for SignalR (1=Unassigned, 2=Assigned, 3=Resolved)
+      // Status can be in Indonesian or English
+      int statusCode = 1; // default Unassigned
+      final statusLower = chat.status.toLowerCase();
+      if (statusLower.contains('assign') || statusLower.contains('tugas')) {
+        statusCode = 2; // Assigned / Ditugaskan
+      } else if (statusLower.contains('resolv') || statusLower.contains('selesai')) {
+        statusCode = 3; // Resolved / Selesai
+      }
+
+      // Use SignalR for fast block/unblock (real-time), fallback to REST API if fails
+      bool success = false;
+      try {
+        debugPrint('ChatProvider: 🚫 Block/Unblock via SignalR: room=$roomId, contact=$contactId, isBlocked=$isBlocked');
+        final signalR = SignalRService();
+        success = await signalR.invokeBlockUnblock(
+          roomId: roomId,
+          status: statusCode,
+          contactId: contactId,
+          shouldBlock: isBlocked,
+        );
+      } catch (e) {
+        debugPrint('ChatProvider: ❌ SignalR block/unblock failed, falling back to REST API: $e');
+        success = false;
+      }
+
+      // Fallback to REST API if SignalR failed
+      if (!success) {
+        debugPrint('ChatProvider: 🚫 Falling back to REST API for block/unblock');
+        final updateResponse = await _chatService.updateContactInfo(roomId, {
+          'CtIsBlock': isBlocked ? 1 : 0,
+          'IsBlock': isBlocked ? 1 : 0,
+        });
+        success = !updateResponse.isError;
+      }
 
       if (!success) {
         // Revert on error
