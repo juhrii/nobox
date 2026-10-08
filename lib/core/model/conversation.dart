@@ -289,19 +289,32 @@ class Conversation {
       if (grpFlag != null && grpFlag.toString().isNotEmpty && grpFlag.toString() != 'null') {
         final strFlag = grpFlag.toString().trim().toLowerCase();
         if (strFlag == '1' || strFlag == 'true') return true;
-        if (strFlag == '0' || strFlag == 'false') return false;
+        // JANGAN langsung return false jika strFlag == '0', karena server NoBox terkadang
+        // mengembalikan IsGrp: 0 untuk grup Telegram dan menyimpan ID-nya di GrpId/CtRealId
       }
 
       final grpId = getValue(['GrpId', 'grp_id', 'GroupId', 'groupId', 'IdGroup', 'idGroup']);
       if (grpId != null) {
         final gInt = int.tryParse(grpId.toString().trim());
-        if (gInt != null && gInt > 0) return true;
+        // FIX: Di Telegram, ID grup bernilai NEGATIF (< 0, contoh -1001234567890).
+        // Jangan batasi hanya gInt > 0!
+        if (gInt != null && gInt != 0) return true;
+        final gStr = grpId.toString().trim();
+        if (gStr.isNotEmpty && gStr != '0' && gStr != 'null') {
+          if (gStr.startsWith('-')) return true;
+        }
+      }
+
+      // Cek apakah ada nama grup (Grp / GroupNm)
+      final grpName = (getValue(['Grp', 'GroupNm', 'GroupName', 'group_name'])?.toString() ?? '').trim();
+      if (grpName.isNotEmpty && grpName != 'null' && grpName != '0') {
+        return true;
       }
 
       final chNm = (getValue(['ChNm', 'ChannelName', 'chnm', 'ChId', 'ch_id', 'Channel'])?.toString() ?? '').trim().toLowerCase();
       final idStr = (getValue(['Id', 'id', 'RoomId', 'room_id'])?.toString() ?? '').trim().toLowerCase();
-      final contactStr = (getValue(['CtRealId', 'ct_real_id', 'CtId', 'ContactId', 'IdLink', 'LinkId', 'LinkTmp', 'Link'])?.toString() ?? '').trim().toLowerCase();
-      final combined = '$idStr $contactStr';
+      final contactStr = (getValue(['CtRealId', 'ct_real_id', 'CtId', 'ContactId', 'IdLink', 'LinkId', 'LinkTmp', 'Link', 'CtIdExt', 'ExtId', 'IdExt'])?.toString() ?? '').trim().toLowerCase();
+      final combined = '$chNm $idStr $contactStr';
 
       // 2. ATURAN GROUP WHATSAPP: Pada channel WhatsApp, JID Grup berakhiran / mengandung '@g.us' atau '@group'.
       if (combined.contains('@g.us') || combined.contains('@group')) {
@@ -309,8 +322,13 @@ class Conversation {
       }
 
       // 3. ATURAN TELEGRAM: Di Telegram, Grup selalu ber-ID negatif (awalan tanda minus '-').
-      if (chNm.contains('telegram') || chNm.contains('tg') || combined.contains('telegram')) {
-        if (idStr.startsWith('-') || contactStr.startsWith('-')) return true;
+      final isTelegram = chNm.contains('telegram') || chNm.contains('tg') || chNm == '2' || combined.contains('telegram');
+      if (isTelegram) {
+        if (idStr.startsWith('-') ||
+            contactStr.startsWith('-') ||
+            (grpId != null && grpId.toString().trim().startsWith('-'))) {
+          return true;
+        }
       }
 
       // 4. ATURAN PRIVATE CHAT WHATSAPP
@@ -375,9 +393,22 @@ class Conversation {
       groupName: getValue(['Grp', 'GroupNm', 'GroupName', 'group_name'])?.toString() ?? '',
       groupId: () {
         final g = getValue(['GrpId', 'grp_id', 'GroupId', 'groupId', 'IdGroup', 'idGroup']);
-        if (g == null || g.toString() == '0' || g.toString() == 'null') return '';
-        final gInt = int.tryParse(g.toString().trim());
-        if (gInt != null && gInt > 0) return gInt.toString();
+        if (g != null && g.toString() != '0' && g.toString() != 'null') {
+          final gInt = int.tryParse(g.toString().trim());
+          // FIX: Telegram group IDs adalah angka negatif (gInt != 0, bukan gInt > 0)
+          if (gInt != null && gInt != 0) return gInt.toString();
+          final str = g.toString().trim();
+          if (str.isNotEmpty && str != '0' && str != 'null') return str;
+        }
+        // Fallback untuk Telegram group: periksa apakah CtRealId, LinkTmp, ExtId, atau RoomId merupakan ID negatif
+        final ctReal = getValue(['CtRealId', 'ct_real_id'])?.toString().trim() ?? '';
+        if (ctReal.startsWith('-')) return ctReal;
+        final linkVal = getValue(['LinkTmp', 'IdLink', 'LinkId', 'Link'])?.toString().trim() ?? '';
+        if (linkVal.startsWith('-')) return linkVal;
+        final extIdVal = getValue(['CtIdExt', 'ExtId', 'IdExt'])?.toString().trim() ?? '';
+        if (extIdVal.startsWith('-')) return extIdVal;
+        final roomIdVal = getValue(['Id', 'id', 'RoomId', 'room_id'])?.toString().trim() ?? '';
+        if (roomIdVal.startsWith('-')) return roomIdVal;
         return '';
       }(),
       sdrMsg: getValue(['SdrMsg', 'sdr_msg', 'Sdr'])?.toString().trim() ?? '',

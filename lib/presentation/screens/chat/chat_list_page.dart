@@ -241,6 +241,46 @@ class _ChatListPageState extends State<ChatListPage>
     );
   }
 
+  /// Mengubah pesan error mentah dari server/jaringan menjadi pesan yang ramah user.
+  /// - Internet HP mati / DNS gagal      → "Tidak ada koneksi internet"
+  /// - Server error (5xx) / server mati  → "Server sedang bermasalah..."
+  /// - Selain itu                        → "Gagal memuat percakapan..."
+  String _friendlyChatError(String error) {
+    final e = error.toLowerCase();
+
+    // 1. Perangkat tidak terhubung ke internet
+    if (e.contains('failed host lookup') ||
+        e.contains('no address associated with hostname') ||
+        e.contains('network is unreachable') ||
+        e.contains('no route to host') ||
+        e.contains('xmlhttprequest error')) {
+      return 'Tidak ada koneksi internet';
+    }
+
+    // 2. Server error / server mati / tidak merespons
+    if (RegExp(r'\b5\d\d\b').hasMatch(e) ||
+        e.contains('server error') ||
+        e.contains('internal server') ||
+        e.contains('service unavailable') ||
+        e.contains('bad gateway') ||
+        e.contains('connection refused') ||
+        e.contains('connection reset') ||
+        e.contains('connection closed') ||
+        e.contains('timeout') ||
+        e.contains('timed out')) {
+      return 'Server sedang bermasalah. Silakan coba lagi nanti.';
+    }
+
+    // 3. Error koneksi lain yang tidak spesifik → anggap tidak ada internet
+    if (e.contains('socketexception') ||
+        e.contains('connection error') ||
+        e.contains('connection errored')) {
+      return 'Tidak ada koneksi internet';
+    }
+
+    return 'Gagal memuat percakapan. Silakan coba lagi.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -562,6 +602,47 @@ class _ChatListPageState extends State<ChatListPage>
       body: Column(
         children: [
           const ConnectionStatusBanner(),
+          // Banner kecil saat gagal memuat ulang, tetapi daftar chat lama masih tampil.
+          Consumer<ChatProvider>(
+            builder: (context, chatProvider, _) {
+              if (chatProvider.fetchError == null ||
+                  chatProvider.chats.isEmpty ||
+                  chatProvider.isLoading) {
+                return const SizedBox.shrink();
+              }
+              return Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                color: Colors.orange.shade50,
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline,
+                        size: 16, color: Colors.orange.shade800),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Gagal memuat percakapan',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.orange.shade900,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => chatProvider.fetchChats(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 28),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text('Coba Lagi'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           Expanded(
             child: Consumer<ChatProvider>(
               builder: (context, chatProvider, _) {
@@ -632,13 +713,7 @@ class _ChatListPageState extends State<ChatListPage>
                         if (chatProvider.error != null) ...[
                           const SizedBox(height: 8),
                           Text(
-                            chatProvider.error!.contains('500')
-                                ? 'Server NoBox sedang mengalami gangguan (Error 500). Silakan coba lagi nanti.'
-                                : chatProvider.error!.contains('SocketException')
-                                    ? 'Tidak ada koneksi internet atau server tidak dapat dijangkau.'
-                                    : chatProvider.error!.length > 100
-                                        ? 'Gagal memuat obrolan. Silakan coba lagi.'
-                                        : chatProvider.error!,
+                            _friendlyChatError(chatProvider.error!),
                             style: const TextStyle(
                               color: Colors.red,
                               fontSize: 13,
@@ -2085,8 +2160,9 @@ class _ChatListPageState extends State<ChatListPage>
 
                                           if (isGroup) {
                                             if (groupId != null &&
-                                                groupId > 0 &&
-                                                c.groupId == groupId.toString()) {
+                                                groupId != 0 &&
+                                                (c.groupId == groupId.toString() ||
+                                                    c.ctRealId == groupId.toString())) {
                                               return true;
                                             }
                                             if (groupName != null &&

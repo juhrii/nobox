@@ -874,9 +874,18 @@ class ChatService {
         );
       }
     } on DioException catch (e) {
-      String errorMessage = e.message ?? 'Unknown connection error';
+      // Sertakan detail error asli (mis. SocketException: Failed host lookup)
+      // agar UI bisa membedakan "tidak ada internet" vs "server bermasalah".
+      String errorMessage = [e.message, e.error?.toString()]
+          .whereType<String>()
+          .where((s) => s.isNotEmpty)
+          .join(' | ');
+      if (errorMessage.isEmpty) errorMessage = 'Unknown connection error (${e.type.name})';
       if (e.response != null && e.response?.data is Map) {
-        errorMessage = e.response?.data['error'] ?? errorMessage;
+        errorMessage = e.response?.data['error']?.toString() ?? errorMessage;
+      }
+      if (e.response?.statusCode != null && e.response!.statusCode! >= 500) {
+        errorMessage = 'Server error (${e.response!.statusCode}): $errorMessage';
       }
       debugPrint('ChatService: getConversations DioException: $errorMessage');
       return ApiResponse.failure(errorMessage, e.response?.statusCode ?? 500);
@@ -1646,12 +1655,17 @@ class ChatService {
         payload['GrpId'] = int.tryParse(request.groupId!) ?? request.groupId;
       }
 
-      payload['ExtId'] = finalExtId;
-      // Fallback: sertakan LinkId (database primary key) jika ada
-      if (!isGroupReq && request.contactId != null && request.contactId!.isNotEmpty) {
-        final linkIdInt = int.tryParse(request.contactId!);
-        if (linkIdInt != null && linkIdInt > 0) {
-          payload['LinkId'] = linkIdInt;
+      // ExtId dan LinkId hanya untuk obrolan 1-on-1 (bukan grup)
+      if (!isGroupReq) {
+        if (finalExtId.isNotEmpty) {
+          payload['ExtId'] = finalExtId;
+        }
+        // Fallback: sertakan LinkId (database primary key) jika ada
+        if (request.contactId != null && request.contactId!.isNotEmpty) {
+          final linkIdInt = int.tryParse(request.contactId!);
+          if (linkIdInt != null && linkIdInt > 0) {
+            payload['LinkId'] = linkIdInt;
+          }
         }
       }
 
@@ -1957,9 +1971,13 @@ class ChatService {
       "Ptt": bodyType == 2,
     };
     
-    final bool isGroupMedia = (groupId != null && groupId.isNotEmpty && groupId != '0');
+    final bool isGroupMedia = (groupId != null && groupId.isNotEmpty && groupId != '0') ||
+        (channelId == '2' && (link?.startsWith('-') == true || contactId?.startsWith('-') == true));
+    final resolvedMediaGrpId = (groupId != null && groupId.isNotEmpty && groupId != '0')
+        ? groupId
+        : ((link?.startsWith('-') == true) ? link : ((contactId?.startsWith('-') == true) ? contactId : null));
     final idLinkValue = isGroupMedia ? null : ((link != null && link.isNotEmpty) ? link : contactId);
-    debugPrint('ChatService: SignalR Media (All Channels) → idLink=$idLinkValue, idGroup=$groupId, idRoom=$conversationId, type=${bodyType.toString()}, File=$fileJsonObj');
+    debugPrint('ChatService: SignalR Media (All Channels) → idLink=$idLinkValue, idGroup=$resolvedMediaGrpId, idRoom=$conversationId, type=${bodyType.toString()}, File=$fileJsonObj');
 
     // FIX: Pesan Media untuk channel lain tetap lewat SignalR tanpa Teks Caption
     final signalRMsg = '';
@@ -1968,7 +1986,7 @@ class ChatService {
       idLink: idLinkValue,
       idAccount: safeAccountId,
       idRoom: conversationId,
-      idGroup: isGroupMedia ? groupId : null,
+      idGroup: isGroupMedia ? resolvedMediaGrpId : null,
       type: bodyType.toString(),
       msg: '', 
       fileJson: jsonEncode(fileJsonObj),

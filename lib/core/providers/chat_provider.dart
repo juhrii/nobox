@@ -20,6 +20,9 @@ class ChatProvider with ChangeNotifier {
   List<ChatModel> _chats = [];
   bool _isLoading = false;
   String? _error;
+  // Error khusus dari fetchChats() (memuat daftar percakapan).
+  // Dipisah dari _error karena _error juga dipakai aksi lain (arsip, tag, dll).
+  String? _fetchError;
   Timer? _signalRRefreshTimer;
 
   // Pagination state
@@ -55,6 +58,9 @@ class ChatProvider with ChangeNotifier {
   final List<Map<String, dynamic>> _starredMessages = [];
 
   bool _isDisposed = false;
+
+  // Request tracking untuk mencegah race condition saat ganti tab cepat
+  int _fetchGeneration = 0;
 
   // FIX: Unread Override Shield
   // Backend kadang mereturn UnreadCount = 0 pada API/SignalR jika aplikasi sedang berjalan di foreground,
@@ -308,6 +314,7 @@ class ChatProvider with ChangeNotifier {
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMore => _hasMore;
   String? get error => _error;
+  String? get fetchError => _fetchError;
   String get searchQuery => _searchQuery;
   String get activeFilter => _activeFilter;
   List<Map<String, dynamic>>? get cachedAccounts => _cachedAccounts;
@@ -371,9 +378,12 @@ class ChatProvider with ChangeNotifier {
     // Reset pagination karena filter berubah
     _currentSkip = 0;
     _hasMore = true;
-    _chats = [];
-    notifyListeners();
-    fetchChats();
+    // TIDAK kosongkan _chats di sini → list lama tetap tampil selama fetch
+    // Increment generation untuk cancel request lama secara implisit
+    _fetchGeneration++;
+    final currentGen = _fetchGeneration;
+    notifyListeners(); // Hanya update tab highlight
+    fetchChats(generation: currentGen); // Fetch di background dengan generation
   }
 
   // FITUR: Filter Lanjutan
@@ -426,8 +436,10 @@ class ChatProvider with ChangeNotifier {
     _currentSkip = 0;
     _hasMore = true;
     _chats = [];
+    _fetchGeneration++;
+    final currentGen = _fetchGeneration;
     notifyListeners();
-    fetchChats();
+    fetchChats(generation: currentGen);
   }
 
   void resetFilters() {
@@ -445,8 +457,10 @@ class ChatProvider with ChangeNotifier {
     _filterDeal = null;
     _filterTags = null;
     _filterHumanAgent = null;
+    _fetchGeneration++;
+    final currentGen = _fetchGeneration;
     notifyListeners();
-    fetchChats();
+    fetchChats(generation: currentGen);
   }
 
   void clearChatDataForAccountSwitch() {
@@ -522,9 +536,12 @@ class ChatProvider with ChangeNotifier {
   // FITUR: Ambil Data Chat
   // FUNGSI: Mengambil daftar percakapan dari server dengan dukungan pagination dan filter
   // FITUR 2: Mengambil daftar obrolan utama (20 data pertama) dari server.
-  Future<void> fetchChats() async {
+  Future<void> fetchChats({int? generation}) async {
+    // Jika generation tidak disediakan, gunakan current (untuk backward compat)
+    final gen = generation ?? _fetchGeneration;
     _isLoading = true;
     _error = null;
+    _fetchError = null;
     // Reset state pagination saat pengambilan data baru
     _currentSkip = 0;
     _hasMore = true;
@@ -571,6 +588,14 @@ class ChatProvider with ChangeNotifier {
       );
 
       if (!response.isError && response.data != null) {
+        // Guard: jika generation sudah berubah (user ganti tab lagi), abaikan response ini
+        if (gen != _fetchGeneration) {
+          debugPrint('ChatProvider: fetchChats generation stale ($gen vs ${_fetchGeneration}), discarding');
+          _isLoading = false;
+          notifyListeners();
+          return;
+        }
+
         final freshData = response.data!
             .where((c) {
               final name = c.participantEmail.toLowerCase().trim();
@@ -1029,12 +1054,18 @@ class ChatProvider with ChangeNotifier {
           debugPrint('ChatProvider: Failed to fetch archived chats: $e');
         }
       } else {
+        // Guard: jika generation sudah berubah, abaikan error state
+        if (gen != _fetchGeneration) return;
         _error = response.error ?? 'Gagal memuat chat';
+        _fetchError = _error;
         _isLoading = false;
         notifyListeners();
       }
     } catch (e) {
+      // Guard: jika generation sudah berubah, abaikan error state
+      if (gen != _fetchGeneration) return;
       _error = e.toString();
+      _fetchError = _error;
       _isLoading = false;
       notifyListeners();
     }
@@ -2269,6 +2300,8 @@ class ChatProvider with ChangeNotifier {
     if (_isLoadingMore || !_hasMore) return;
 
     _isLoadingMore = true;
+    _fetchGeneration++;
+    final currentGen = _fetchGeneration;
     notifyListeners();
 
     try {
@@ -2288,6 +2321,13 @@ class ChatProvider with ChangeNotifier {
         humanAgentId: _filterHumanAgent,
         // linkId → HTTP 500, funnelId, tagsId → client-side
       );
+
+      // Guard: jika generation sudah berubah (user ganti tab), abaikan
+      if (currentGen != _fetchGeneration) {
+        _isLoadingMore = false;
+        notifyListeners();
+        return;
+      }
 
       if (!response.isError && response.data != null) {
         final newConversations = response.data!;
@@ -2339,14 +2379,25 @@ class ChatProvider with ChangeNotifier {
           );
         }
       } else {
+        // Guard: jika generation sudah berubah, abaikan error
+        if (currentGen != _fetchGeneration) {
+          _isLoadingMore = false;
+          notifyListeners();
+          return;
+        }
         debugPrint('📄 [Pagination] Error loading more: ${response.error}');
         // Don't set _hasMore to false on error — allow retry
       }
     } catch (e) {
+      // Guard: jika generation sudah berubah, abaikan exception
+      if (currentGen != _fetchGeneration) return;
       debugPrint('📄 [Pagination] Exception loading more: $e');
     } finally {
-      _isLoadingMore = false;
-      notifyListeners();
+      // Guard: hanya notify jika generation masih sama
+      if (currentGen == _fetchGeneration) {
+        _isLoadingMore = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -3122,7 +3173,9 @@ class ChatProvider with ChangeNotifier {
     // --------------------------------
 
     final bool isGroupChat = chat.isGroup ||
-        (chat.groupId.isNotEmpty && chat.groupId != '0' && chat.groupId != 'null');
+        (chat.groupId.isNotEmpty && chat.groupId != '0' && chat.groupId != 'null') ||
+        (chat.groupName.isNotEmpty && chat.groupName != '0' && chat.groupName != 'null') ||
+        (isTelegram && (chat.groupId.startsWith('-') || chat.ctRealId.startsWith('-') || chat.link.startsWith('-') || chat.id.startsWith('-')));
 
     String? resolvedGroupId;
     String? idLinkValue;
@@ -3131,14 +3184,18 @@ class ChatProvider with ChangeNotifier {
       // GROUP CHAT: IdGroup harus diisi, dan IdLink harus NULL agar backend NoBox tidak memvalidasi IdLink ke kontak individu
       if (chat.groupId.isNotEmpty && chat.groupId != '0' && chat.groupId != 'null') {
         resolvedGroupId = chat.groupId;
-      } else if (chat.link.isNotEmpty && chat.link != '0' && chat.link != 'null') {
+      } else if (isTelegram && chat.ctRealId.isNotEmpty && chat.ctRealId.startsWith('-')) {
+        resolvedGroupId = chat.ctRealId;
+      } else if (isTelegram && chat.link.isNotEmpty && chat.link.startsWith('-')) {
         resolvedGroupId = chat.link;
-      } else if (chat.contactId.isNotEmpty && chat.contactId != '0' && chat.contactId != 'null') {
+      } else if (chat.link.isNotEmpty && chat.link != '0' && chat.link != 'null' && !chat.link.contains('@s.whatsapp.net')) {
+        resolvedGroupId = chat.link;
+      } else if (chat.contactId.isNotEmpty && chat.contactId != '0' && chat.contactId != 'null' && !chat.contactId.contains('@s.whatsapp.net')) {
         resolvedGroupId = chat.contactId;
       } else {
         resolvedGroupId = chat.id
             .replaceAll(RegExp(r'^[0-9]+_'), '')
-            .replaceAll(RegExp(r'[^0-9]'), '');
+            .replaceAll(RegExp(r'[^0-9\-]'), '');
       }
       idLinkValue = null; // IMPORTANT: For group chat, IdLink MUST be null!
     } else {

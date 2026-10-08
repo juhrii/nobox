@@ -116,6 +116,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   final TextEditingController _messageController = TextEditingController();
   final ChatService _chatService = ChatService();
 
+  bool get _isTelegramChat =>
+      chat.chId == '2' ||
+      chat.channelType.toLowerCase().contains('telegram') ||
+      chat.channelName.toLowerCase().contains('telegram');
+
   void _showTopToast(String message, {bool isError = false}) {
     if (!mounted) return;
     final overlay = Overlay.of(context);
@@ -3072,7 +3077,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         SignalRService().joinConversation(chat.ctRealId);
       }
 
-      // Background refresh detail room agar AccountId, LinkId, dan ExtId selalu yang terbaru dari database
+      // Background refresh detail room agar AccountId, LinkId, ExtId, dan GroupId selalu yang terbaru dari database
       _chatService.getDetailRoom(chat.id).then((resp) {
         if (!mounted || resp.isError || resp.data == null) return;
         final d = resp.data!;
@@ -3081,16 +3086,37 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         final linkId = d['CtId']?.toString() ?? d['LinkId']?.toString();
         final extId = d['CtIdExt']?.toString() ?? d['ExtId']?.toString();
 
+        final rMap = d['Room'] is Map ? Map<String, dynamic>.from(d['Room'] as Map) : d;
+        final rawGrpId = (rMap['GrpId'] ?? rMap['grp_id'] ?? rMap['GroupId'] ?? rMap['groupId'] ?? rMap['IdGroup'])?.toString();
+        final rawGrpNm = (rMap['Grp'] ?? rMap['GroupNm'] ?? rMap['GroupName'] ?? rMap['group_name'])?.toString();
+        final rawCtReal = rMap['CtRealId']?.toString();
+        final isGrpFlag = rMap['IsGrp'] == 1 || rMap['IsGrp'] == true || rMap['IsGroup'] == 1 || rMap['IsGroup'] == true;
+
+        final isGrp = chat.isGroup ||
+            isGrpFlag ||
+            (rawGrpId != null && rawGrpId.isNotEmpty && rawGrpId != '0') ||
+            (rawGrpNm != null && rawGrpNm.isNotEmpty && rawGrpNm != 'null') ||
+            (rawCtReal != null && rawCtReal.startsWith('-'));
+
+        final resolvedGrpId = (rawGrpId != null && rawGrpId.isNotEmpty && rawGrpId != '0')
+            ? rawGrpId
+            : ((rawCtReal != null && rawCtReal.startsWith('-'))
+                ? rawCtReal
+                : chat.groupId);
+
         setState(() {
           chat = chat.copyWith(
             accountId: (chAccId != null && chAccId.isNotEmpty && chAccId != '0') ? chAccId : chat.accountId,
             channelName: (chAccNm != null && chAccNm.isNotEmpty && chAccNm != 'Not Found') ? chAccNm : chat.channelName,
-            contactId: (linkId != null && linkId.isNotEmpty && linkId != '0') ? linkId : chat.contactId,
+            contactId: isGrp ? '' : ((linkId != null && linkId.isNotEmpty && linkId != '0') ? linkId : chat.contactId),
             link: (linkId != null && linkId.isNotEmpty && linkId != '0') ? linkId : chat.link,
-            extId: (extId != null && extId.isNotEmpty) ? extId : chat.extId,
+            extId: isGrp ? '' : ((extId != null && extId.isNotEmpty) ? extId : chat.extId),
+            isGroup: isGrp,
+            groupId: (resolvedGrpId != null && resolvedGrpId.isNotEmpty && resolvedGrpId != '0') ? resolvedGrpId : chat.groupId,
+            groupName: (rawGrpNm != null && rawGrpNm.isNotEmpty && rawGrpNm != 'null') ? rawGrpNm : chat.groupName,
           );
         });
-        debugPrint('ChatDetail: ✅ Refreshed room details: ChAccId=$chAccId, LinkId=$linkId, ExtId=$extId');
+        debugPrint('ChatDetail: ✅ Refreshed room details: ChAccId=$chAccId, isGroup=$isGrp, GrpId=${chat.groupId}, GrpNm=${chat.groupName}');
       }).catchError((e) {
         debugPrint('ChatDetail: ⚠️ Background getDetailRoom error: $e');
       });
@@ -3369,6 +3395,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         'ChatDetail: ⚠️ SignalR send failed ($errorMsg), attempting fallback via REST API Inbox/Send...',
       );
       try {
+        final isGroupChat = chat.isGroup ||
+            (chat.groupId.isNotEmpty && chat.groupId != '0' && chat.groupId != 'null') ||
+            (chat.groupName.isNotEmpty && chat.groupName != '0' && chat.groupName != 'null') ||
+            (isTelegram && (chat.groupId.startsWith('-') || chat.ctRealId.startsWith('-') || chat.link.startsWith('-') || chat.id.startsWith('-')));
+
+        final resolvedGroupId = isGroupChat
+            ? (chat.groupId.isNotEmpty && chat.groupId != '0'
+                ? chat.groupId
+                : (isTelegram && chat.ctRealId.startsWith('-')
+                    ? chat.ctRealId
+                    : (isTelegram && chat.link.startsWith('-')
+                        ? chat.link
+                        : (chat.id.startsWith('-') ? chat.id : null))))
+            : null;
+
         final resp = await _chatService.sendMessage(
           MessageRequest(
             receiver: chat.id.isNotEmpty && chat.id != '0'
@@ -3376,14 +3417,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                 : (chat.ctRealId.isNotEmpty ? chat.ctRealId : chat.contactId),
             content: finalContent,
             accountId: _getResolvedAccountId(chatProvider),
-            contactId: chat.isGroup ? null : (chat.contactId.isNotEmpty ? chat.contactId : chat.link),
-            extId: chat.extId.isNotEmpty
-                ? chat.extId
-                : (chat.sender.replaceAll(RegExp(r'[^0-9]'), '').length >= 9
-                    ? chat.sender
-                    : null),
+            contactId: isGroupChat ? null : (chat.contactId.isNotEmpty ? chat.contactId : chat.link),
+            extId: isGroupChat
+                ? null
+                : (chat.extId.isNotEmpty
+                    ? chat.extId
+                    : (chat.sender.replaceAll(RegExp(r'[^0-9]'), '').length >= 9
+                        ? chat.sender
+                        : null)),
             channelId: chat.chId,
-            groupId: chat.isGroup ? (chat.groupId.isNotEmpty && chat.groupId != '0' ? chat.groupId : chat.id) : null,
+            groupId: resolvedGroupId,
           ),
         );
         if (!resp.isError) {
@@ -3546,15 +3589,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       chat.id,
       pickedFile.path,
       accountId: _getResolvedAccountId(chatProvider),
-      channelId:
-          (chat.chId == '2' ||
-              chat.channelType.toLowerCase().contains('telegram') ||
-              chat.channelName.toLowerCase().contains('telegram'))
-          ? '2'
-          : chat.chId,
-      contactId: chat.contactId,
+      channelId: _isTelegramChat ? '2' : chat.chId,
+      contactId: (chat.isGroup || (_isTelegramChat && (chat.groupId.startsWith('-') || chat.ctRealId.startsWith('-')))) ? null : chat.contactId,
       link: chat.link,
-      groupId: chat.groupId,
+      groupId: chat.groupId.isNotEmpty && chat.groupId != '0' ? chat.groupId : (_isTelegramChat && chat.ctRealId.startsWith('-') ? chat.ctRealId : null),
     );
 
     if (mounted && messageIndex < _messages.length) {
@@ -3672,15 +3710,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       chat.id,
       pickedFile.path,
       accountId: _getResolvedAccountId(chatProvider),
-      channelId:
-          (chat.chId == '2' ||
-              chat.channelType.toLowerCase().contains('telegram') ||
-              chat.channelName.toLowerCase().contains('telegram'))
-          ? '2'
-          : chat.chId,
-      contactId: chat.contactId,
+      channelId: _isTelegramChat ? '2' : chat.chId,
+      contactId: (chat.isGroup || (_isTelegramChat && (chat.groupId.startsWith('-') || chat.ctRealId.startsWith('-')))) ? null : chat.contactId,
       link: chat.link,
-      groupId: chat.groupId,
+      groupId: chat.groupId.isNotEmpty && chat.groupId != '0' ? chat.groupId : (_isTelegramChat && chat.ctRealId.startsWith('-') ? chat.ctRealId : null),
     );
 
     if (mounted && messageIndex < _messages.length) {
@@ -3918,15 +3951,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         chat.id,
         file.path!,
         accountId: _getResolvedAccountId(chatProvider),
-        channelId:
-            (chat.chId == '2' ||
-                chat.channelType.toLowerCase().contains('telegram') ||
-                chat.channelName.toLowerCase().contains('telegram'))
-            ? '2'
-            : chat.chId,
-        contactId: chat.contactId,
+        channelId: _isTelegramChat ? '2' : chat.chId,
+        contactId: (chat.isGroup || (_isTelegramChat && (chat.groupId.startsWith('-') || chat.ctRealId.startsWith('-')))) ? null : chat.contactId,
         link: chat.link,
-        groupId: chat.groupId,
+        groupId: chat.groupId.isNotEmpty && chat.groupId != '0' ? chat.groupId : (_isTelegramChat && chat.ctRealId.startsWith('-') ? chat.ctRealId : null),
         forceDocument: true,
       );
 
@@ -4133,15 +4161,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       accountId: _getResolvedAccountId(
         Provider.of<ChatProvider>(context, listen: false),
       ),
-      channelId:
-          (chat.chId == '2' ||
-              chat.channelType.toLowerCase().contains('telegram') ||
-              chat.channelName.toLowerCase().contains('telegram'))
-          ? '2'
-          : chat.chId,
-      contactId: chat.contactId,
+      channelId: _isTelegramChat ? '2' : chat.chId,
+      contactId: (chat.isGroup || (_isTelegramChat && (chat.groupId.startsWith('-') || chat.ctRealId.startsWith('-')))) ? null : chat.contactId,
       link: chat.link,
-      groupId: chat.groupId,
+      groupId: chat.groupId.isNotEmpty && chat.groupId != '0' ? chat.groupId : (_isTelegramChat && chat.ctRealId.startsWith('-') ? chat.ctRealId : null),
     );
 
     if (!response.isError) {
@@ -4319,15 +4342,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         chat.id,
         path,
         accountId: _getResolvedAccountId(chatProvider),
-        channelId:
-            (chat.chId == '2' ||
-                chat.channelType.toLowerCase().contains('telegram') ||
-                chat.channelName.toLowerCase().contains('telegram'))
-            ? '2'
-            : chat.chId,
-        contactId: chat.contactId,
+        channelId: _isTelegramChat ? '2' : chat.chId,
+        contactId: (chat.isGroup || (_isTelegramChat && (chat.groupId.startsWith('-') || chat.ctRealId.startsWith('-')))) ? null : chat.contactId,
         link: chat.link,
-        groupId: chat.groupId,
+        groupId: chat.groupId.isNotEmpty && chat.groupId != '0' ? chat.groupId : (_isTelegramChat && chat.ctRealId.startsWith('-') ? chat.ctRealId : null),
       );
 
       if (!response.isError) {
