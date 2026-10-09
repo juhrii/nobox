@@ -908,7 +908,7 @@ class _ChatListPageState extends State<ChatListPage>
                 ),
                 child: Center(
                   child: Text(
-                    unreadCount > 100 ? '100' : unreadCount.toString(),
+                    unreadCount.toString(),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
@@ -2837,9 +2837,7 @@ class _ChatListPageState extends State<ChatListPage>
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
-                                    chat.unreadCount > 100
-                                        ? '100'
-                                        : chat.unreadCount.toString(),
+                                    chat.unreadCount.toString(),
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 10,

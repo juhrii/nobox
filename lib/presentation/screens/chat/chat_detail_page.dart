@@ -1084,7 +1084,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       debugPrint('chat.accountId: ${chat.accountId}');
       debugPrint('isTelegram    : $isTelegram');
       final initialTake = (chat.unreadCount > 75)
-          ? (chat.unreadCount >= 100 ? 100 : (chat.unreadCount + 10)).clamp(75, 100)
+          ? (chat.unreadCount + 10)
           : 75;
       final response = await _chatService.getMessageHistory(
         chat.id,
@@ -2892,99 +2892,34 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
-  // FITUR: Scroll ke Awal Pesan Belum Dibaca
-  // FUNGSI: Ketika membuka ruang obrolan yang memiliki rentetan pesan belum dibaca,
-  //          posisi gulir tidak langsung melompat ke paling bawah, melainkan berfokus
-  //          pada pesan pertama yang belum dibaca agar pengguna dapat membaca secara berurutan.
+  // FITUR: Scroll ke Pesan Terbaru (Paling Bawah)
+// FUNGSI: Saat membuka ruang obrolan, otomatis scroll ke pesan terbaru (bawah).
+//          Menandai semua pesan sebagai sudah dibaca dan menyembunyikan tombol scroll-to-bottom.
   void _handleInitialScroll() {
     if (!_scrollController.hasClients || _messages.isEmpty) return;
     if (_hasPositionedAtUnread) return;
 
-    final displayMessages = _messages.where((m) => !m.isSystemMessage).toList();
-    if (displayMessages.isEmpty) {
-      _scrollToBottom(animate: false);
-      return;
-    }
+    _hasPositionedAtUnread = true;
+    setState(() {
+      _allInitialUnreadSeen = true;
+      _showScrollToBottomButton = false;
+      _unreadIncomingCountWhileScrolled = 0;
+      _firstUnreadMessageId = null;
+      _firstUnreadDisplayIndex = null;
+      _initialUnreadCount = 0;
+      _initialUnreadOffset = 0.0;
+      _passedUnreadMessageIds.clear();
+      _unreadMessageKeys.clear();
+    });
 
-    final unreadCount = chat.unreadCount;
-    final effectiveUnreadCount = unreadCount > 100 ? 100 : unreadCount;
-
-    if (effectiveUnreadCount >= 1) {
-      int customerUnreadSeen = 0;
-      int firstUnreadDisplayIdx = -1;
-      for (int i = displayMessages.length - 1; i >= 0; i--) {
-        if (!displayMessages[i].isMe) {
-          customerUnreadSeen++;
-          firstUnreadDisplayIdx = i;
-          if (customerUnreadSeen >= effectiveUnreadCount) {
-            break;
-          }
-        } else {
-          break;
-        }
-      }
-
-      if (firstUnreadDisplayIdx != -1) {
-        _hasPositionedAtUnread = true;
-        final rawCount = effectiveUnreadCount > customerUnreadSeen
-            ? effectiveUnreadCount
-            : customerUnreadSeen;
-        final actualCount = rawCount > 100 ? 100 : rawCount;
-        final adjustedIndex = displayMessages.length - 1 - firstUnreadDisplayIdx;
-
-        // Hitung estimasi offset: setiap pesan ~85 piksel + 40 piksel divider
-        final estimatedOffset = adjustedIndex > 0
-            ? ((adjustedIndex * 85.0) + 40.0)
-            : 0.0;
-        final maxExtent = _scrollController.position.maxScrollExtent;
-        final targetOffset = maxExtent > 0
-            ? estimatedOffset.clamp(0.0, maxExtent)
-            : estimatedOffset;
-
-        setState(() {
-          _firstUnreadMessageId = displayMessages[firstUnreadDisplayIdx].id;
-          _firstUnreadDisplayIndex = firstUnreadDisplayIdx;
-          _initialUnreadCount = actualCount;
-          _initialUnreadOffset = targetOffset;
-          _unreadIncomingCountWhileScrolled = actualCount;
-          _passedUnreadMessageIds.clear();
-          _unreadMessageKeys.clear();
-          _allInitialUnreadSeen = targetOffset <= 30.0;
-          _showScrollToBottomButton = targetOffset > 30.0;
-        });
-
-        debugPrint(
-          'ChatDetail: 📍 Positioning at first unread message (displayIdx=$firstUnreadDisplayIdx, adjustedIndex=$adjustedIndex, estimatedOffset=$estimatedOffset, targetOffset=$targetOffset, maxExtent=$maxExtent)',
-        );
-
-        if (_scrollController.hasClients && targetOffset > 0) {
-          try {
-            _scrollController.jumpTo(targetOffset);
-          } catch (_) {}
-        }
-
-        // Jika layout belum selesai mengukur seluruh list (maxExtent masih berkembang),
-        // lakukan penyesuaian posisi sekali lagi di frame berikutnya tanpa animasi.
-        if (targetOffset > 0) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted || !_scrollController.hasClients) return;
-            final updatedMax = _scrollController.position.maxScrollExtent;
-            if (updatedMax > 0) {
-              final refinedTarget = estimatedOffset.clamp(0.0, updatedMax);
-              if ((_scrollController.position.pixels - refinedTarget).abs() > 20.0) {
-                _scrollController.jumpTo(refinedTarget);
-              }
-              _initialUnreadOffset = refinedTarget;
-            }
-          });
-        }
-
-        return; // SELESAI: Jangan biarkan mengeksekusi _scrollToBottom()!
-      }
-    }
-
-    _allInitialUnreadSeen = true;
+    // Scroll ke bawah (pesan terbaru) - animate: false untuk langsung di posisi
     _scrollToBottom(animate: false);
+
+    // Pastikan posisi benar setelah layout selesai (frame kedua)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollToBottom(animate: false);
+    });
   }
 
   // FITUR: Memuat Pesan Terdahulu (Pagination)
@@ -4629,12 +4564,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       child: Stack(
                         children: [
                           _buildMessageList(isDark),
-                          if (_showScrollToBottomButton)
-                            Positioned(
-                              right: 16,
-                              bottom: 12,
-                              child: _buildScrollToBottomButton(isDark),
-                            ),
+                          // Tombol scroll-to-bottom dihilangkan
+                          // if (_showScrollToBottomButton)
+                          //   Positioned(
+                          //     right: 16,
+                          //     bottom: 12,
+                          //     child: _buildScrollToBottomButton(isDark),
+                          //   ),
                         ],
                       ),
                     ),
@@ -4759,9 +4695,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                       ),
                       child: Center(
                         child: Text(
-                          unreadBadgeCount > 100
-                              ? '100'
-                              : '$unreadBadgeCount',
+                          '$unreadBadgeCount',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -5953,8 +5887,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             key: ValueKey('col_$msgKey'),
             children: [
               if (dateSeparator != null) dateSeparator,
-              if (isFirstUnread && actualUnread > 0)
-                _buildUnreadMessagesDivider(actualUnread, isDark),
+              // Divider "PESAN BELUM DIBACA" dihilangkan
+              // if (isFirstUnread && actualUnread > 0)
+              //   _buildUnreadMessagesDivider(actualUnread, isDark),
               Container(
                 key: unreadKey,
                 color: isSelected
@@ -6157,9 +6092,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   // FITUR: Pembatas Pesan Belum Dibaca (Unread Messages Divider)
   // FUNGSI: Menampilkan penanda visual dengan garis dan badge pill di atas pesan pertama yang belum dibaca
   Widget _buildUnreadMessagesDivider(int count, bool isDark) {
-    final text = count >= 100
-        ? '100 PESAN BELUM DIBACA'
-        : (count > 1 ? '$count PESAN BELUM DIBACA' : 'PESAN BELUM DIBACA');
+    final text = count > 1 ? '$count PESAN BELUM DIBACA' : 'PESAN BELUM DIBACA';
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
